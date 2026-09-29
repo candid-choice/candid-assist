@@ -1,0 +1,44 @@
+/* Content frame with toolbar + content area. */
+
+.ha-surface-frame {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-md);
+  overflow: hidden;
+  background: var(--ha-surface);
+}
+
+.ha-surface-frame--no-radius {
+  border-radius: 0;
+}
+
+.ha-surface-frame-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ha-border);
+  flex-shrink: 0;
+}
+
+.ha-surface-frame-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.ha-surface-frame-address {
+  flex: 1;
+  min-width: 0;
+}
+
+.ha-surface-frame-content {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  background: #ffffff;
+}

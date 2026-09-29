@@ -1,0 +1,86 @@
+/* Help palette — floating menu overlay. */
+
+.ha-help-palette__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+  background: rgba(61, 61, 61, 0.04);
+  pointer-events: auto;
+}
+
+.ha-help-palette {
+  width: 260px;
+  background: var(--ha-surface);
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-lg);
+  box-shadow: var(--ha-shadow-lg);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.ha-help-palette-header {
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--ha-border);
+}
+
+.ha-help-palette-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ha-text);
+}
+
+.ha-help-palette-body {
+  padding: 4px;
+}
+
+.ha-help-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--ha-radius-sm);
+  background: transparent;
+  color: var(--ha-text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s;
+  text-align: left;
+}
+
+.ha-help-palette-item:hover,
+.ha-help-palette-item--hover {
+  background: var(--ha-primary-light);
+  color: var(--ha-primary);
+}
+
+.ha-help-palette-item-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ha-radius-sm);
+  border: 1px solid var(--ha-border);
+  background: #fafaf8;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.ha-help-palette-item-label {
+  flex: 1;
+  font-weight: 500;
+  text-align: left;
+}
+
+.ha-help-palette-item-shortcut {
+  font-size: 11px;
+  color: var(--ha-text-secondary);
+  font-weight: 500;
+  flex-shrink: 0;
+}

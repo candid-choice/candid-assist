@@ -1,0 +1,94 @@
+/* Screen capture surface — mode selector + preview area. */
+
+.ha-screen-surface {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ha-screen-modes {
+  display: flex;
+  gap: 4px;
+  padding: 10px 16px;
+  background: var(--ha-surface);
+  border-bottom: 1px solid var(--ha-border);
+  flex-shrink: 0;
+}
+
+.ha-screen-mode {
+  padding: 6px 14px;
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-sm);
+  background: transparent;
+  color: var(--ha-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.ha-screen-mode:hover {
+  background: var(--ha-primary-light);
+  color: var(--ha-primary);
+}
+
+.ha-screen-mode--active {
+  background: var(--ha-primary);
+  border-color: var(--ha-primary);
+  color: #fff;
+}
+
+.ha-screen-preview {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #f8f7f4;
+}
+
+.ha-screen-preview-inner {
+  width: 100%;
+  height: 100%;
+  border: 2px dashed var(--ha-border);
+  border-radius: var(--ha-radius-md);
+  overflow: hidden;
+}
+
+.ha-screen-preview-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px;
+  text-align: center;
+}
+
+.ha-screen-icon {
+  width: 40px;
+  height: 40px;
+  color: var(--ha-text-secondary);
+}
+
+.ha-screen-preview-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ha-text);
+  margin: 0;
+}
+
+.ha-screen-preview-sub {
+  font-size: 12px;
+  color: var(--ha-text-secondary);
+  margin: 0;
+}
+
+.ha-screen-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--ha-surface);
+  border-top: 1px solid var(--ha-border);
+}

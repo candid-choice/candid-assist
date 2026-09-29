@@ -1,0 +1,139 @@
+/* Input surface — form layout with labels, options, and buttons. */
+
+.ha-input-surface {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ha-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ha-input-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ha-text);
+}
+
+.ha-input-question {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ha-text);
+  margin: 0;
+}
+
+.ha-input-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ha-input-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-sm);
+  background: var(--ha-surface);
+  color: var(--ha-text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  text-align: left;
+}
+
+.ha-input-option:hover {
+  background: #fafaf8;
+  border-color: var(--ha-primary);
+}
+
+.ha-input-option--selected {
+  background: var(--ha-primary-light);
+  border-color: var(--ha-primary);
+  color: var(--ha-primary);
+}
+
+.ha-input-option-check {
+  width: 16px;
+  font-size: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.ha-input-option-label {
+  flex: 1;
+}
+
+.ha-input-confirm-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.ha-input-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--ha-radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ha-input-btn--yes {
+  background: var(--ha-primary);
+  color: #fff;
+}
+
+.ha-input-btn--yes:hover {
+  background: var(--ha-primary-hover);
+}
+
+.ha-input-btn--no {
+  background: #f0efec;
+  color: var(--ha-text);
+}
+
+.ha-input-btn--no:hover {
+  background: #e8e7e3;
+}
+
+.ha-input-file-area {
+  padding: 20px;
+  border: 2px dashed var(--ha-border);
+  border-radius: var(--ha-radius-md);
+  text-align: center;
+}
+
+.ha-input-file {
+  font-size: 13px;
+}
+
+.ha-input-voice-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.ha-input-voice-btn {
+  padding: 12px 24px;
+  border: 2px solid var(--ha-primary);
+  border-radius: var(--ha-radius-lg);
+  background: transparent;
+  color: var(--ha-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ha-input-voice-btn:hover {
+  background: var(--ha-primary-light);
+}

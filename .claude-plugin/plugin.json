@@ -1,0 +1,5 @@
+{
+  "name": "harness",
+  "version": "1.0.0",
+  "description": "Project environment harness management — config, start, stop, and planning slash commands"
+}

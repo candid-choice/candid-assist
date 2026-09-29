@@ -1,0 +1,8 @@
+{
+  "name": "harness-monorepo",
+  "private": true,
+  "scripts": {
+    "harness:dev": "pnpm --filter harness-desktop dev",
+    "type-check": "pnpm --filter harness-desktop type-check"
+  }
+}

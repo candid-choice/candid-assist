@@ -1,0 +1,28 @@
+{
+  "name": "harness-desktop",
+  "version": "1.0.0",
+  "description": "A simple Electrobun app showcasing core features",
+  "scripts": {
+    "postinstall": "electrobun prepare",
+    "build": "pnpm run vite:build && electrobun build --env=stable",
+    "vite:build": "vite build",
+    "dev": "vite & electrobun dev --watch"
+  },
+  "devDependencies": {
+    "@tabler/icons-react": "^3.20.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/bun": "latest",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electrobun": "^2.0.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwindcss": "^4.0.0",
+    "vite": "^7.0.0"
+  },
+  "dependencies": {
+    "zustand": "^5.0.15"
+  }
+}

@@ -1,0 +1,31 @@
+/* Reusable icon button for toolbars. */
+
+.ha-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  border: none;
+  border-radius: var(--ha-radius-sm);
+  background: transparent;
+  color: var(--ha-text-secondary);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.ha-action-btn:hover {
+  background: var(--ha-primary-light);
+  color: var(--ha-primary);
+}
+
+.ha-action-btn:active {
+  background: #e6e2f2;
+}
+
+.ha-action-btn--active {
+  background: var(--ha-primary-light);
+  color: var(--ha-primary);
+}

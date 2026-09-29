@@ -1,0 +1,154 @@
+/* Window shell — macOS-style title bar + body. */
+
+.ha-window {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--ha-bg);
+}
+
+.ha-titlebar {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  -webkit-user-select: none;
+  user-select: none;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--ha-border);
+  -webkit-app-region: drag;
+  justify-content: center;
+}
+
+.ha-titlebar-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ha-text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.ha-titlebar-label-icon {
+  font-size: 10px;
+  color: var(--ha-primary);
+}
+
+/* ── Titlebar status (right side) ─────────────────────────── */
+
+.ha-titlebar-status {
+  position: absolute;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.ha-titlebar-user {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border-radius: var(--ha-radius-sm);
+  cursor: default;
+  transition: background 0.12s;
+}
+
+.ha-titlebar-user:hover {
+  background: var(--ha-primary-light);
+}
+
+.ha-titlebar-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ha-primary);
+  font-size: 9px;
+  font-weight: 600;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.ha-titlebar-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ha-text);
+  white-space: nowrap;
+}
+
+/* ── Chrome bar (address bar + URL) ─────────────────────────── */
+
+.ha-chrome-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--ha-surface);
+  flex-shrink: 0;
+}
+
+.ha-chrome-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Body ──────────────────────────────────────────────────── */
+
+.ha-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Footer / status bar ───────────────────────────────────── */
+
+.ha-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 22px;
+  padding: 0 10px;
+  border-top: 1px solid var(--ha-border);
+  background: var(--ha-surface);
+  font-size: 11px;
+  color: var(--ha-text-secondary);
+  -webkit-user-select: none;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.ha-footer-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ha-connection-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ha-success);
+}
+
+/* ── View switching ────────────────────────────────────────── */
+
+.ha-view {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ha-webview {
+  width: 100%;
+  height: 100%;
+}

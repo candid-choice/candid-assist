@@ -1,0 +1,70 @@
+/* User status — compact avatar + name + connection count. */
+
+.ha-user-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: var(--ha-radius-sm);
+  cursor: default;
+  transition: background 0.12s;
+  flex-shrink: 0;
+}
+
+.ha-user-status:hover {
+  background: var(--ha-primary-light);
+}
+
+.ha-user-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ha-primary);
+  flex-shrink: 0;
+}
+
+.ha-user-avatar-letter {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1;
+}
+
+.ha-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.ha-user-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ha-text);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ha-user-connections {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  color: var(--ha-text-secondary);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.ha-connection-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ha-success);
+  flex-shrink: 0;
+}

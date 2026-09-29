@@ -1,0 +1,38 @@
+/* Browser surface — clean, compact URL bar + embedded webview. */
+
+.ha-browser-url-bar {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 8px;
+  background: #ffffff;
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-sm);
+  height: 28px;
+  gap: 6px;
+}
+
+.ha-browser-url-lock {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  color: var(--ha-success);
+}
+
+.ha-browser-url-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 11.5px;
+  color: var(--ha-text);
+  font-family: inherit;
+  padding: 0;
+}
+
+.ha-browser-url-input::placeholder {
+  color: var(--ha-text-secondary);
+  opacity: 0.5;
+}

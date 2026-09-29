@@ -1,0 +1,68 @@
+/* Idle state — calm, centered, unobtrusive. */
+
+.ha-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+}
+
+.ha-idle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--ha-radius-lg);
+  background: var(--ha-primary-light);
+  border: 1px solid #e6e2f2;
+}
+
+.ha-idle-icon-dot {
+  color: var(--ha-primary);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.ha-idle-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ha-text);
+  margin: 0;
+}
+
+.ha-idle-subtitle {
+  font-size: 13px;
+  color: var(--ha-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ha-idle-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 99px;
+  background: #f0f7f1;
+  border: 1px solid #dce8df;
+  margin-top: 4px;
+}
+
+.ha-idle-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ha-success);
+  flex-shrink: 0;
+}
+
+.ha-idle-status-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ha-success);
+}

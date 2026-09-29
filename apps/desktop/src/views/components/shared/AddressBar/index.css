@@ -1,0 +1,101 @@
+/* Address bar — tab buttons + URL input. */
+
+.ha-address-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 4px;
+  background: var(--ha-surface);
+  border-bottom: 1px solid var(--ha-border);
+  flex-shrink: 0;
+  min-height: 34px;
+}
+
+/* ── Nav controls ─────────────────────────────────────────── */
+
+.ha-address-bar-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Tab list ──────────────────────────────────────────────── */
+
+.ha-address-bar-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.ha-address-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border: none;
+  border-radius: var(--ha-radius-sm);
+  background: transparent;
+  color: var(--ha-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ha-address-tab:hover {
+  background: var(--ha-primary-light);
+  color: var(--ha-primary);
+}
+
+.ha-address-tab--active {
+  background: var(--ha-primary-light);
+  color: var(--ha-primary);
+  font-weight: 600;
+}
+
+.ha-address-tab--active:hover {
+  background: var(--ha-primary-light);
+}
+
+/* ── URL input ─────────────────────────────────────────────── */
+
+.ha-address-bar-url {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  background: #ffffff;
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-sm);
+  height: 26px;
+  gap: 5px;
+  max-width: 420px;
+  flex-shrink: 0;
+}
+
+.ha-address-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 11.5px;
+  color: var(--ha-text);
+  font-family: inherit;
+  padding: 0;
+}
+
+.ha-address-input::placeholder {
+  color: var(--ha-text-secondary);
+  opacity: 0.5;
+}

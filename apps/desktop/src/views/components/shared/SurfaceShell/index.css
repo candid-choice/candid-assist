@@ -1,0 +1,80 @@
+/* Surface shell — consistent chrome for every surface type. */
+
+.ha-surface-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ha-surface-shell-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--ha-border);
+  background: var(--ha-surface);
+}
+
+.ha-surface-shell-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--ha-radius-md);
+  background: var(--ha-primary-light);
+  border: 1px solid #e6e2f2;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.ha-surface-shell-icon-dot {
+  color: var(--ha-primary);
+}
+
+.ha-surface-shell-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ha-surface-shell-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ha-text);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.ha-surface-shell-instruction {
+  font-size: 12px;
+  color: var(--ha-text-secondary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.ha-surface-shell-footer {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--ha-border);
+  background: #fcfbf9;
+}
+
+.ha-surface-shell-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px 14px;
+  background: var(--ha-surface);
+  border-top: 1px solid var(--ha-border);
+  flex-shrink: 0;
+}
+
+.ha-btn--hover {
+  background: #f5f4f1 !important;
+}
+
+.ha-btn--primary-hover {
+  background: var(--ha-primary-hover) !important;
+  border-color: var(--ha-primary-hover) !important;
+}

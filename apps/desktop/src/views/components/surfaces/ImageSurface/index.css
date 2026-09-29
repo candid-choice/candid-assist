@@ -1,0 +1,65 @@
+/* Image annotation surface — toolbar + image canvas area. */
+
+.ha-image-surface {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #f8f7f4;
+}
+
+.ha-image-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  background: var(--ha-surface);
+  border-bottom: 1px solid var(--ha-border);
+  flex-shrink: 0;
+}
+
+.ha-image-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: auto;
+}
+
+.ha-image-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--ha-radius-sm);
+  overflow: hidden;
+  box-shadow: var(--ha-shadow-md);
+}
+
+.ha-image-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  cursor: crosshair;
+}
+
+.ha-image-src {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.ha-image-bottom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--ha-surface);
+  border-top: 1px solid var(--ha-border);
+  font-size: 11px;
+  color: var(--ha-text-secondary);
+}
