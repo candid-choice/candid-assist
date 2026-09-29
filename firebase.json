@@ -1,0 +1,26 @@
+{
+  "firestore": {
+    "database": "(default)",
+    "location": "nam5",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "emulators": {
+    "auth": {
+      "port": 3602
+    },
+    "firestore": {
+      "port": 3613
+    },
+    "storage": {
+      "port": 3604
+    },
+    "ui": {
+      "enabled": true,
+      "port": 3607
+    }
+  }
+}

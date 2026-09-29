@@ -1,0 +1,39 @@
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://100.118.207.41:8001/",
+    "ANTHROPIC_MODEL": "qwen/qwen3.6-35b-a3b",
+    "CLAUDE_CODE_DISABLE_MODEL_CACHE": "1",
+    "API_TIMEOUT_MS": "18000000",
+    "BASH_DEFAULT_TIMEOUT_MS": "900000",
+    "BASH_MAX_TIMEOUT_MS": "1800000",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "80"
+  },
+  "permissions": {
+    "deny": [
+      "WebSearch"
+    ]
+  },
+  "model": "qwen/qwen3.6-35b-a3b",
+  "modelOverrides": {
+    "claude-opus-5": "qwen/qwen3.6-35b-a3b",
+    "claude-3-5-sonnet-20241022": "qwen/qwen3.6-35b-a3b",
+    "claude-haiku-4-5-20251001": "qwen/qwen3.6-35b-a3b"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": []
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": []
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true
+  }
+}

@@ -5,3 +5,14 @@ build
 artifacts
 .hutch
 .cottontail-tmp
+
+
+user-plans# Firebase debug logs
+*-debug.log
+firebase-debug.log
+firestore-debug.log
+storage-debug.log
+auth-debug.log
+functions-debug.log
+hosting-debug.log
+extensions-debug.log
