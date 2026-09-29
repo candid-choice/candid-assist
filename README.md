@@ -33,10 +33,9 @@ pnpm build             # Build all apps
 | Web (Next.js)        | 3600 |
 | Backend (NestJS)     | 3601 |
 | Firebase Auth        | 3602 |
-| Firebase Firestore   | 3603 |
+| Firebase Firestore   | 3613 |
 | Firebase Storage     | 3604 |
 | Firebase Functions   | 3605 |
-| Firebase Hosting     | 3606 |
 | Firebase Emulator UI | 3607 |
 | Firebase Database    | 3608 |
 | Firebase Pub/Sub     | 3609 |
@@ -96,11 +95,11 @@ firebase emulators:start    # Starts all configured emulators
 Emulators are configured in `firebase.json` at the repository root:
 
 - **Auth** — `http://localhost:3602`
-- **Firestore** — `http://localhost:3603`
+- **Firestore** — `http://localhost:3613`
 - **Storage** — `http://localhost:3604`
 - **Emulator UI** — `http://localhost:3607`
 
-Use `FIREBASE_PROJECT_ID=candid-assist-dev` consistently when the emulator suite is running.
+Use `FIREBASE_PROJECT_ID=candid-assist` consistently when the emulator suite is running.
 
 ## Structure
 

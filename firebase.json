@@ -1,5 +1,7 @@
 {
   "firestore": {
+    "database": "(default)",
+    "location": "nam5",
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
@@ -10,14 +12,8 @@
     "auth": {
       "port": 3602
     },
-    "functions": {
-      "port": 3605
-    },
     "firestore": {
-      "port": 3603
-    },
-    "hosting": {
-      "port": 3606
+      "port": 3613
     },
     "storage": {
       "port": 3604

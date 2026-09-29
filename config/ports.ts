@@ -10,7 +10,7 @@ export const PORTS = {
 
   // Firebase emulator ports
   AUTH: parseInt(process.env.FIREBASE_AUTH_PORT ?? '3602', 10),
-  FIRESTORE: parseInt(process.env.FIREBASE_FIRESTORE_PORT ?? '3603', 10),
+  FIRESTORE: parseInt(process.env.FIREBASE_FIRESTORE_PORT ?? '3613', 10),
   STORAGE: parseInt(process.env.FIREBASE_STORAGE_PORT ?? '3604', 10),
   FUNCTIONS: parseInt(process.env.FIREBASE_FUNCTIONS_PORT ?? '3605', 10),
   HOSTING: parseInt(process.env.FIREBASE_HOSTING_PORT ?? '3606', 10),
