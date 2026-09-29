@@ -1,8 +1,24 @@
 {
-  "name": "harness-monorepo",
+  "name": "candid-assist-monorepo",
   "private": true,
   "scripts": {
+    "dev": "concurrently \"pnpm dev:web\" \"pnpm dev:backend\" \"pnpm dev:firebase\"",
+    "dev:web": "pnpm --filter web dev",
+    "dev:backend": "pnpm --filter backend start:dev",
+    "dev:firebase": "firebase emulators:start",
+    "build": "pnpm -r build",
+    "build:web": "pnpm --filter web build",
+    "build:backend": "pnpm --filter backend build",
+    "type-check": "pnpm --filter harness-desktop type-check",
     "harness:dev": "pnpm --filter harness-desktop dev",
-    "type-check": "pnpm --filter harness-desktop type-check"
+    "lint": "pnpm -r lint",
+    "test": "echo 'No tests configured yet'",
+    "postinstall": "pnpm -r --filter '!backend' build 2>/dev/null || true"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "pnpm": ">=9.0.0"
   }
 }

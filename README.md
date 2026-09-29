@@ -1,124 +1,129 @@
-# harness — Electrobun Desktop Runtime
+# candid-assist
 
-Electrobun-powered desktop application toolkit. The harness provides a runtime for building lightweight, non-Electron desktop applications via Electrobun (Cottontail / JavaScriptCore main process + Vite-rendered webviews).
-
-## Structure
+Monorepo for Human Assist — a human-in-the-loop interaction platform built on Next.js + NestJS + Firebase.
 
 ```
-harness/
+candid-assist/
 ├── apps/
-│   └── desktop/       # harness-desktop — Vite + React 19 renderer
-│       ├── src/
-│       │   ├── bun/     # Electrobun main process entry
-│       │   └── views/   # Renderer UI (Human Assist app)
-│       ├── index.html
-│       ├── vite.config.ts
-│       ├── tsconfig.json
-│       └── package.json
-├── skills/            # Reusable skill packages
-├── rules/             # Development rules & guidelines
-├── package.json       # Monorepo root (pnpm workspaces)
+│   ├── web/             # Next.js 16 web app (frontend)
+│   ├── backend/         # NestJS 12 API server
+│   └── desktop/         # Electrobun desktop runtime (existing)
+├── config/
+│   └── ports.ts         # Centralized port allocation
+├── firebase.json        # Firebase config (emulators at root)
+├── firestore.rules      # Firestore security rules
+├── firestore.indexes.json
+├── storage.rules
+├── package.json         # Monorepo root (pnpm workspaces)
 └── pnpm-workspace.yaml
 ```
 
-## Apps
-
-### harness-desktop
-
-A Vite + React 19 desktop app built on Electrobun 2.x.
-
-**Stack:**
-- **Runtime** — Electrobun 2.x (Cottontail / JavaScriptCore main process)
-- **Build** — Vite 7 + @vitejs/plugin-react
-- **Styling** — Tailwind CSS 4 + CSS custom properties (`--ha-*`)
-- **Language** — TypeScript (strict mode)
-
-**Capabilities:**
-- `<electrobun-webview>` custom element for embedded webviews
-- RPC-based communication between main process and renderer
-- Surface-driven architecture for human-in-the-loop interactions
-
-### Human Assist
-
-Human Assist is the primary application built with the harness — a warm, minimal human-in-the-loop interaction peripheral for Claude Code. Claude Code pushes "surfaces" via MCP, the human interacts with them, and results flow back.
-
-**Architecture:**
-```
-WindowShell (macOS-style chrome)
-└── ha-body
-    ├── SurfaceHost (type router)
-    │   ├── IdleState → "Waiting for Claude"
-    │   └── SurfaceShell → surface-specific component
-    └── HelpPalette (proactive help menu)
-```
-
-**Surface types:**
-| Surface | Purpose |
-|---|---|
-| `browser` | Interactive web view with navigation |
-| `image` | Image annotation (draw, circle, arrow, text) |
-| `canvas` | Freeform drawing (pen, eraser, undo/redo) |
-| `screen` | Region/window/screen capture selection |
-| `input` | Structured input (choices, text, confirm, file, voice) |
-| `file` / `voice` / `prompt` | Fallback surfaces (generic chrome) |
-
-**Design tokens:**
-- Background: `#FAF7F2` (warm cream)
-- Surface: `#FFFFFF` (warm white)
-- Primary: `#7C6FA8` (muted violet)
-- Text: `#3D3D3D` (warm charcoal)
-
-## Getting Started
+## Quick Start
 
 ```bash
-cd apps/desktop
-pnpm install
+pnpm install           # Install all workspace dependencies
+pnpm dev               # Start web + backend + Firebase emulator
+pnpm build             # Build all apps
+```
+
+## Port Allocation
+
+| Service              | Port |
+| -------------------- | ---: |
+| Web (Next.js)        | 3600 |
+| Backend (NestJS)     | 3601 |
+| Firebase Auth        | 3602 |
+| Firebase Firestore   | 3603 |
+| Firebase Storage     | 3604 |
+| Firebase Functions   | 3605 |
+| Firebase Hosting     | 3606 |
+| Firebase Emulator UI | 3607 |
+| Firebase Database    | 3608 |
+| Firebase Pub/Sub     | 3609 |
+
+All ports are explicitly configured — no framework defaults are used. Override any port via environment variables documented in `.env.example`.
+
+## Available Commands
+
+```bash
+# Start all services (web, backend, Firebase emulator)
 pnpm dev
+
+# Start individual services
+pnpm dev:web          # Next.js dev server
+pnpm dev:backend      # NestJS dev server (watch mode)
+pnpm dev:firebase     # Firebase emulator suite
+
+# Build
+pnpm build            # Build all
+pnpm build:web        # Build Next.js
+pnpm build:backend    # Build NestJS
 ```
 
-Runs Vite dev server + Electrobun watch for live development.
+## Development
 
-## Surface Protocol
+### Environment Variables
 
-### SurfaceConfig
-```ts
-interface SurfaceConfig<T = unknown> {
-  type: SurfaceType;       // 'browser' | 'image' | 'canvas' | 'screen' | 'input' | 'file' | 'voice' | 'prompt'
-  title: string;            // Short title for chrome header
-  instruction?: string;     // Longer instruction text
-  payload: T;               // Type-specific payload data
-  source: 'mcp' | 'proactive';
-  createdAt: number;
-}
+Copy `.env.example` to `.env.local` and adjust as needed. The key variables:
+
+- `WEB_PORT` — Next.js dev server port (default: 3600)
+- `BACKEND_PORT` — NestJS dev server port (default: 3601)
+- `FIREBASE_*_PORT` — Firebase emulator ports
+- `FIREBASE_PROJECT_ID` — Firebase project ID for development
+
+### Next.js (apps/web)
+
+```bash
+cd apps/web
+pnpm dev    # Runs on $WEB_PORT
 ```
 
-### State Management
-```ts
-useSurfaceState<T>() => {
-  activeSurface: SurfaceConfig<T> | null,
-  helpPaletteOpen: boolean,
-  openSurface(config),
-  completeSurface(result),
-  cancelSurface(),
-  toggleHelpPalette()
-}
+### NestJS (apps/backend)
+
+```bash
+cd apps/backend
+pnpm start:dev    # Runs on $BACKEND_PORT
 ```
 
-## Architecture
+The backend exposes a health check at `GET /health`.
 
-Everything revolves around a **Surface** — a temporary workspace Claude hands to the human. The state machine flows:
+### Firebase Emulator Suite
 
+```bash
+firebase emulators:start    # Starts all configured emulators
 ```
-Idle → Active Surface → Completed / Cancelled → Idle
+
+Emulators are configured in `firebase.json` at the repository root:
+
+- **Auth** — `http://localhost:3602`
+- **Firestore** — `http://localhost:3603`
+- **Storage** — `http://localhost:3604`
+- **Emulator UI** — `http://localhost:3607`
+
+Use `FIREBASE_PROJECT_ID=candid-assist-dev` consistently when the emulator suite is running.
+
+## Structure
+
+- `apps/web` — Next.js 16 application (React 19, TypeScript, Tailwind CSS 4)
+- `apps/backend` — NestJS 12 API server (TypeScript, strict mode)
+- `apps/desktop` — Electrobun desktop runtime (existing application)
+- `config/ports.ts` — Single source of truth for all local service ports
+- Root `firebase.json` — Firebase configuration (not in any app directory)
+
+## Testing
+
+```bash
+pnpm test        # Run tests across all packages
 ```
 
-Only one surface is active at a time. Surfaces arrive from MCP (Claude requests help) or from proactive mode (user opens the help palette).
+## Linting
 
-## Project History
+```bash
+pnpm lint        # Lint all packages
+```
 
-| Date | Milestone |
-|---|---|
-| 2024-09-22 | Human Assist UI — complete surface system (5 surfaces, 26 components, ~4500 lines) |
-| 2024-09-15 | Vite + React migration (replaced minimal scaffold) |
-| 2024-08 | Electrobun 2.x runtime integration |
-| 2024-07 | Initial harness scaffold |
+## Type Checking
+
+```bash
+pnpm type-check  # Type-check harness-desktop
+```
