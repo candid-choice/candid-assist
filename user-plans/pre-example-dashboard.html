@@ -1,0 +1,1454 @@
+<div
+  class="bg-stone-50 dark:bg-neutral-950 text-stone-800 min-h-screen relative isolate antialiased dark:text-stone-100 font-sans"
+>
+  <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+    <div
+      class="h-[60vh] w-[60vh] rounded-full bg-gradient-to-br absolute -top-32 -left-32 from-violet-200 via-rose-100 to-purple-200 opacity-20 blur-2xl dark:opacity-0"
+    ></div>
+    <div
+      class="h-[40vh] w-[50vh] rounded-full bg-gradient-to-tr absolute -bottom-20 right-10 from-orange-200 via-amber-200 to-rose-200 opacity-40 blur-3xl dark:opacity-0"
+    ></div>
+    <div
+      class="h-[35vh] w-[45vh] rounded-full bg-gradient-to-b dark:h-[28vh] absolute top-28 left-1/4 from-violet-200 via-purple-100 to-rose-100 opacity-50 blur-3xl dark:from-violet-900 dark:via-purple-900 dark:to-rose-900 dark:opacity-30"
+    ></div>
+  </div>
+  <div
+    class="w-full bg-white/80 dark:bg-neutral-900/80 border-b border-stone-200 dark:border-stone-800 backdrop-blur-sm sticky top-0 z-30"
+  >
+    <div class="mx-auto px-6 items-center justify-between py-3 max-w-7xl flex">
+      <div class="items-center flex gap-2">
+        <span class="text-violet-500 text-base dark:text-violet-400">✦</span>
+        <span
+          class="text-sm font-semibold tracking-wide text-stone-800 dark:text-stone-100"
+          >Human Assist</span
+        >
+        <span class="text-stone-300 text-xs ml-1 dark:text-stone-600"
+          >/ Workspace</span
+        >
+      </div>
+      <div class="items-center flex gap-3">
+        <div
+          class="items-center px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex gap-2 border border-emerald-100 dark:border-emerald-800/40"
+        >
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-emerald-400 dark:bg-emerald-500 block animate-pulse"
+          ></span>
+          <span
+            class="text-emerald-700 text-xs font-medium dark:text-emerald-400"
+            >MCP Connected</span
+          >
+        </div>
+        <div
+          class="items-center px-3 py-1 rounded-full bg-violet-50 dark:bg-violet-900/20 flex gap-1.5 border border-violet-100 dark:border-violet-800/40"
+        >
+          <span class="text-violet-600 text-xs font-medium dark:text-violet-400"
+            >Claude Code</span
+          >
+          <span class="text-violet-300 text-xs dark:text-violet-600">·</span>
+          <span class="text-violet-500 text-xs dark:text-violet-400"
+            >active</span
+          >
+        </div>
+      </div>
+    </div>
+  </div>
+  <div
+    class="mx-auto px-4 py-4 h-[calc(100vh-53px)] max-w-7xl flex gap-4 overflow-hidden"
+  >
+    <div class="w-64 flex-shrink-0 flex flex-col gap-3 overflow-hidden">
+      <div
+        class="rounded-2xl bg-white dark:bg-neutral-900 shadow-sm border border-stone-200 dark:border-stone-700/50 flex flex-col overflow-hidden flex-1"
+      >
+        <div
+          class="px-4 py-3 items-center justify-between border-b border-stone-100 dark:border-stone-800 flex"
+        >
+          <div class="items-center flex gap-2">
+            <span class="text-violet-500 text-xs dark:text-violet-400">✦</span>
+            <span
+              class="text-xs font-semibold text-stone-700 tracking-wide dark:text-stone-300"
+              >AI Tasks</span
+            >
+          </div>
+          <span
+            class="text-xs text-stone-400 bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded-md font-medium dark:text-stone-500"
+            >5</span
+          >
+        </div>
+        <div class="flex border-b border-stone-100 dark:border-stone-800">
+          <button
+            type="submit"
+            class="flex-1 dark:text-violet-400 border-b-2 border-violet-500 dark:border-violet-400 transition-colors duration-150 py-2 text-xs font-medium text-violet-600 bg-transparent"
+          >
+            Active
+          </button>
+          <button
+            type="submit"
+            class="flex-1 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors duration-150 py-2 text-xs font-medium text-stone-400"
+          >
+            Queued
+          </button>
+          <button
+            type="submit"
+            class="flex-1 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors duration-150 py-2 text-xs font-medium text-stone-400"
+          >
+            Done
+          </button>
+        </div>
+        <div class="py-2 px-2 flex-1 overflow-y-auto space-y-1">
+          <button
+            type="submit"
+            class="border border-violet-200 dark:border-violet-700/60 p-3 group transition-all duration-150 ring-2 ring-violet-300 dark:ring-violet-600/50 w-full rounded-xl bg-violet-50 dark:bg-violet-900/20 text-left"
+          >
+            <div class="items-start flex gap-2">
+              <div
+                class="w-5 h-5 rounded-md bg-violet-500 dark:bg-violet-600 items-center justify-center mt-0.5 flex flex-shrink-0"
+              >
+                <svg
+                  class="w-3 h-3 text-white animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  id="Windframe_bmOXt184J"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                  ></path>
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p
+                  class="text-xs font-semibold text-violet-700 dark:text-violet-300 truncate"
+                >
+                  Research React Native
+                </p>
+                <p
+                  class="text-xs text-violet-500 mt-0.5 leading-relaxed dark:text-violet-400"
+                >
+                  Gathering docs, examples & comparisons
+                </p>
+                <div class="items-center mt-1.5 flex gap-1.5">
+                  <span class="text-xs text-violet-400 dark:text-violet-500"
+                    >Browser</span
+                  >
+                  <span class="text-violet-200 dark:text-violet-700">·</span>
+                  <span class="text-xs text-violet-400 dark:text-violet-500"
+                    >3 steps left</span
+                  >
+                </div>
+              </div>
+            </div>
+            <div
+              class="mt-2 h-1 rounded-full bg-violet-100 dark:bg-violet-900/40 overflow-hidden"
+            >
+              <div
+                style="width: 62%"
+                class="h-full rounded-full bg-violet-400 dark:bg-violet-500 transition-all duration-500"
+              ></div>
+            </div>
+          </button>
+          <button
+            type="submit"
+            class="border border-stone-200 dark:border-stone-700/50 hover:bg-stone-50 dark:hover:bg-stone-800 p-3 group transition-all duration-150 w-full rounded-xl bg-white dark:bg-stone-800/40 text-left"
+          >
+            <div class="items-start flex gap-2">
+              <div
+                class="w-5 h-5 rounded-md bg-amber-100 dark:bg-amber-900/40 items-center justify-center mt-0.5 border border-amber-200 dark:border-amber-700/50 flex flex-shrink-0"
+              >
+                <span class="text-amber-600 text-xs dark:text-amber-400"
+                  >◎</span
+                >
+              </div>
+              <div class="flex-1 min-w-0">
+                <p
+                  class="text-xs font-semibold text-stone-700 dark:text-stone-300 truncate"
+                >
+                  Scaffold project structure
+                </p>
+                <p
+                  class="text-xs text-stone-400 mt-0.5 leading-relaxed dark:text-stone-500"
+                >
+                  Waiting on research task
+                </p>
+                <div class="items-center mt-1.5 flex gap-1.5">
+                  <span class="text-xs text-stone-400 dark:text-stone-500"
+                    >Terminal</span
+                  >
+                  <span class="text-stone-200 dark:text-stone-700">·</span>
+                  <span class="text-xs text-amber-500 dark:text-amber-400"
+                    >queued</span
+                  >
+                </div>
+              </div>
+            </div>
+          </button>
+          <button
+            type="submit"
+            class="border border-stone-200 dark:border-stone-700/50 hover:bg-stone-50 dark:hover:bg-stone-800 p-3 group transition-all duration-150 w-full rounded-xl bg-white dark:bg-stone-800/40 text-left"
+          >
+            <div class="items-start flex gap-2">
+              <div
+                class="w-5 h-5 rounded-md bg-stone-100 dark:bg-stone-700 items-center justify-center mt-0.5 border border-stone-200 dark:border-stone-600 flex flex-shrink-0"
+              >
+                <span class="text-stone-400 text-xs dark:text-stone-500"
+                  >◎</span
+                >
+              </div>
+              <div class="flex-1 min-w-0">
+                <p
+                  class="text-xs font-semibold text-stone-700 dark:text-stone-300 truncate"
+                >
+                  Write component boilerplate
+                </p>
+                <p
+                  class="text-xs text-stone-400 mt-0.5 leading-relaxed dark:text-stone-500"
+                >
+                  Navigation, screens, styles
+                </p>
+                <div class="items-center mt-1.5 flex gap-1.5">
+                  <span class="text-xs text-stone-400 dark:text-stone-500"
+                    >Editor</span
+                  >
+                  <span class="text-stone-200 dark:text-stone-700">·</span>
+                  <span class="text-xs text-stone-400 dark:text-stone-500"
+                    >queued</span
+                  >
+                </div>
+              </div>
+            </div>
+          </button>
+          <button
+            type="submit"
+            class="border border-stone-200 dark:border-stone-700/50 hover:bg-stone-50 dark:hover:bg-stone-800 p-3 group transition-all duration-150 w-full rounded-xl bg-white dark:bg-stone-800/40 text-left"
+          >
+            <div class="items-start flex gap-2">
+              <div
+                class="w-5 h-5 rounded-md bg-stone-100 dark:bg-stone-700 items-center justify-center mt-0.5 border border-stone-200 dark:border-stone-600 flex flex-shrink-0"
+              >
+                <span class="text-stone-400 text-xs dark:text-stone-500"
+                  >◎</span
+                >
+              </div>
+              <div class="flex-1 min-w-0">
+                <p
+                  class="text-xs font-semibold text-stone-700 dark:text-stone-300 truncate"
+                >
+                  Configure Expo & deps
+                </p>
+                <p
+                  class="text-xs text-stone-400 mt-0.5 leading-relaxed dark:text-stone-500"
+                >
+                  Install and link packages
+                </p>
+                <div class="items-center mt-1.5 flex gap-1.5">
+                  <span class="text-xs text-stone-400 dark:text-stone-500"
+                    >Terminal</span
+                  >
+                  <span class="text-stone-200 dark:text-stone-700">·</span>
+                  <span class="text-xs text-stone-400 dark:text-stone-500"
+                    >queued</span
+                  >
+                </div>
+              </div>
+            </div>
+          </button>
+          <button
+            type="submit"
+            class="border border-stone-200 dark:border-stone-700/50 hover:bg-stone-50 dark:hover:bg-stone-800 p-3 group transition-all duration-150 w-full rounded-xl bg-white dark:bg-stone-800/40 text-left"
+          >
+            <div class="items-start flex gap-2">
+              <div
+                class="w-5 h-5 rounded-md bg-stone-100 dark:bg-stone-700 items-center justify-center mt-0.5 border border-stone-200 dark:border-stone-600 flex flex-shrink-0"
+              >
+                <span class="text-stone-400 text-xs dark:text-stone-500"
+                  >◎</span
+                >
+              </div>
+              <div class="flex-1 min-w-0">
+                <p
+                  class="text-xs font-semibold text-stone-700 dark:text-stone-300 truncate"
+                >
+                  Write README & docs
+                </p>
+                <p
+                  class="text-xs text-stone-400 mt-0.5 leading-relaxed dark:text-stone-500"
+                >
+                  Setup guide and usage notes
+                </p>
+                <div class="items-center mt-1.5 flex gap-1.5">
+                  <span class="text-xs text-stone-400 dark:text-stone-500"
+                    >Editor</span
+                  >
+                  <span class="text-stone-200 dark:text-stone-700">·</span>
+                  <span class="text-xs text-stone-400 dark:text-stone-500"
+                    >queued</span
+                  >
+                </div>
+              </div>
+            </div>
+          </button>
+        </div>
+        <div
+          class="px-3 py-2.5 items-center justify-between border-t border-stone-100 dark:border-stone-800 flex"
+        >
+          <span class="text-xs text-stone-400 dark:text-stone-500"
+            >1 running · 4 queued</span
+          >
+          <button
+            type="submit"
+            class="dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors duration-150 text-xs text-violet-500 font-medium"
+          >
+            + Add task
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="flex-1 min-w-0 flex flex-col gap-3 overflow-hidden">
+      <div
+        class="rounded-2xl bg-white dark:bg-neutral-900 px-5 py-4 shadow-sm items-start border border-stone-200 dark:border-stone-700/50 flex gap-4 flex-shrink-0"
+      >
+        <div
+          class="w-8 h-8 rounded-xl bg-violet-100 dark:bg-violet-900/40 items-center justify-center border border-violet-200 dark:border-violet-800/50 flex flex-shrink-0"
+        >
+          <span class="text-violet-500 dark:text-violet-400">✦</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="items-center flex gap-2 flex-wrap">
+            <p class="text-sm font-semibold text-stone-800 dark:text-stone-100">
+              Researching React Native
+            </p>
+            <span
+              class="items-center px-2.5 py-0.5 rounded-full bg-violet-50 dark:bg-violet-900/30 text-violet-600 text-xs font-medium inline-flex gap-1.5 border border-violet-100 dark:border-violet-800/40 dark:text-violet-400"
+            >
+              <svg
+                class="w-2.5 h-2.5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+                id="Windframe_1ZsX96gz4"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="3"
+                ></circle>
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                ></path>
+              </svg>
+              <span>In progress</span>
+            </span>
+          </div>
+          <p
+            class="text-xs text-stone-500 mt-1 leading-relaxed dark:text-stone-400 max-w-2xl"
+          >
+            Claude is browsing official React Native documentation, community
+            guides, and GitHub repositories to gather an overview of the
+            framework — including setup, navigation patterns, styling
+            approaches, and comparisons with Expo. Results will be compiled
+            before scaffolding begins.
+          </p>
+        </div>
+        <div class="items-center flex gap-2 flex-shrink-0">
+          <div class="text-right">
+            <p class="text-xs font-semibold text-stone-700 dark:text-stone-300">
+              Task 1 of 5
+            </p>
+            <p class="text-xs text-stone-400 dark:text-stone-500">
+              ~2 min left
+            </p>
+          </div>
+          <div
+            class="w-8 h-8 rounded-full bg-stone-50 dark:bg-stone-800 items-center justify-center border border-stone-200 dark:border-stone-700 flex flex-shrink-0"
+          >
+            <span
+              class="text-xs font-semibold text-stone-500 dark:text-stone-400"
+              >62%</span
+            >
+          </div>
+        </div>
+      </div>
+      <div
+        class="rounded-2xl bg-white dark:bg-neutral-900 shadow-sm flex-1 border border-stone-200 dark:border-stone-700/50 flex flex-col overflow-hidden"
+      >
+        <div
+          class="items-center px-4 py-3 bg-stone-50/80 dark:bg-neutral-900/90 flex gap-2 border-b border-stone-100 dark:border-stone-800 flex-shrink-0"
+        >
+          <div class="items-center flex gap-1.5">
+            <span
+              class="w-3 h-3 rounded-full bg-red-400/70 dark:bg-red-500/60 block"
+            ></span>
+            <span
+              class="w-3 h-3 rounded-full bg-amber-400/70 dark:bg-amber-500/60 block"
+            ></span>
+            <span
+              class="w-3 h-3 rounded-full bg-emerald-400/70 dark:bg-emerald-500/60 block"
+            ></span>
+          </div>
+          <div class="items-center ml-2 flex gap-1">
+            <button
+              type="submit"
+              class="p-1 rounded hover:text-stone-600 dark:hover:text-stone-300 transition-colors duration-150 text-stone-400"
+            >
+              <svg
+                class="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                id="Windframe_FPhI6sfp2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15 19l-7-7 7-7"
+                ></path>
+              </svg>
+            </button>
+            <button
+              type="submit"
+              class="p-1 rounded hover:text-stone-600 dark:hover:text-stone-300 transition-colors duration-150 text-stone-400"
+            >
+              <svg
+                class="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                id="Windframe_RcUTpRWDn"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 5l7 7-7 7"
+                ></path>
+              </svg>
+            </button>
+            <button
+              type="submit"
+              class="p-1 rounded hover:text-stone-600 dark:hover:text-stone-300 transition-colors duration-150 text-stone-400"
+            >
+              <svg
+                class="w-3.5 h-3.5 animate-spin"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                id="Windframe_YP8fcJrJN"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                ></path>
+              </svg>
+            </button>
+          </div>
+          <div
+            class="items-center bg-white dark:bg-stone-800 rounded-lg px-3 py-1.5 mx-1 flex-1 flex gap-2 border border-stone-200 dark:border-stone-700"
+          >
+            <svg
+              class="w-3 h-3 text-emerald-500 flex-shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              id="Windframe_gnlJGA87f"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+              ></path>
+            </svg>
+            <span class="text-xs text-stone-500 dark:text-stone-400 truncate"
+              >reactnative.dev/docs/getting-started</span
+            >
+            <div class="ml-auto flex-shrink-0">
+              <span
+                class="items-center text-xs text-violet-500 font-medium bg-violet-50 dark:bg-violet-900/20 px-1.5 py-0.5 rounded-md inline-flex gap-1 dark:text-violet-400 border border-violet-100 dark:border-violet-800/40"
+              >
+                <span
+                  class="w-1.5 h-1.5 rounded-full bg-violet-400 dark:bg-violet-500 animate-pulse block"
+                ></span>
+                <span>MCP</span>
+              </span>
+            </div>
+          </div>
+          <div class="items-center ml-1 flex gap-1">
+            <div
+              class="items-center bg-white dark:bg-stone-700 rounded-md px-2 py-1 text-xs text-stone-600 shadow-sm flex gap-1.5 border border-stone-200 dark:border-stone-600 dark:text-stone-300 max-w-28 truncate"
+            >
+              <svg
+                class="w-3 h-3 text-orange-400 flex-shrink-0"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+                id="Windframe_VDayUtVAi"
+              >
+                <path
+                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
+                ></path>
+              </svg>
+              <span class="truncate">React Native</span>
+            </div>
+            <div
+              class="items-center bg-stone-50 dark:bg-stone-800 rounded-md px-2 py-1 text-xs text-stone-400 flex gap-1.5 border border-stone-100 dark:border-stone-700 dark:text-stone-500 max-w-24 truncate"
+            >
+              <span class="truncate">GitHub</span>
+            </div>
+            <div
+              class="items-center bg-stone-50 dark:bg-stone-800 rounded-md px-2 py-1 text-xs text-stone-400 flex gap-1.5 border border-stone-100 dark:border-stone-700 dark:text-stone-500 max-w-24 truncate"
+            >
+              <span class="truncate">Expo docs</span>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white dark:bg-stone-950 flex-1 overflow-y-auto relative">
+          <div class="h-full flex">
+            <div
+              class="w-52 bg-stone-50 dark:bg-neutral-900 flex-shrink-0 border-r border-stone-100 dark:border-stone-800 p-4 space-y-1 overflow-y-auto"
+            >
+              <div class="mb-3">
+                <div class="items-center mb-3 flex gap-2">
+                  <svg
+                    class="w-5 h-5 text-orange-400"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                    id="Windframe_TOSx30bjk"
+                  >
+                    <path
+                      d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
+                    ></path>
+                  </svg>
+                  <span
+                    class="text-sm font-bold text-stone-800 dark:text-stone-100"
+                    >React Native</span
+                  >
+                </div>
+                <div
+                  class="h-7 bg-stone-100 dark:bg-stone-800 rounded-lg items-center px-2 flex gap-2"
+                >
+                  <svg
+                    class="w-3 h-3 text-stone-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    id="Windframe_OUt43iSAd"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    ></path>
+                  </svg>
+                  <span class="text-xs text-stone-400 dark:text-stone-500"
+                    >Search...</span
+                  >
+                </div>
+              </div>
+              <div class="space-y-0.5">
+                <p
+                  class="text-xs font-semibold text-stone-400 tracking-wide px-2 pb-1 dark:text-stone-500 uppercase"
+                >
+                  Get Started
+                </p>
+                <div
+                  class="items-center rounded-lg px-2 py-1.5 bg-orange-50 dark:bg-orange-900/20 flex gap-2 border border-orange-100 dark:border-orange-800/30"
+                >
+                  <span
+                    class="w-1 h-4 rounded-full bg-orange-400 dark:bg-orange-500 flex-shrink-0"
+                  ></span>
+                  <span
+                    class="text-xs font-medium text-orange-700 dark:text-orange-300"
+                    >Introduction</span
+                  >
+                </div>
+                <div
+                  class="items-center rounded-lg px-2 py-1.5 flex gap-2 hover:bg-stone-100 dark:hover:bg-stone-800"
+                >
+                  <span
+                    class="w-1 h-4 rounded-full bg-transparent flex-shrink-0"
+                  ></span>
+                  <span class="text-xs text-stone-500 dark:text-stone-400"
+                    >Getting Started</span
+                  >
+                </div>
+                <div
+                  class="items-center rounded-lg px-2 py-1.5 flex gap-2 hover:bg-stone-100 dark:hover:bg-stone-800"
+                >
+                  <span
+                    class="w-1 h-4 rounded-full bg-transparent flex-shrink-0"
+                  ></span>
+                  <span class="text-xs text-stone-500 dark:text-stone-400"
+                    >Core Components</span
+                  >
+                </div>
+                <div
+                  class="items-center rounded-lg px-2 py-1.5 flex gap-2 hover:bg-stone-100 dark:hover:bg-stone-800"
+                >
+                  <span
+                    class="w-1 h-4 rounded-full bg-transparent flex-shrink-0"
+                  ></span>
+                  <span class="text-xs text-stone-500 dark:text-stone-400"
+                    >React Fundamentals</span
+                  >
+                </div>
+                <div
+                  class="items-center rounded-lg px-2 py-1.5 flex gap-2 hover:bg-stone-100 dark:hover:bg-stone-800"
+                >
+                  <span
+                    class="w-1 h-4 rounded-full bg-transparent flex-shrink-0"
+                  ></span>
+                  <span class="text-xs text-stone-500 dark:text-stone-400"
+                    >Handling Text Input</span
+                  >
+                </div>
+              </div>
+              <div class="pt-2 space-y-0.5">
+                <p
+                  class="text-xs font-semibold text-stone-400 tracking-wide px-2 pb-1 dark:text-stone-500 uppercase"
+                >
+                  Guides
+                </p>
+                <div
+                  class="items-center rounded-lg px-2 py-1.5 flex gap-2 hover:bg-stone-100 dark:hover:bg-stone-800"
+                >
+                  <span
+                    class="w-1 h-4 rounded-full bg-transparent flex-shrink-0"
+                  ></span>
+                  <span class="text-xs text-stone-500 dark:text-stone-400"
+                    >Images</span
+                  >
+                </div>
+                <div
+                  class="items-center rounded-lg px-2 py-1.5 flex gap-2 hover:bg-stone-100 dark:hover:bg-stone-800"
+                >
+                  <span
+                    class="w-1 h-4 rounded-full bg-transparent flex-shrink-0"
+                  ></span>
+                  <span class="text-xs text-stone-500 dark:text-stone-400"
+                    >StyleSheet</span
+                  >
+                </div>
+                <div
+                  class="items-center rounded-lg px-2 py-1.5 flex gap-2 hover:bg-stone-100 dark:hover:bg-stone-800"
+                >
+                  <span
+                    class="w-1 h-4 rounded-full bg-transparent flex-shrink-0"
+                  ></span>
+                  <span class="text-xs text-stone-500 dark:text-stone-400"
+                    >Navigation</span
+                  >
+                </div>
+                <div
+                  class="items-center rounded-lg px-2 py-1.5 flex gap-2 hover:bg-stone-100 dark:hover:bg-stone-800"
+                >
+                  <span
+                    class="w-1 h-4 rounded-full bg-transparent flex-shrink-0"
+                  ></span>
+                  <span class="text-xs text-stone-500 dark:text-stone-400"
+                    >Networking</span
+                  >
+                </div>
+                <div
+                  class="items-center rounded-lg px-2 py-1.5 flex gap-2 hover:bg-stone-100 dark:hover:bg-stone-800"
+                >
+                  <span
+                    class="w-1 h-4 rounded-full bg-transparent flex-shrink-0"
+                  ></span>
+                  <span class="text-xs text-stone-500 dark:text-stone-400"
+                    >Performance</span
+                  >
+                </div>
+              </div>
+            </div>
+            <div class="flex-1 p-6 overflow-y-auto space-y-5 relative">
+              <div
+                class="h-20 rounded-xl bg-violet-50/50 dark:bg-violet-900/10 absolute top-44 left-5 right-5 border-2 border-violet-400 dark:border-violet-500 pointer-events-none z-10"
+              >
+                <div
+                  class="items-center bg-violet-500 dark:bg-violet-600 px-2 py-0.5 rounded-md absolute -top-5 left-3 flex gap-1.5"
+                >
+                  <span class="text-white text-xs">✦</span>
+                  <span class="text-white text-xs font-medium"
+                    >Claude is reading</span
+                  >
+                </div>
+              </div>
+              <div>
+                <div class="items-center mb-1 flex gap-2">
+                  <span
+                    class="text-xs font-medium text-orange-500 tracking-wide dark:text-orange-400 uppercase"
+                    >Introduction</span
+                  >
+                </div>
+                <h1
+                  class="text-xl font-bold text-stone-900 mb-3 dark:text-stone-100"
+                >
+                  React Native · Getting Started
+                </h1>
+                <p
+                  class="text-sm text-stone-600 leading-relaxed dark:text-stone-400"
+                >
+                  Welcome to the very start of your React Native journey! If
+                  you're looking for environment setup instructions, they've
+                  moved to their own section. Continue reading for an
+                  introduction to the documentation, Native Components, React,
+                  and more!
+                </p>
+              </div>
+              <div
+                class="rounded-xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 p-4 space-y-2"
+              >
+                <h2
+                  class="text-sm font-semibold text-stone-800 dark:text-stone-200"
+                >
+                  How to use these docs
+                </h2>
+                <p
+                  class="text-xs text-stone-500 leading-relaxed dark:text-stone-400"
+                >
+                  You can start here and read through these docs linearly like a
+                  book; or you can read the specific sections you need. Already
+                  familiar with React? You can skip that section—or read it for
+                  a light refresher.
+                </p>
+              </div>
+              <div class="space-y-2">
+                <h2
+                  class="text-sm font-semibold text-stone-800 dark:text-stone-200"
+                >
+                  Native Components
+                </h2>
+                <p
+                  class="text-xs text-stone-500 leading-relaxed dark:text-stone-400"
+                >
+                  <span>In Android and iOS development, a</span>
+                  <strong class="text-stone-700 dark:text-stone-300"
+                    >view</strong
+                  >
+                  <span
+                    >is the basic building block of UI. React Native lets you
+                    invoke these views with JavaScript. At runtime, React Native
+                    creates the corresponding Android and iOS views for these
+                    components.</span
+                  >
+                </p>
+                <div class="mt-3 grid grid-cols-2 gap-2">
+                  <div
+                    class="rounded-lg bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 p-3"
+                  >
+                    <p
+                      class="text-xs font-semibold text-stone-700 mb-1 dark:text-stone-300"
+                    >
+                      Core Components
+                    </p>
+                    <div class="space-y-0.5">
+                      <div
+                        class="h-2 bg-stone-100 dark:bg-stone-700 rounded-full w-full"
+                      ></div>
+                      <div
+                        class="h-2 bg-stone-100 dark:bg-stone-700 rounded-full w-4/5"
+                      ></div>
+                      <div
+                        class="h-2 bg-stone-100 dark:bg-stone-700 rounded-full w-3/5"
+                      ></div>
+                    </div>
+                  </div>
+                  <div
+                    class="rounded-lg bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 p-3"
+                  >
+                    <p
+                      class="text-xs font-semibold text-stone-700 mb-1 dark:text-stone-300"
+                    >
+                      Community Components
+                    </p>
+                    <div class="space-y-0.5">
+                      <div
+                        class="h-2 bg-stone-100 dark:bg-stone-700 rounded-full w-full"
+                      ></div>
+                      <div
+                        class="h-2 bg-stone-100 dark:bg-stone-700 rounded-full w-2/3"
+                      ></div>
+                      <div
+                        class="h-2 bg-stone-100 dark:bg-stone-700 rounded-full w-4/5"
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <h2
+                  class="text-sm font-semibold text-stone-800 dark:text-stone-200"
+                >
+                  React Fundamentals
+                </h2>
+                <p
+                  class="text-xs text-stone-500 leading-relaxed dark:text-stone-400"
+                >
+                  React Native runs on React, a popular open source library for
+                  building user interfaces with JavaScript. To make the most of
+                  React Native, it helps to understand React itself. This
+                  section can get you started or can serve as a refresher
+                  course.
+                </p>
+                <div
+                  class="rounded-xl bg-stone-900 dark:bg-stone-950 p-3 font-mono"
+                >
+                  <p class="text-xs text-emerald-400">import</p>
+                  <p class="text-xs text-stone-300">
+                    <span>React</span>
+                    <span class="text-emerald-400">from</span>
+                    <span class="text-orange-300">'react'</span>
+                    <span>;</span>
+                  </p>
+                  <p class="text-xs text-stone-300">
+                    <span class="text-emerald-400">import</span>
+                    <span>{ Text, View }</span>
+                    <span class="text-emerald-400">from</span>
+                    <span class="text-orange-300">'react-native'</span>
+                    <span>;</span>
+                  </p>
+                  <p class="text-xs text-stone-500 mt-1">
+                    // Your first component
+                  </p>
+                  <p class="text-xs text-stone-300">
+                    <span class="text-violet-400">const</span>
+                    <span class="text-amber-300">HelloWorld</span>
+                    <span>= ()</span>
+                    <span class="text-violet-400">=&gt;</span>
+                    <span>(</span>
+                  </p>
+                  <p class="text-xs text-stone-300">
+                    <span>&lt;</span>
+                    <span class="text-orange-400">View</span>
+                    <span>&gt;&lt;</span>
+                    <span class="text-orange-400">Text</span>
+                    <span>&gt;Hello, World!&lt;/</span>
+                    <span class="text-orange-400">Text</span>
+                    <span>&gt;&lt;/</span>
+                    <span class="text-orange-400">View</span>
+                    <span>&gt;</span>
+                  </p>
+                  <p class="text-xs text-stone-300">);</p>
+                </div>
+              </div>
+              <div class="pb-4 space-y-2">
+                <h2
+                  class="text-sm font-semibold text-stone-800 dark:text-stone-200"
+                >
+                  Expo vs React Native CLI
+                </h2>
+                <p
+                  class="text-xs text-stone-500 leading-relaxed dark:text-stone-400"
+                >
+                  If you are new to mobile development, the easiest way to get
+                  started is with Expo Go. Expo is a set of tools and services
+                  built around React Native. However, if you want to integrate
+                  React Native into an existing application, you'll need the
+                  React Native CLI.
+                </p>
+                <div class="mt-2 grid grid-cols-2 gap-3">
+                  <div
+                    class="rounded-xl bg-violet-50 dark:bg-violet-900/10 border border-violet-200 dark:border-violet-700/50 p-3"
+                  >
+                    <p
+                      class="text-xs font-semibold text-violet-700 mb-1.5 dark:text-violet-300"
+                    >
+                      Expo (Recommended)
+                    </p>
+                    <div class="space-y-1">
+                      <div class="items-center flex gap-1.5">
+                        <span
+                          class="w-3 h-3 rounded-full bg-emerald-400/30 items-center justify-center flex flex-shrink-0"
+                        >
+                          <span
+                            class="w-1.5 h-1.5 rounded-full bg-emerald-500 block"
+                          ></span>
+                        </span>
+                        <span class="text-xs text-stone-500 dark:text-stone-400"
+                          >Managed workflow</span
+                        >
+                      </div>
+                      <div class="items-center flex gap-1.5">
+                        <span
+                          class="w-3 h-3 rounded-full bg-emerald-400/30 items-center justify-center flex flex-shrink-0"
+                        >
+                          <span
+                            class="w-1.5 h-1.5 rounded-full bg-emerald-500 block"
+                          ></span>
+                        </span>
+                        <span class="text-xs text-stone-500 dark:text-stone-400"
+                          >Easy setup</span
+                        >
+                      </div>
+                      <div class="items-center flex gap-1.5">
+                        <span
+                          class="w-3 h-3 rounded-full bg-emerald-400/30 items-center justify-center flex flex-shrink-0"
+                        >
+                          <span
+                            class="w-1.5 h-1.5 rounded-full bg-emerald-500 block"
+                          ></span>
+                        </span>
+                        <span class="text-xs text-stone-500 dark:text-stone-400"
+                          >OTA updates</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    class="rounded-xl bg-white dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700 p-3"
+                  >
+                    <p
+                      class="text-xs font-semibold text-stone-700 mb-1.5 dark:text-stone-300"
+                    >
+                      React Native CLI
+                    </p>
+                    <div class="space-y-1">
+                      <div class="items-center flex gap-1.5">
+                        <span
+                          class="w-3 h-3 rounded-full bg-stone-200 dark:bg-stone-700 items-center justify-center flex flex-shrink-0"
+                        >
+                          <span
+                            class="w-1.5 h-1.5 rounded-full bg-stone-400 block"
+                          ></span>
+                        </span>
+                        <span class="text-xs text-stone-500 dark:text-stone-400"
+                          >Full control</span
+                        >
+                      </div>
+                      <div class="items-center flex gap-1.5">
+                        <span
+                          class="w-3 h-3 rounded-full bg-stone-200 dark:bg-stone-700 items-center justify-center flex flex-shrink-0"
+                        >
+                          <span
+                            class="w-1.5 h-1.5 rounded-full bg-stone-400 block"
+                          ></span>
+                        </span>
+                        <span class="text-xs text-stone-500 dark:text-stone-400"
+                          >Native modules</span
+                        >
+                      </div>
+                      <div class="items-center flex gap-1.5">
+                        <span
+                          class="w-3 h-3 rounded-full bg-stone-200 dark:bg-stone-700 items-center justify-center flex flex-shrink-0"
+                        >
+                          <span
+                            class="w-1.5 h-1.5 rounded-full bg-stone-400 block"
+                          ></span>
+                        </span>
+                        <span class="text-xs text-stone-500 dark:text-stone-400"
+                          >Custom config</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          class="items-center justify-between px-4 py-1.5 bg-stone-50 dark:bg-neutral-900 flex border-t border-stone-100 dark:border-stone-800 flex-shrink-0"
+        >
+          <span class="text-xs text-stone-400 dark:text-stone-500"
+            >reactnative.dev · secure</span
+          >
+          <div class="items-center flex gap-3">
+            <span
+              class="text-xs text-violet-500 font-medium items-center dark:text-violet-400 flex gap-1"
+            >
+              <svg
+                class="w-3 h-3 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+                id="Windframe_YFIWpT3Bb"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="3"
+                ></circle>
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                ></path>
+              </svg>
+              <span>Claude scanning…</span>
+            </span>
+            <span class="text-xs text-stone-400 dark:text-stone-500"
+              >3 pages visited</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="w-72 flex-shrink-0 flex flex-col gap-3 overflow-hidden">
+      <div
+        class="rounded-2xl bg-white dark:bg-neutral-900 shadow-sm border border-stone-200 dark:border-stone-700/50 flex flex-col overflow-hidden flex-1"
+      >
+        <div
+          class="px-4 py-3 items-center justify-between border-b border-stone-100 dark:border-stone-800 flex flex-shrink-0"
+        >
+          <div class="items-center flex gap-2">
+            <svg
+              class="w-3.5 h-3.5 text-stone-400 dark:text-stone-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              id="Windframe_1MqcCinCv"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              ></path>
+            </svg>
+            <span
+              class="text-xs font-semibold text-stone-700 tracking-wide dark:text-stone-300"
+              >Action Log</span
+            >
+          </div>
+          <div class="items-center flex gap-2">
+            <span
+              class="items-center text-xs text-stone-400 flex gap-1 dark:text-stone-500"
+            >
+              <span
+                class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse block"
+              ></span>
+              <span>live</span>
+            </span>
+            <button
+              type="submit"
+              class="dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors duration-150 p-0.5 rounded text-xs text-stone-400"
+            >
+              <svg
+                class="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                id="Windframe_f4CeMsDIL"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                ></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div
+          class="px-3 py-2 flex gap-1 border-b border-stone-100 dark:border-stone-800 flex-shrink-0"
+        >
+          <button
+            type="submit"
+            class="dark:text-stone-300 transition-colors duration-150 px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 text-xs font-medium text-stone-700"
+          >
+            All
+          </button>
+          <button
+            type="submit"
+            class="dark:text-stone-500 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors duration-150 px-2.5 py-1 rounded-lg text-xs font-medium text-stone-400"
+          >
+            Browser
+          </button>
+          <button
+            type="submit"
+            class="dark:text-stone-500 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors duration-150 px-2.5 py-1 rounded-lg text-xs font-medium text-stone-400"
+          >
+            Tools
+          </button>
+          <button
+            type="submit"
+            class="dark:text-stone-500 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors duration-150 px-2.5 py-1 rounded-lg text-xs font-medium text-stone-400"
+          >
+            Errors
+          </button>
+        </div>
+        <div class="px-3 py-3 flex-1 overflow-y-auto space-y-2">
+          <div
+            class="rounded-xl bg-violet-50 dark:bg-violet-900/10 border border-violet-200 dark:border-violet-700/50 p-3"
+          >
+            <div class="items-start flex gap-2">
+              <div
+                class="w-5 h-5 rounded-md bg-violet-100 dark:bg-violet-900/50 items-center justify-center mt-0.5 border border-violet-200 dark:border-violet-700 flex flex-shrink-0"
+              >
+                <svg
+                  class="w-3 h-3 text-violet-500 dark:text-violet-400 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  id="Windframe_CT6KTnXGh"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                  ></path>
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="items-center justify-between flex gap-1">
+                  <p
+                    class="text-xs font-semibold text-violet-700 dark:text-violet-300"
+                  >
+                    Reading page content
+                  </p>
+                  <span
+                    class="text-xs text-violet-400 dark:text-violet-500 flex-shrink-0"
+                    >now</span
+                  >
+                </div>
+                <p
+                  class="text-xs text-violet-500 mt-0.5 leading-relaxed dark:text-violet-400"
+                >
+                  Extracting text from reactnative.dev/docs/getting-started —
+                  Expo vs CLI section
+                </p>
+                <div class="mt-1.5 items-center flex gap-1.5">
+                  <span
+                    class="text-xs bg-violet-100 dark:bg-violet-900/50 text-violet-600 px-1.5 py-0.5 rounded-md font-medium dark:text-violet-400 border border-violet-200 dark:border-violet-700/50"
+                    >browser.read</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="rounded-xl bg-white dark:bg-stone-800/30 border border-stone-100 dark:border-stone-800 p-3"
+          >
+            <div class="items-start flex gap-2">
+              <div
+                class="w-5 h-5 rounded-md bg-emerald-50 dark:bg-emerald-900/30 items-center justify-center mt-0.5 border border-emerald-100 dark:border-emerald-800/40 flex flex-shrink-0"
+              >
+                <svg
+                  class="w-3 h-3 text-emerald-500 dark:text-emerald-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  id="Windframe_Yg0dKg8a5"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2.5"
+                    d="M5 13l4 4L19 7"
+                  ></path>
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="items-center justify-between flex gap-1">
+                  <p
+                    class="text-xs font-semibold text-stone-700 dark:text-stone-300"
+                  >
+                    Page loaded
+                  </p>
+                  <span
+                    class="text-xs text-stone-400 dark:text-stone-500 flex-shrink-0"
+                    >12s ago</span
+                  >
+                </div>
+                <p
+                  class="text-xs text-stone-400 mt-0.5 leading-relaxed dark:text-stone-500"
+                >
+                  reactnative.dev/docs/getting-started loaded in 1.2s
+                </p>
+                <div class="mt-1.5 items-center flex gap-1.5">
+                  <span
+                    class="text-xs bg-stone-50 dark:bg-stone-800 text-stone-500 px-1.5 py-0.5 rounded-md font-medium dark:text-stone-400 border border-stone-100 dark:border-stone-700"
+                    >browser.navigate</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="rounded-xl bg-white dark:bg-stone-800/30 border border-stone-100 dark:border-stone-800 p-3"
+          >
+            <div class="items-start flex gap-2">
+              <div
+                class="w-5 h-5 rounded-md bg-emerald-50 dark:bg-emerald-900/30 items-center justify-center mt-0.5 border border-emerald-100 dark:border-emerald-800/40 flex flex-shrink-0"
+              >
+                <svg
+                  class="w-3 h-3 text-emerald-500 dark:text-emerald-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  id="Windframe_U4FvCJyUx"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2.5"
+                    d="M5 13l4 4L19 7"
+                  ></path>
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="items-center justify-between flex gap-1">
+                  <p
+                    class="text-xs font-semibold text-stone-700 dark:text-stone-300"
+                  >
+                    Extracted data
+                  </p>
+                  <span
+                    class="text-xs text-stone-400 dark:text-stone-500 flex-shrink-0"
+                    >28s ago</span
+                  >
+                </div>
+                <p
+                  class="text-xs text-stone-400 mt-0.5 leading-relaxed dark:text-stone-500"
+                >
+                  Captured Core Components overview, 4 sections
+                </p>
+                <div class="mt-1.5 items-center flex gap-1.5">
+                  <span
+                    class="text-xs bg-stone-50 dark:bg-stone-800 text-stone-500 px-1.5 py-0.5 rounded-md font-medium dark:text-stone-400 border border-stone-100 dark:border-stone-700"
+                    >browser.extract</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="rounded-xl bg-white dark:bg-stone-800/30 border border-stone-100 dark:border-stone-800 p-3"
+          >
+            <div class="items-start flex gap-2">
+              <div
+                class="w-5 h-5 rounded-md bg-emerald-50 dark:bg-emerald-900/30 items-center justify-center mt-0.5 border border-emerald-100 dark:border-emerald-800/40 flex flex-shrink-0"
+              >
+                <svg
+                  class="w-3 h-3 text-emerald-500 dark:text-emerald-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  id="Windframe_xy54FtLg5"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2.5"
+                    d="M5 13l4 4L19 7"
+                  ></path>
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="items-center justify-between flex gap-1">
+                  <p
+                    class="text-xs font-semibold text-stone-700 dark:text-stone-300"
+                  >
+                    Navigated to GitHub
+                  </p>
+                  <span
+                    class="text-xs text-stone-400 dark:text-stone-500 flex-shrink-0"
+                    >47s ago</span
+                  >
+                </div>
+                <p
+                  class="text-xs text-stone-400 mt-0.5 leading-relaxed dark:text-stone-500"
+                >
+                  github.com/facebook/react-native — checked stars, issues,
+                  activity
+                </p>
+                <div class="mt-1.5 items-center flex gap-1.5">
+                  <span
+                    class="text-xs bg-stone-50 dark:bg-stone-800 text-stone-500 px-1.5 py-0.5 rounded-md font-medium dark:text-stone-400 border border-stone-100 dark:border-stone-700"
+                    >browser.navigate</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="rounded-xl bg-white dark:bg-stone-800/30 border border-stone-100 dark:border-stone-800 p-3"
+          >
+            <div class="items-start flex gap-2">
+              <div
+                class="w-5 h-5 rounded-md bg-amber-50 dark:bg-amber-900/20 items-center justify-center mt-0.5 border border-amber-100 dark:border-amber-800/30 flex flex-shrink-0"
+              >
+                <svg
+                  class="w-3 h-3 text-amber-500 dark:text-amber-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  id="Windframe_JLfQmscWE"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                  ></path>
+                  <circle cx="12" cy="12" r="3" stroke-width="2"></circle>
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="items-center justify-between flex gap-1">
+                  <p
+                    class="text-xs font-semibold text-stone-700 dark:text-stone-300"
+                  >
+                    MCP tool called
+                  </p>
+                  <span
+                    class="text-xs text-stone-400 dark:text-stone-500 flex-shrink-0"
+                    >1m 4s ago</span
+                  >
+                </div>
+                <p
+                  class="text-xs text-stone-400 mt-0.5 leading-relaxed dark:text-stone-500"
+                >
+                  browser.search("React Native vs Expo 2024")
+                </p>
+                <div class="mt-1.5 items-center flex gap-1.5">
+                  <span
+                    class="text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-600 px-1.5 py-0.5 rounded-md font-medium dark:text-amber-400 border border-amber-100 dark:border-amber-800/40"
+                    >browser.search</span
+                  >
+                  <span class="text-xs text-stone-400 dark:text-stone-500"
+                    >→ 8 results</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="rounded-xl bg-white dark:bg-stone-800/30 border border-stone-100 dark:border-stone-800 p-3"
+          >
+            <div class="items-start flex gap-2">
+              <div
+                class="w-5 h-5 rounded-md bg-emerald-50 dark:bg-emerald-900/30 items-center justify-center mt-0.5 border border-emerald-100 dark:border-emerald-800/40 flex flex-shrink-0"
+              >
+                <svg
+                  class="w-3 h-3 text-emerald-500 dark:text-emerald-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  id="Windframe_5yOiteNHb"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2.5"
+                    d="M5 13l4 4L19 7"
+                  ></path>
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="items-center justify-between flex gap-1">
+                  <p
+                    class="text-xs font-semibold text-stone-700 dark:text-stone-300"
+                  >
+                    Task started
+                  </p>
+                  <span
+                    class="text-xs text-stone-400 dark:text-stone-500 flex-shrink-0"
+                    >1m 22s ago</span
+                  >
+                </div>
+                <p
+                  class="text-xs text-stone-400 mt-0.5 leading-relaxed dark:text-stone-500"
+                >
+                  Initiated "Research React Native" task via MCP agent
+                </p>
+                <div class="mt-1.5 items-center flex gap-1.5">
+                  <span
+                    class="text-xs bg-stone-50 dark:bg-stone-800 text-stone-500 px-1.5 py-0.5 rounded-md font-medium dark:text-stone-400 border border-stone-100 dark:border-stone-700"
+                    >agent.start</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="rounded-xl bg-stone-50 dark:bg-stone-800/20 border border-stone-100 dark:border-stone-800 p-3"
+          >
+            <div class="items-start flex gap-2">
+              <div
+                class="w-5 h-5 rounded-md bg-stone-100 dark:bg-stone-700 items-center justify-center mt-0.5 border border-stone-200 dark:border-stone-600 flex flex-shrink-0"
+              >
+                <span class="text-stone-400 text-xs dark:text-stone-500"
+                  >✦</span
+                >
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="items-center justify-between flex gap-1">
+                  <p
+                    class="text-xs font-semibold text-stone-600 dark:text-stone-400"
+                  >
+                    Session started
+                  </p>
+                  <span
+                    class="text-xs text-stone-400 dark:text-stone-500 flex-shrink-0"
+                    >1m 30s ago</span
+                  >
+                </div>
+                <p
+                  class="text-xs text-stone-400 mt-0.5 leading-relaxed dark:text-stone-500"
+                >
+                  Claude Code connected via MCP. Human Assist ready.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          class="px-4 py-3 bg-stone-50/50 dark:bg-stone-800/20 border-t border-stone-100 dark:border-stone-800 flex-shrink-0"
+        >
+          <div class="text-center grid grid-cols-3 gap-2">
+            <div>
+              <p
+                class="text-sm font-semibold text-stone-800 dark:text-stone-100"
+              >
+                7
+              </p>
+              <p class="text-xs text-stone-400 dark:text-stone-500">actions</p>
+            </div>
+            <div>
+              <p
+                class="text-sm font-semibold text-stone-800 dark:text-stone-100"
+              >
+                3
+              </p>
+              <p class="text-xs text-stone-400 dark:text-stone-500">pages</p>
+            </div>
+            <div>
+              <p
+                class="text-sm font-semibold text-emerald-600 dark:text-emerald-400"
+              >
+                6/7
+              </p>
+              <p class="text-xs text-stone-400 dark:text-stone-500">success</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
