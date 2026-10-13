@@ -5,7 +5,9 @@ build
 artifacts
 .hutch
 .cottontail-tmp
-
+.env
+.env.*
+!*.example
 
 user-plans# Firebase debug logs
 *-debug.log
