@@ -17,8 +17,8 @@
   "_metadata": {
     "overrides": {
       "claude-opus-5": "qwen/qwen3.6-35b-a3b",
-      "claude-3-5-sonnet-20241022": "qwen3.6-35b-a3b",
-      "claude-haiku-4-5-20251001": "qwen3.6-35b-a3b"
+      "claude-3-5-sonnet-20241022": "qwen/qwen3.6-35b-a3b",
+      "claude-haiku-4-5-20251001": "qwen/qwen3.6-35b-a3b"
     },
     "timeoutOverrides": {
       "api": 1800000,
