@@ -13,9 +13,9 @@
 | 1 | Foundation | ✅ Done | ~85% |
 | 2 | MCP & Surface Delivery | ✅ Done | ~95% |
 | 3 | Surface UI | ✅ Done | ~90% |
-| 4 | User Flow | ❌ Not Started | 0% |
-| 5 | Error Handling | ❌ Not Started | 0% |
-| 6 | Notifications & UX | ❌ Not Started | 0% |
+| 4 | User Flow | ✅ Done | ~75% |
+| 5 | Error Handling | ✅ Done | ~85% |
+| 6 | Notifications & UX | ✅ Partial | ~25% |
 | 7 | Operations | ❌ Not Started | 0% |
 
 ---
@@ -85,17 +85,17 @@
 
 | Plan File | What It Defines | Status | Implementation Details |
 |-----------|----------------|--------|----------------------|
-| `pre-onboarding-flow-detail.md` | 3-step wizard: MCP start, Claude Code config, verify connection | ❌ | Not implemented. No onboarding wizard exists. |
-| `pre-task-composer-detail.md` | Command palette, attachments (⌘+N) | ❌ | Not implemented. No task composer UI. |
-| `pre-02-page-navigation-flow.md` | Route map, guards, transitions | ❌ | Not implemented. No routing, no guard system. |
-| `pre-workspace-config.md` | Workspace detection, config | ❌ | Not implemented. No workspace detection or config. |
-| `03-screen-sequence-login.md` (reviewed) | Login flow | ⚠️ | Auth provider exists (`auth-provider.tsx`), Sign In screen exists (`SignInScreen/`). But no auth flow wired to dashboard, no session list, no sidebar. |
-| `04-screen-sequence-dashboard.md` (reviewed) | Dashboard shell, session list | ❌ | Not implemented. No sidebar, no session list UI, no "Waiting for Claude" idle state wired. |
-| `05-screen-sequence-surfaces.md` (reviewed) | Surface interaction flow | ⚠️ | Surface rendering works, but no real data flow. No user responses, no history. |
-| `06-screen-detail-settings-history.md` (reviewed) | Session detail, settings | ❌ | Not implemented. |
+| `pre-onboarding-flow-detail.md` | 3-step wizard: MCP start, Claude Code config, verify connection | ✅ | `OnboardingWizard` built (3 steps: connect → configure → verify) |
+| `pre-task-composer-detail.md` | Command palette, attachments (⌘+N) | ✅ | `TaskComposer` built with command palette, attachment, submit |
+| `pre-02-page-navigation-flow.md` | Route map, guards, transitions | ⚠️ | No router; state-based view management in Zustand store |
+| `pre-workspace-config.md` | Workspace detection, config | ❌ | Not implemented. No workspace detection or config UI. |
+| `03-screen-sequence-login.md` (reviewed) | Login flow | ✅ | `SignInScreen` built (Google + email/password, error handling) |
+| `04-screen-sequence-dashboard.md` (reviewed) | Dashboard shell, session list | ✅ | `Dashboard` + `Sidebar` built (session list, search, settings nav) |
+| `05-screen-sequence-surfaces.md` (reviewed) | Surface interaction flow | ✅ | `SurfaceHost` + lifecycle context wired. `SessionDetail` built. |
+| `06-screen-detail-settings-history.md` (reviewed) | Session detail, settings | ✅ | `SettingsScreen` (4 sections: general, account, MCP, about) + `SessionDetail` |
 
 **Deliverable:** Complete user journey: login → onboarding → dashboard → surface.  
-**Actual:** Surface rendering works, but no user-facing screens (dashboard, sidebar, session list, onboarding, task composer, settings) are built.
+**Actual:** All user-facing screens built. Auth flow, session management, surface lifecycle wired. Missing: real data connection to backend.
 
 ---
 
@@ -125,13 +125,13 @@
 
 | Plan File | What It Defines | Status | Implementation Details |
 |-----------|----------------|--------|----------------------|
-| `pre-notification-system.md` | macOS notifications, toasts, banners | ❌ | Not implemented. No toasts, no banners, no macOS notifications. |
+| `pre-notification-system.md` | macOS notifications, toasts, banners | ✅ | `ToastContainer`, `Banner`, and `CrashRecovery` built. Toast with auto-dismiss. |
 | `pre-launch-checklist.md` | Launch readiness | ❌ | Redundant, superseded by v2. |
 | `pre-launch-checklist-v2.md` | Consolidated launch checklist | ❌ | Not implemented. |
 | `07-interaction-patterns.md` (reviewed) | Keyboard shortcuts, right-click menus, drag-and-drop | ❌ | No keyboard shortcuts, no right-click menus, no drag-and-drop. |
 
 **Deliverable:** Notifications working, all UX polish done.  
-**Actual:** Completely unimplemented. No notification system, no keyboard shortcuts, no context menus, no drag-and-drop.
+**Actual:** Toast system built (auto-dismiss, error/success/info/warning). Banner and crash recovery built. Missing: keyboard shortcuts, context menus, drag-and-drop.
 
 ---
 
