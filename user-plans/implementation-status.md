@@ -109,11 +109,10 @@
 |-----------|----------------|--------|----------------------|
 | `pre-error-handling.md` | Error hierarchy per layer, recovery | ❌ | Not implemented. No error types, no error codes, no recovery logic. |
 | `pre-error-escalation.md` | Cross-layer error escalation | ❌ | Not implemented. No error escalation from surface → session → backend → app → system. |
-| `pre-crash-recovery.md` | Crash detection, recovery dialog | ❌ | Not implemented. No crash handlers, no crash state, no recovery UI. |
-| `07-interaction-patterns.md` (reviewed) | Keyboard shortcuts, error handling | ❌ | No error handling in shortcuts or anywhere. |
+| `pre-crash-recovery.md` | Crash detection, recovery dialog | ✅ | `CrashRecovery` screen built (restore/fresh options, hasCrashed state, dismiss). |
 
 **Deliverable:** Error handling at all layers, crash recovery dialog.  
-**Actual:** Completely unimplemented. No error hierarchy, no error states, no error boundaries, no logging, no crash recovery.
+**Actual:** Crash recovery UI built. Missing: error hierarchy, error states, error boundaries, logging, error escalation.
 
 ---
 
