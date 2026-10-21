@@ -1,0 +1,95 @@
+/* ── Crash Recovery ───────────────────────────────────────────────── */
+
+.ha-crash-recovery {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+}
+
+.ha-crash-recovery-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #fed7d7;
+  color: #e53e3e;
+  margin-bottom: 24px;
+}
+
+.ha-crash-recovery-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ha-text);
+  margin: 0 0 8px 0;
+}
+
+.ha-crash-recovery-desc {
+  font-size: 14px;
+  color: var(--ha-text-secondary);
+  margin: 0 0 40px 0;
+  max-width: 400px;
+}
+
+.ha-crash-recovery-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 280px;
+}
+
+.ha-crash-recovery-choice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.ha-crash-recovery-choice:not(.ha-crash-recovery-choice--secondary) {
+  background: var(--ha-primary);
+  color: #fff;
+}
+
+.ha-crash-recovery-choice:not(.ha-crash-recovery-choice--secondary):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ha-primary) 85%, white);
+}
+
+.ha-crash-recovery-choice--secondary {
+  background: var(--ha-surface);
+  color: var(--ha-text);
+  border: 1px solid var(--ha-border);
+}
+
+.ha-crash-recovery-choice--secondary:hover:not(:disabled) {
+  background: var(--ha-bg-hover);
+}
+
+.ha-crash-recovery-choice:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* ── Spinner (simple character spinner) ───────────────────────────── */
+
+.ha-spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

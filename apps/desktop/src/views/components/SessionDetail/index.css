@@ -1,0 +1,146 @@
+/* ── Session Detail ─────────────────────────────────────────────────── */
+
+.ha-session-detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 24px 32px;
+  overflow-y: auto;
+}
+
+/* ── Header ───────────────────────────────────────────────────────── */
+
+.ha-session-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.ha-session-detail-back {
+  padding: 6px 12px;
+  background: var(--ha-surface);
+  border: 1px solid var(--ha-border);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--ha-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.ha-session-detail-back:hover {
+  background: var(--ha-bg-hover);
+  color: var(--ha-text);
+}
+
+.ha-session-detail-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ha-text);
+  margin: 0;
+  flex: 1;
+}
+
+.ha-session-detail-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ha-session-detail-action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: var(--ha-surface);
+  border: 1px solid var(--ha-border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ha-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.ha-session-detail-action:hover {
+  background: var(--ha-bg-hover);
+  color: var(--ha-text);
+}
+
+.ha-session-detail-action--danger:hover {
+  color: #e53e3e;
+  border-color: #fed7d7;
+}
+
+/* ── Meta ─────────────────────────────────────────────────────────── */
+
+.ha-session-detail-meta {
+  display: flex;
+  gap: 32px;
+  padding: 16px 20px;
+  background: var(--ha-surface);
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.ha-session-detail-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ha-text-secondary);
+}
+
+.ha-session-detail-meta-item svg {
+  color: var(--ha-text-tertiary);
+}
+
+.ha-session-detail-meta-item span:last-child {
+  color: var(--ha-text);
+  font-weight: 500;
+}
+
+.ha-session-detail-status {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.ha-session-detail-status--active {
+  background: color-mix(in srgb, var(--ha-primary) 15%, transparent);
+  color: var(--ha-primary);
+}
+
+.ha-session-detail-status--waiting {
+  background: #ebf5ff;
+  color: #3182ce;
+}
+
+.ha-session-detail-status--archived {
+  background: #f7fafc;
+  color: var(--ha-text-tertiary);
+}
+
+/* ── Section ──────────────────────────────────────────────────────── */
+
+.ha-session-detail-section {
+  margin-top: 16px;
+}
+
+.ha-session-detail-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ha-text);
+  margin: 0 0 12px 0;
+}
+
+.ha-session-detail-empty {
+  padding: 32px;
+  text-align: center;
+  background: var(--ha-surface);
+  border-radius: 8px;
+  color: var(--ha-text-tertiary);
+  font-size: 13px;
+}

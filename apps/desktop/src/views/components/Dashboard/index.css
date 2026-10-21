@@ -1,0 +1,116 @@
+/* ── Dashboard ───────────────────────────────────────────────────────── */
+
+.ha-dashboard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ── Idle State ─────────────────────────────────────────────────────── */
+
+.ha-dashboard-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 40px;
+  text-align: center;
+}
+
+.ha-dashboard-idle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--ha-primary-light, color-mix(in srgb, var(--ha-primary) 15%, transparent));
+  color: var(--ha-primary);
+  margin-bottom: 24px;
+}
+
+.ha-dashboard-idle-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ha-text);
+  margin: 0 0 8px 0;
+}
+
+.ha-dashboard-idle-sub {
+  font-size: 15px;
+  color: var(--ha-text-secondary);
+  margin: 0 0 32px 0;
+  max-width: 400px;
+}
+
+.ha-dashboard-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.ha-dashboard-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+  font-family: inherit;
+}
+
+.ha-dashboard-btn--primary {
+  background: var(--ha-primary);
+  color: #fff;
+}
+
+.ha-dashboard-btn--primary:hover {
+  background: color-mix(in srgb, var(--ha-primary) 85%, white);
+}
+
+.ha-dashboard-btn--secondary {
+  background: var(--ha-surface);
+  color: var(--ha-text);
+  border: 1px solid var(--ha-border);
+}
+
+.ha-dashboard-btn--secondary:hover {
+  background: var(--ha-bg-hover);
+}
+
+.ha-dashboard-btn-icon {
+  font-size: 16px;
+}
+
+/* ── Sessions ───────────────────────────────────────────────────────── */
+
+.ha-dashboard-sessions {
+  padding: 24px 40px;
+  border-top: 1px solid var(--ha-border);
+  margin-top: auto;
+}
+
+.ha-dashboard-sessions-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ha-text);
+  margin: 0 0 16px 0;
+}
+
+.ha-dashboard-sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ha-dashboard-sessions-placeholder {
+  padding: 24px;
+  text-align: center;
+  color: var(--ha-text-tertiary);
+  font-size: 13px;
+}

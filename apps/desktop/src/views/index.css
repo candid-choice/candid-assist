@@ -10,7 +10,7 @@
   /* Primary — muted violet/purple */
   --ha-primary: #7c6fa8;
   --ha-primary-hover: #6b5d94;
-  --ha-primary-light: #f0ee f6;
+  --ha-primary-light: #f0eef6;
   /* Secondary — muted peach/terracotta */
   --ha-secondary: #e8927f;
   /* Text — warm charcoal */
@@ -18,8 +18,16 @@
   --ha-text-secondary: #8a8178;
   /* Borders — soft beige */
   --ha-border: #e8e4de;
+  --ha-bg-hover: #f5f4f1;
+  --ha-text-tertiary: #a8a099;
+  /* Secondary */
+  --ha-secondary-light: #f2e2dc;
+  /* Sidebar */
+  --ha-sidebar-bg: #f5f5f5;
   /* Success */
   --ha-success: #6b9e78;
+  /* Danger */
+  --ha-danger: #e53e3e;
   /* Shadow */
   --ha-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
   --ha-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
