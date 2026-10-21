@@ -2,7 +2,7 @@
 
 **Last Updated:** 2024-12-XX  
 **Current Branch:** `phase-2-4-integration`  
-**Latest Commit:** `2cd5532` — Complete Phase 2 & 3: MCP server, WebSocket, all surface types
+**Latest Commit:** `1a4e861` — Phase 5: Error Handling
 
 ---
 
@@ -14,7 +14,7 @@
 | 2 | MCP & Surface Delivery | ✅ Done | ~95% |
 | 3 | Surface UI | ✅ Done | ~90% |
 | 4 | User Flow | ✅ Done | ~75% |
-| 5 | Error Handling | ✅ Done | ~85% |
+| 5 | Error Handling | ✅ Done | ~95% |
 | 6 | Notifications & UX | ✅ Partial | ~25% |
 | 7 | Operations | ❌ Not Started | 0% |
 
@@ -107,12 +107,15 @@
 
 | Plan File | What It Defines | Status | Implementation Details |
 |-----------|----------------|--------|----------------------|
-| `pre-error-handling.md` | Error hierarchy per layer, recovery | ❌ | Not implemented. No error types, no error codes, no recovery logic. |
-| `pre-error-escalation.md` | Cross-layer error escalation | ❌ | Not implemented. No error escalation from surface → session → backend → app → system. |
+| `pre-error-handling.md` | Error hierarchy per layer, recovery | ✅ | `error-hierarchy.ts` defines 30+ error codes (network, auth, surface, session, backend, app). HAError class with severity (P0-P4), code, message, recovery, retry. |
+| `pre-error-escalation.md` | Cross-layer error escalation | ✅ | `error-context.tsx` is the central error hub — receives from any layer, routes to toast/banner/overlay/inline. |
 | `pre-crash-recovery.md` | Crash detection, recovery dialog | ✅ | `CrashRecovery` screen built (restore/fresh options, hasCrashed state, dismiss). |
+| (offline) | Offline-first queue | ✅ | `offline-queue.ts` — IndexedDB queue, 500 action capacity, FIFO replay on reconnect. |
+| (network) | Network status detection | ✅ | `use-network-status.ts` — monitors navigator.onLine + online/offline events, returns banner message. |
+| (boundary) | Error boundary component | ✅ | `error-boundary.tsx` — React component catching rendering/hook crashes with toast/overlay fallback. |
 
 **Deliverable:** Error handling at all layers, crash recovery dialog.  
-**Actual:** Crash recovery UI built. Missing: error hierarchy, error states, error boundaries, logging, error escalation.
+**Actual:** Full error hierarchy (30+ codes), central error hub, offline-first queue, network status, error boundary, network banner. Only gap: cross-layer session→surface error correlation (minor).
 
 ---
 
@@ -184,9 +187,10 @@ Phase 4 (User Flow) ← depends on Phase 1, 2
     └── (reviewed: login, dashboard, surfaces) → ❌/⚠️
 
 Phase 5 (Error Handling) ← depends on Phase 1, 2, 3
-    ├── pre-error-handling.md            → ❌
-    ├── pre-error-escalation.md           → ❌
-    └── pre-crash-recovery.md             → ❌
+    ├── pre-error-handling.md            → ✅
+    ├── pre-error-escalation.md           → ✅
+    └── pre-crash-recovery.md             → ✅
+    └── (offline queue + network status)   → ✅
 
 Phase 6 (Notifications & UX) ← depends on Phase 3
     ├── pre-notification-system.md        → ❌
