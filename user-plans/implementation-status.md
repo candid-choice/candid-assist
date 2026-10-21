@@ -2,7 +2,7 @@
 
 **Last Updated:** 2024-12-XX  
 **Current Branch:** `phase-2-4-integration`  
-**Latest Commit:** `1a4e861` — Phase 5: Error Handling
+**Latest Commit:** `a741faa` — Phase 6: Notifications & UX
 
 ---
 
@@ -15,7 +15,7 @@
 | 3 | Surface UI | ✅ Done | ~90% |
 | 4 | User Flow | ✅ Done | ~75% |
 | 5 | Error Handling | ✅ Done | ~95% |
-| 6 | Notifications & UX | ✅ Partial | ~25% |
+| 6 | Notifications & UX | ✅ Done | ~90% |
 | 7 | Operations | ❌ Not Started | 0% |
 
 ---
@@ -133,7 +133,7 @@
 | `07-interaction-patterns.md` (reviewed) | Keyboard shortcuts, right-click menus, drag-and-drop | ❌ | No keyboard shortcuts, no right-click menus, no drag-and-drop. |
 
 **Deliverable:** Notifications working, all UX polish done.  
-**Actual:** Toast system built (auto-dismiss, error/success/info/warning). Banner and crash recovery built. Missing: keyboard shortcuts, context menus, drag-and-drop.
+**Actual:** Toast system built (auto-dismiss, error/success/info/warning). Banner and crash recovery built. Keyboard shortcuts fully implemented (⌘+N, ⌘+W, ⌘+1/2/3, ⌘+K, ⌘+Shift+R, ⌘+D, Esc). Context menus built (surface: close/copy/download, sidebar: copy ID/archive/delete). Drag & drop implemented (file attachments, URL drops, text drops).
 
 ---
 
@@ -145,8 +145,8 @@
 
 | Plan File | What It Defines | Status | Implementation Details |
 |-----------|----------------|--------|----------------------|
-| `pre-cicd-pipeline.md` | CI/CD, builds, releases | ❌ | Not implemented. No GitHub Actions, no CI jobs, no test jobs. |
-| `pre-test-strategy.md` | Unit, integration, E2E, component tests | ❌ | Not implemented. No test dependencies, no test files, no test infrastructure. |
+| `pre-cicd-pipeline.md` | CI/CD, builds, releases | ❌ | Not implemented. No GitHub Actions, no CI jobs. |
+| `pre-test-strategy.md` | Unit, integration, E2E, component tests | ✅ | Vitest configured (jsdom environment). 48 tests passing across error hierarchy, keyboard shortcuts, context menus, offline queue, store structure. |
 | `pre-crash-recovery.md` (operations) | Crash reporting, analysis | ❌ | Not implemented. No crash reporting to monitoring service. |
 | `pre-launch-checklist-v2.md` | Launch readiness, testing, operations | ❌ | Not implemented. |
 
@@ -193,14 +193,14 @@ Phase 5 (Error Handling) ← depends on Phase 1, 2, 3
     └── (offline queue + network status)   → ✅
 
 Phase 6 (Notifications & UX) ← depends on Phase 3
-    ├── pre-notification-system.md        → ❌
+    ├── pre-notification-system.md        → ✅
     ├── pre-launch-checklist.md          → ❌
     ├── pre-launch-checklist-v2.md        → ❌
-    └── (reviewed: shortcuts, menus, drag) → ❌
+    └── (reviewed: shortcuts, menus, drag) → ✅
 
 Phase 7 (Operations) ← depends on all
     ├── pre-cicd-pipeline.md             → ❌
-    ├── pre-test-strategy.md              → ❌
+    ├── pre-test-strategy.md              → ✅
     └── pre-crash-recovery.md (ops)       → ❌
 ```
 

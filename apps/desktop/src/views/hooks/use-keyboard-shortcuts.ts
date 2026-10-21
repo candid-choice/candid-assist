@@ -38,7 +38,7 @@ interface ShortcutKey {
   meta: boolean;
 }
 
-function parseShortcut(description: string): ShortcutKey {
+export function parseShortcut(description: string): ShortcutKey {
   const parts = description
     .toLowerCase()
     .split(/\+/)
@@ -61,13 +61,13 @@ function parseShortcut(description: string): ShortcutKey {
   const ctrl =
     parts.includes('ctrl') ||
     parts.includes('control') ||
-    (isMac && !parts.includes('⌘'));
+    (isMac && parts.some((p) => p === 'ctrl' || p === 'control'));
   const meta = parts.includes('⌘') || parts.includes('cmd') || parts.includes('meta');
 
   return { key, shift, alt, ctrl, meta };
 }
 
-function eventMatchesKey(e: KeyboardEvent, key: ShortcutKey): boolean {
+export function eventMatchesKey(e: KeyboardEvent, key: ShortcutKey): boolean {
   return (
     e.key.toLowerCase() === key.key ||
     e.code.toLowerCase() === `key${key.key.toUpperCase()}` ||
