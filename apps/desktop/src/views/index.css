@@ -206,3 +206,14 @@ electrobun-webview {
   position: relative;
   flex: 1;
 }
+
+/* ── Auth state ─────────────────────────────────────────────────── */
+
+.ha-checking {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 14px;
+  color: var(--ha-text-secondary);
+}

@@ -19,6 +19,14 @@ import type {
 // ── Store ────────────────────────────────────────────────────────────────
 
 interface AppState {
+  // ── Auth state ─────────────────────────────────────────────────────────
+  authToken: string | null;
+  authLoading: boolean;
+  authError: string | null;
+  login: (token: string) => void;
+  logout: () => void;
+  setAuthError: (error: string | null) => void;
+
   // ── Surface state ──────────────────────────────────────────────────────
   activeSurface: SurfaceConfig<SurfacePayload> | null;
   helpPaletteOpen: boolean;
@@ -62,6 +70,15 @@ const defaultViews: SurfaceConfig<BrowserPayload>[] = [
 ];
 
 export const useStore = create<AppState>((set, get) => ({
+  // ── Auth state ─────────────────────────────────────────────────────────
+  authToken: null,
+  authLoading: false,
+  authError: null,
+
+  login: (token: string) => set({ authToken: token, authLoading: false, authError: null }),
+  logout: () => set({ authToken: null, authError: null }),
+  setAuthError: (error: string | null) => set({ authError: error }),
+
   // ── Surface state ──────────────────────────────────────────────────────
   activeSurface: null,
   helpPaletteOpen: false,
