@@ -2,25 +2,40 @@
 
 import { useCallback } from "react";
 
+import { useAuth } from "./context/auth-provider";
+import { SignInScreen } from "./components/SignInScreen";
 import {
   AddressBar,
   WindowShell,
   HelpPalette,
   SurfaceHost,
+  IdleState,
 } from "./components";
 import { useStoreSelector } from "./store";
 
 function App() {
-  // ── Surface state ─────────────────────────────────────────────────────
+  const { status } = useAuth();
+
+  // ── Auth gating ──────────────────────────────────────────────────
+  if (status === "checking") {
+    return (
+      <div className="human-assist-app h-full w-full">
+        <div className="ha-checking">Loading…</div>
+      </div>
+    );
+  }
+
+  if (status === "unauthorized") {
+    return <SignInScreen />;
+  }
+
+  // ── Authenticated app ────────────────────────────────────────────
   const helpPaletteOpen = useStoreSelector((s) => s.helpPaletteOpen);
   const closeHelpPalette = useStoreSelector((s) => s.closeHelpPalette);
-
-  // ── View state ────────────────────────────────────────────────────────
   const activeViewId = useStoreSelector((s) => s.activeViewId);
   const views = useStoreSelector((s) => s.views);
   const setActiveView = useStoreSelector((s) => s.setActiveView);
 
-  // ── Render ────────────────────────────────────────────────────────────
   const addressBarTabs = views.map((v) => ({
     id: v.id,
     label: v.label,
@@ -59,13 +74,17 @@ function App() {
 
         {/* ── Content ── */}
         <div className="ha-chrome-content" style={{ overflow: "hidden" }}>
-          {views.map((view) => (
-            <SurfaceHost
-              key={view.id}
-              config={view}
-              isViewActive={view.id === activeViewId}
-            />
-          ))}
+          {views.length > 0 ? (
+            views.map((view) => (
+              <SurfaceHost
+                key={view.id}
+                config={view}
+                isViewActive={view.id === activeViewId}
+              />
+            ))
+          ) : (
+            <IdleState />
+          )}
         </div>
       </WindowShell>
 

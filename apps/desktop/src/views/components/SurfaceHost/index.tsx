@@ -9,6 +9,8 @@ import type {
   CanvasPayload,
   ScreenPayload,
   InputPayload,
+  CodeDiffPayload,
+  TerminalPayload,
 } from "../../types";
 
 import { useStoreSelector } from "../../store";
@@ -18,12 +20,14 @@ import { CanvasSurface } from "../surfaces/CanvasSurface";
 import { ImageSurface } from "../surfaces/ImageSurface";
 import { InputSurface } from "../surfaces/InputSurface";
 import { ScreenSurface } from "../surfaces/ScreenSurface";
+import { CodeDiffSurface } from "../surfaces/CodeDiffSurface";
+import { TerminalSurface } from "../surfaces/TerminalSurface";
 
 import "./index.css";
 
 export interface SurfaceHostProps {
   config: SurfaceConfig<
-    BrowserPayload | ImagePayload | CanvasPayload | ScreenPayload | InputPayload
+    BrowserPayload | ImagePayload | CanvasPayload | ScreenPayload | InputPayload | CodeDiffPayload | TerminalPayload
   >;
   isViewActive: boolean;
 }
@@ -84,6 +88,20 @@ export function SurfaceHost({
         return (
           <InputSurface
             config={config as SurfaceConfig<InputPayload>}
+            onComplete={() => {}}
+          />
+        );
+      case "code-diff":
+        return (
+          <CodeDiffSurface
+            config={config as SurfaceConfig<CodeDiffPayload>}
+            onComplete={() => {}}
+          />
+        );
+      case "terminal":
+        return (
+          <TerminalSurface
+            config={config as SurfaceConfig<TerminalPayload>}
             onComplete={() => {}}
           />
         );

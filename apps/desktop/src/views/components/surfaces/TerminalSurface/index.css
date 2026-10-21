@@ -1,0 +1,118 @@
+/* TerminalSurface — scrollable terminal output. */
+
+.ha-term-surface {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  font-family: var(--font-mono);
+}
+
+/* ── Toolbar ────────────────────────────────────────────────────── */
+
+.ha-term-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #181825;
+  border-bottom: 1px solid #313244;
+  flex-shrink: 0;
+}
+
+.ha-term-cmd {
+  font-size: 13px;
+  color: #89b4fa;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ha-term-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* ── Search bar ─────────────────────────────────────────────────── */
+
+.ha-term-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #11111b;
+  border-bottom: 1px solid #313244;
+  flex-shrink: 0;
+}
+
+.ha-term-search-input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #313244;
+  border-radius: 4px;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  outline: none;
+}
+
+.ha-term-search-input:focus {
+  border-color: #89b4fa;
+}
+
+.ha-term-search-input::placeholder {
+  color: #585b70;
+}
+
+.ha-term-search-count {
+  font-size: 11px;
+  color: #89b4fa;
+  white-space: nowrap;
+}
+
+/* ── Scroll area ────────────────────────────────────────────────── */
+
+.ha-term-scroll {
+  flex: 1;
+  overflow: auto;
+}
+
+.ha-term-output {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.ha-term-output--filtered {
+  background: #1e1e2e;
+}
+
+.ha-term-placeholder {
+  color: #585b70;
+  font-style: italic;
+}
+
+/* ── Button overrides ───────────────────────────────────────────── */
+
+.ha-term-actions .ha-btn {
+  background: #313244;
+  border: none;
+  color: #cdd6f4;
+  font-size: 12px;
+}
+
+.ha-term-actions .ha-btn:hover {
+  background: #45475a;
+}
+
+.ha-term-actions .ha-btn--icon {
+  padding: 4px 6px;
+  border-radius: 4px;
+}
