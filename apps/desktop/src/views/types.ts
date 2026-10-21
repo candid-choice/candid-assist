@@ -11,7 +11,9 @@ export type SurfaceType =
   | 'input'
   | 'file'
   | 'voice'
-  | 'prompt';
+  | 'prompt'
+  | 'code-diff'
+  | 'terminal';
 
 export interface SurfaceConfig<T = unknown> {
   /** Unique identifier for this surface/view. */
@@ -77,12 +79,39 @@ export interface InputPayload {
   value?: string;
 }
 
+export interface CodeDiffPayload {
+  /** Unified diff text */
+  diff: string;
+  /** Array of file diffs */
+  files: Array<{
+    path: string;
+    status: 'modified' | 'added' | 'deleted';
+    hunks: Array<{
+      start: number;
+      lines: string[];
+    }>;
+  }>;
+  /** Prompt or instruction */
+  prompt?: string;
+}
+
+export interface TerminalPayload {
+  /** Command that was run */
+  command: string;
+  /** Full terminal output */
+  output: string;
+  /** Optional error output */
+  error?: string;
+}
+
 export type SurfacePayload =
   | BrowserPayload
   | ImagePayload
   | CanvasPayload
   | ScreenPayload
-  | InputPayload;
+  | InputPayload
+  | CodeDiffPayload
+  | TerminalPayload;
 
 // ── Result Shapes ─────────────────────────────────────────────────────────
 
