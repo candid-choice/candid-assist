@@ -14,6 +14,9 @@ export { SignInScreen } from "./SignInScreen";
 export { Banner } from "./Banner";
 export { ToastContainer } from "./ToastContainer";
 
+
+export { SignInScreen } from "./SignInScreen";
+
 // ── Shared primitives ────────────────────────────────────────────
 export { SurfaceShell } from "./shared/SurfaceShell";
 export { ActionButton } from "./shared/ActionButton";

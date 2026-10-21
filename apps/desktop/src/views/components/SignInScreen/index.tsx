@@ -1,97 +1,108 @@
-/** Human Assist — Sign In screen.
-
-Centered card with Google sign-in and email/password form.
-Displayed when user is unauthorized.
-*/
+/** Sign-In Screen — first screen after app launch (no auth). */
 
 import { useState } from "react";
+
+import { useAuth } from "../../context/auth-provider";
+
 import "./index.css";
 
-export interface SignInScreenProps {
-  onGoogleSignIn: () => void;
-  onEmailSignIn: (email: string, password: string) => void;
-  error?: string;
-}
-
-function SignInScreen({ onGoogleSignIn, onEmailSignIn, error }: SignInScreenProps) {
+export function SignInScreen() {
+  const { signInWithGoogle, signInWithEmail, isLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showEmail, setShowEmail] = useState(false);
+  const [error, setError] = useState("");
+  const [emailMode, setEmailMode] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleGoogleSignIn = () => {
+    setError("");
+    signInWithGoogle().catch(() => {
+      setError("Failed to sign in with Google");
+    });
+  };
+
+  const handleEmailSignIn = (e: React.FormEvent) => {
     e.preventDefault();
-    onEmailSignIn(email, password);
+    setError("");
+    if (!email || !password) {
+      setError("Please enter email and password");
+      return;
+    }
+    signInWithEmail(email, password).catch(() => {
+      setError("Invalid email or password");
+    });
   };
 
   return (
     <div className="ha-signin-screen">
       <div className="ha-signin-card">
+        {/* Logo & title */}
         <div className="ha-signin-header">
-          <div className="ha-signin-logo">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
-            </svg>
-          </div>
+          <span className="ha-signin-logo">✦</span>
           <h1 className="ha-signin-title">Human Assist</h1>
-          <p className="ha-signin-subtitle">Claude Code's surface companion</p>
+          <p className="ha-signin-subtitle">
+            Your shared workspace with Claude Code
+          </p>
         </div>
 
-        {/* ── Google Sign In ─────────────────────────────────────── */}
-        <button className="ha-signin-btn ha-signin-btn--google" onClick={onGoogleSignIn}>
-          <span className="ha-signin-btn-icon">G</span>
-          <span>Continue with Google</span>
-        </button>
-
-        {/* ── Toggle Email ───────────────────────────────────────── */}
-        {!showEmail ? (
-          <button className="ha-signin-toggle" onClick={() => setShowEmail(true)}>
-            Sign in with email
+        {/* Google Sign In */}
+        {!emailMode && (
+          <button
+            className="ha-btn ha-btn--google"
+            onClick={handleGoogleSignIn}
+            disabled={isLoading}
+          >
+            <span className="ha-btn-icon">G</span>
+            Sign in with Google
           </button>
-        ) : (
-          <>
-            <form className="ha-signin-form" onSubmit={handleSubmit}>
-              {error && <div className="ha-signin-error">{error}</div>}
-              <div className="ha-signin-field">
-                <label>Email</label>
-                <input
-                  type="email"
-                  className="ha-signin-input"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                />
-              </div>
-              <div className="ha-signin-field">
-                <label>Password</label>
-                <input
-                  type="password"
-                  className="ha-signin-input"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                />
-              </div>
-              <div className="ha-signin-actions">
-                <button type="button" className="ha-signin-btn ha-signin-btn--secondary" onClick={() => setShowEmail(false)}>
-                  Back
-                </button>
-                <button type="submit" className="ha-signin-btn ha-signin-btn--primary">
-                  Sign In
-                </button>
-              </div>
-            </form>
-          </>
         )}
 
-        <div className="ha-signin-reqs">
-          Requires Claude Code + Human Assist MCP extension
-        </div>
+        {/* Email form toggle */}
+        {!emailMode && (
+          <button className="ha-signin-toggle" onClick={() => setEmailMode(true)}>
+            Sign in with email
+          </button>
+        )}
+
+        {/* Email password form */}
+        {emailMode && (
+          <form className="ha-signin-form" onSubmit={handleEmailSignIn}>
+            {error && <div className="ha-signin-error">{error}</div>}
+            <div className="ha-signin-field">
+              <label>Email</label>
+              <input
+                className="ha-signin-input"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+              />
+            </div>
+            <div className="ha-signin-field">
+              <label>Password</label>
+              <input
+                className="ha-signin-input"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="ha-signin-actions">
+              <button type="submit" className="ha-btn ha-btn--primary" disabled={isLoading}>
+                {isLoading ? "Signing in…" : "Sign in"}
+              </button>
+              <button type="button" className="ha-btn" onClick={() => { setEmailMode(false); setError(""); }}>
+                Back
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* System requirements */}
+        <p className="ha-signin-reqs">Requires macOS 13+ and Claude Code 0.4+</p>
       </div>
     </div>
   );
 }
-
-export { SignInScreen };

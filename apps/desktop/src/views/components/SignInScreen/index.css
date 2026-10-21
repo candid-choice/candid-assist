@@ -1,5 +1,5 @@
 /* ── Sign In Screen ────────────────────────────────────────────────── */
-
+/* SignInScreen — centered auth card. */
 .ha-signin-screen {
   display: flex;
   align-items: center;
@@ -15,13 +15,15 @@
   padding: 40px 32px;
   background: var(--ha-surface);
   border-radius: 12px;
-  box-shadow: var(--ha-shadow-md);
+  max-width: 400px;
+  padding: 40px 32px;
+  background: var(--ha-surface);
+  border-radius: var(--ha-radius-lg);
   text-align: center;
 }
 
 /* ── Header ───────────────────────────────────────────────────────── */
 
-.ha-signin-header {
   margin-bottom: 32px;
 }
 
@@ -35,7 +37,10 @@
   border-radius: 50%;
   background: color-mix(in srgb, var(--ha-primary) 15%, transparent);
   color: var(--ha-primary);
-}
+  display: block;
+  font-size: 48px;
+  color: var(--ha-primary);
+  margin-bottom: 12px;
 
 .ha-signin-title {
   font-size: 24px;
@@ -46,14 +51,20 @@
 
 .ha-signin-subtitle {
   font-size: 14px;
-  color: var(--ha-text-secondary);
+  margin: 0 0 8px 0;
+}
+
+.ha-signin-subtitle {
+  font-size: 15px;
   margin: 0;
 }
 
 /* ── Google Button ──────────────────────────────────────────────────── */
 
 .ha-signin-btn {
-  display: flex;
+/* ── Google button ──────────────────────────────────────────────── */
+
+.ha-btn--google {
   align-items: center;
   justify-content: center;
   gap: 10px;
@@ -112,7 +123,35 @@
 }
 
 /* ── Toggle ─────────────────────────────────────────────────────────── */
+  background: #fff;
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-md);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ha-text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
 
+.ha-btn--google:hover {
+  background: #fafafa;
+  border-color: #d0d0d0;
+}
+
+.ha-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #4285f4;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* ── Toggle ─────────────────────────────────────────────────────── */
 .ha-signin-toggle {
   display: block;
   width: 100%;
@@ -122,7 +161,7 @@
   color: var(--ha-primary);
   font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
+  font-size: 14px;
 }
 
 .ha-signin-toggle:hover {
@@ -130,7 +169,7 @@
 }
 
 /* ── Form ───────────────────────────────────────────────────────────── */
-
+/* ── Form ───────────────────────────────────────────────────────── */
 .ha-signin-form {
   text-align: left;
 }
@@ -143,16 +182,18 @@
   font-size: 13px;
   margin-bottom: 16px;
   border: 1px solid #ffcdd2;
-}
+  border-radius: var(--ha-radius-sm);
+  font-size: 13px;
+  margin-bottom: 12px;
 
 .ha-signin-field {
   margin-bottom: 12px;
-}
+  text-align: left;
 
 .ha-signin-field label {
   display: block;
   font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
   color: var(--ha-text);
   margin-bottom: 4px;
 }
@@ -167,17 +208,20 @@
   transition: border-color 0.15s, box-shadow 0.15s;
   background: var(--ha-surface);
   color: var(--ha-text);
-}
+  border-radius: var(--ha-radius-sm);
+  font-size: 15px;
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
 
 .ha-signin-input:focus {
   border-color: var(--ha-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ha-primary) 15%, transparent);
-  outline: none;
+  box-shadow: 0 0 0 3px var(--ha-primary-light);
 }
 
 .ha-signin-input::placeholder {
   color: var(--ha-text-tertiary);
-}
+  color: var(--ha-text-secondary);
 
 .ha-signin-actions {
   display: flex;
@@ -196,4 +240,27 @@
   color: var(--ha-text-tertiary);
   margin-top: 24px;
   line-height: 1.4;
+  margin-top: 16px;
 }
+
+.ha-signin-actions .ha-btn {
+  flex: 1;
+}
+
+/* ── System requirements ────────────────────────────────────────── */
+
+.ha-signin-reqs {
+  font-size: 12px;
+  color: var(--ha-text-secondary);
+  margin-top: 24px;
+}
+
+/* ── Spinner ────────────────────────────────────────────────────── */
+
+@keyframes ha-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ha-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;

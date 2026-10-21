@@ -1,5 +1,6 @@
 import "./index.css";
 import { App } from "./App";
+import { AuthProvider } from "./context/auth-provider";
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -45,6 +46,8 @@ if (window.__electrobun) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <App />
+    <AuthProvider>
+      <App />
+    </AuthProvider>
   </StrictMode>,
 );
