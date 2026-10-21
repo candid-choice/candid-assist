@@ -50,7 +50,7 @@ class WsService {
 
     // In production (ElectroBun), the WebSocket port is relative.
     // In dev we hit localhost:3614.
-    const wsUrl = import.meta.env?.["VITE_WS_URL"]
+    const wsUrl = import.meta.env?.VITE_WS_URL
       ? import.meta.env.VITE_WS_URL
       : (window.__electrobun
           ? `ws://${location.hostname}:3614`

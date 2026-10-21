@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 
-import type { SurfaceConfig, TerminalPayload } from "../../../types";
+import type { SurfaceConfig, TerminalPayload } from "../../types";
 
 import "./index.css";
 

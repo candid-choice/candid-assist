@@ -7,7 +7,7 @@ Starts on port 3613, retries 3614–3622 if in use.
 */
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { WebSocket, WebSocketServer } from "ws";
+import { WebSocketServer, type WebSocket } from "ws";
 import { v4 as uuidv4 } from "uuid";
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ interface SurfaceState {
   status: "open" | "closed" | "timeout";
 }
 
-interface // McpErrorResponse {
+interface McpErrorResponse {
   jsonrpc: string;
   id: string | number | null;
   error: {
@@ -40,6 +40,7 @@ const SURFACE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const openSurfaces: Map<string, SurfaceState> = new Map();
 const wsClients: Set<WebSocket> = new Set();
 let server: ReturnType<typeof createServer> | null = null;
+let wss: WebSocketServer | null = null;
 
 // ── URL Validation ────────────────────────────────────────────────────────
 
@@ -286,9 +287,9 @@ function sendJsonResponse(res: ServerResponse, data: unknown): void {
 
 function startWebSocketServer(port: number): WebSocketServer {
   const ws = new WebSocketServer({ port });
-  // wss = ws;
+  wss = ws;
   ws.on("connection", (client) => {
-    wsClients.add(client as WebSocket);
+    wsClients.add(client);
     client.on("close", () => wsClients.delete(client));
     client.on("error", () => wsClients.delete(client));
   });

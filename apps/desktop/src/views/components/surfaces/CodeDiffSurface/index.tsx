@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 
-import type { SurfaceConfig, CodeDiffPayload } from "../../../types";
+import type { SurfaceConfig, CodeDiffPayload } from "../../types";
 
 import "./index.css";
 
