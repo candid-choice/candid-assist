@@ -24,6 +24,8 @@ export { InputSurface } from "./surfaces/InputSurface";
 // ── Hooks ────────────────────────────────────────────────────────
 export { useKeyboardShortcuts, DEFAULT_SHORTCUTS, isMacPlatform } from "../hooks/use-keyboard-shortcuts";
 export { useDropZone, DropZoneOverlay, ComposerDropTarget } from "../hooks/use-drop-zone";
+export { useIndexedDBPersist } from "../hooks/use-indexeddb-persist";
+export { useNotifications } from "../hooks/use-notifications";
 
 // ── Types & state ────────────────────────────────────────────────
 export { type SurfaceConfig, type SurfacePayload, type SurfaceResult } from "../types";

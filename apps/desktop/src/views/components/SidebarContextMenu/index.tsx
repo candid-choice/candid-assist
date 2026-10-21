@@ -52,19 +52,27 @@ export function SidebarContextMenu({
           onCopyId?.();
           onClose();
         }}
-        onHover={(e) => (e.currentTarget.style.background = '#2a2a3e')}
-        onLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+        onMouseEnter={(e) => {
+          (e.target as HTMLButtonElement).style.background = '#2a2a3e';
+        }}
+        onMouseLeave={(e) => {
+          (e.target as HTMLButtonElement).style.background = 'transparent';
+        }}
       >
         <span>Copy ID</span>
       </button>
       <button
-        style={menuButtonStyle(session.archived)}
+        style={menuButtonStyle(Boolean(session.archived))}
         onClick={() => {
           onArchive?.(session.id);
           onClose();
         }}
-        onHover={(e) => (e.currentTarget.style.background = '#2a2a3e')}
-        onLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+        onMouseEnter={(e) => {
+          (e.target as HTMLButtonElement).style.background = '#2a2a3e';
+        }}
+        onMouseLeave={(e) => {
+          (e.target as HTMLButtonElement).style.background = 'transparent';
+        }}
       >
         <span>{session.archived ? 'Restore' : 'Archive'}</span>
       </button>
@@ -81,8 +89,12 @@ export function SidebarContextMenu({
           onDelete?.(session.id);
           onClose();
         }}
-        onHover={(e) => (e.currentTarget.style.background = '#2a2a3e')}
-        onLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+        onMouseEnter={(e) => {
+          (e.target as HTMLButtonElement).style.background = '#2a2a3e';
+        }}
+        onMouseLeave={(e) => {
+          (e.target as HTMLButtonElement).style.background = 'transparent';
+        }}
       >
         <span>Delete</span>
         <span style={{ color: '#f87171' }}>Delete</span>

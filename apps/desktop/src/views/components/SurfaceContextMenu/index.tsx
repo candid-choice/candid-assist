@@ -4,8 +4,6 @@ Right-click menu for surface items (sidebar or surface frame).
 Options: Close, Copy Content, Download.
 */
 
-import { useCallback } from 'react';
-
 import type { SurfaceType } from '../../types';
 
 interface SurfaceContextMenuProps {
@@ -54,8 +52,12 @@ export function SurfaceContextMenu({
           onCloseSurface?.(surfaceId);
           onClose();
         }}
-        onHover={(e) => (e.currentTarget.style.background = '#2a2a3e')}
-        onLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+        onMouseEnter={(e) => {
+          (e.target as HTMLButtonElement).style.background = '#2a2a3e';
+        }}
+        onMouseLeave={(e) => {
+          (e.target as HTMLButtonElement).style.background = 'transparent';
+        }}
       >
         <span>Close Surface</span>
         <span style={{ color: '#666', fontSize: '11px' }}>⌘+W</span>
@@ -75,8 +77,12 @@ export function SurfaceContextMenu({
               onCopyContent?.(content || '');
               onClose();
             }}
-            onHover={(e) => (e.currentTarget.style.background = '#2a2a3e')}
-            onLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            onMouseEnter={(e) => {
+              (e.target as HTMLButtonElement).style.background = '#2a2a3e';
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLButtonElement).style.background = 'transparent';
+            }}
           >
             <span>Copy Content</span>
           </button>
@@ -97,8 +103,12 @@ export function SurfaceContextMenu({
               onDownload?.(surfaceId);
               onClose();
             }}
-            onHover={(e) => (e.currentTarget.style.background = '#2a2a3e')}
-            onLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            onMouseEnter={(e) => {
+              (e.target as HTMLButtonElement).style.background = '#2a2a3e';
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLButtonElement).style.background = 'transparent';
+            }}
           >
             <span>Download</span>
           </button>

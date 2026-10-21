@@ -23,11 +23,12 @@ Usage:
 import { useState, useCallback, useRef, useEffect } from 'react';
 
 export interface ContextMenuItem {
-  label: string;
-  action: () => void;
+  label?: string;
+  action?: () => void;
   disabled?: boolean;
   danger?: boolean; // Red text
   shortcut?: string; // Displayed on right side
+  type?: 'item' | 'divider';
 }
 
 export interface ContextMenuPosition {
@@ -155,7 +156,7 @@ export function ContextMenu({ state, onClose }: { state: ContextMenuState; onClo
             }}
             disabled={item.disabled}
             onClick={() => {
-              item.action();
+              item.action?.();
               onClose();
             }}
             onMouseEnter={(e) => {
