@@ -5,13 +5,13 @@ allowed-tools:
   - Bash(bash "${CLAUDE_PLUGIN_ROOT}/skills/stop/stop.sh")
 ---
 
-# Harness Stop
+# Stop Harness
 
 Stop the MCP harness Electrobun application and clean up any background processes.
 
 ## Shared Context
 
-@../rules/harness-context.md
+@../../rules/harness-context.md
 
 ## Scripts
 
@@ -23,15 +23,8 @@ The following script is whitelisted for this skill and pre-approved for executio
 
 ## Execution
 
-Run the below script exactly.
+Run the below script exactly:
 
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/skills/stop/stop.sh"
 ```
-
-## Notes
-
-- The script reads `.mcp.json` from the plugin root (two levels up from `stop.sh`)
-- Tracked PID in `.harness.pid` is stopped before port-based kill
-- Force-kill (`kill -9`) is used as a fallback if the graceful stop fails
-- The PID file is cleaned up after successful termination

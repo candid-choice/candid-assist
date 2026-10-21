@@ -1,15 +1,15 @@
 # candid-assist
 
-Monorepo for Human Assist — a human-in-the-loop interaction platform built on Next.js + NestJS + Firebase.
+Monorepo for Human Assist — a human-in-the-loop interaction platform built on Next.js + NestJS + Firebase with an Electron desktop runtime.
 
 ```
 candid-assist/
 ├── apps/
-│   ├── web/             # Next.js 16 web app (frontend)
-│   ├── backend/         # NestJS 12 API server
-│   └── desktop/         # Electrobun desktop runtime (existing)
+│   ├── web/        # Next.js 16 web app (frontend)
+│   ├── backend/    # NestJS 12 API server
+│   └── desktop/    # Electrobun desktop runtime
 ├── config/
-│   └── ports.ts         # Centralized port allocation
+│   └── ports.ts    # Centralized port allocation (unused — see note below)
 ├── firebase.json        # Firebase config (emulators at root)
 ├── firestore.rules      # Firestore security rules
 ├── firestore.indexes.json
@@ -25,22 +25,6 @@ pnpm install           # Install all workspace dependencies
 pnpm dev               # Start web + backend + Firebase emulator
 pnpm build             # Build all apps
 ```
-
-## Port Allocation
-
-| Service              | Port |
-| -------------------- | ---: |
-| Web (Next.js)        | 3600 |
-| Backend (NestJS)     | 3601 |
-| Firebase Auth        | 3602 |
-| Firebase Firestore   | 3613 |
-| Firebase Storage     | 3604 |
-| Firebase Functions   | 3605 |
-| Firebase Emulator UI | 3607 |
-| Firebase Database    | 3608 |
-| Firebase Pub/Sub     | 3609 |
-
-All ports are explicitly configured — no framework defaults are used. Override any port via environment variables documented in `.env.example`.
 
 ## Available Commands
 
@@ -86,6 +70,16 @@ pnpm start:dev    # Runs on $BACKEND_PORT
 
 The backend exposes a health check at `GET /health`.
 
+### Desktop App (apps/desktop)
+
+Electrobun-based desktop runtime with a React UI built via Vite.
+
+```bash
+cd apps/desktop
+pnpm dev      # Start dev server
+pnpm build    # Build production bundle
+```
+
 ### Firebase Emulator Suite
 
 ```bash
@@ -106,7 +100,6 @@ Use `FIREBASE_PROJECT_ID=candid-assist` consistently when the emulator suite is 
 - `apps/web` — Next.js 16 application (React 19, TypeScript, Tailwind CSS 4)
 - `apps/backend` — NestJS 12 API server (TypeScript, strict mode)
 - `apps/desktop` — Electrobun desktop runtime (existing application)
-- `config/ports.ts` — Single source of truth for all local service ports
 - Root `firebase.json` — Firebase configuration (not in any app directory)
 
 ## Testing
@@ -126,3 +119,22 @@ pnpm lint        # Lint all packages
 ```bash
 pnpm type-check  # Type-check harness-desktop
 ```
+
+## Port Allocation
+
+| Service              | Port |
+| -------------------- | ---: |
+| Web (Next.js)        | 3600 |
+| Backend (NestJS)     | 3601 |
+| Firebase Auth        | 3602 |
+| Firebase Firestore   | 3613 |
+| Firebase Storage     | 3604 |
+| Firebase Functions   | 3605 |
+| Firebase Hosting     | 3606 |
+| Firebase Emulator UI | 3607 |
+| Firebase Database    | 3608 |
+| Firebase Pub/Sub     | 3609 |
+
+All ports are configured via environment variables in `.env.example`.
+
+> **Note on `config/ports.ts`**: This file is **not imported** anywhere in the codebase. Port configuration is handled through environment variables (`.env`, `.env.example`) and app-level scripts (e.g., `BACKEND_PORT=${BACKEND_PORT:-3601}` in NestJS scripts). The `config/` directory and its contents can safely be deleted.

@@ -5,13 +5,13 @@ allowed-tools:
   - Bash(bash "${CLAUDE_PLUGIN_ROOT}/skills/start/start.sh")
 ---
 
-# Harness Start
+# Start Harness
 
 Start the MCP harness Electrobun application and verify it is healthy.
 
 ## Shared Context
 
-@../rules/harness-context.md
+@../../rules/harness-context.md
 
 ## Scripts
 
@@ -23,14 +23,8 @@ The following script is whitelisted for this skill and pre-approved for executio
 
 ## Execution
 
-Run the below script exactly.
+Run the below script exactly:
 
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/skills/start/start.sh"
 ```
-
-## Notes
-
-- The script reads `.mcp.json` from the plugin root (two levels up from `start.sh`)
-- `ELECTROBUN_RUN_AS_NODE` is unset before launch to avoid crashes
-- `HARNESS_PORT` is set to override default port (3600)

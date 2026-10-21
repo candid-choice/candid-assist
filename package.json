@@ -2,9 +2,10 @@
   "name": "candid-assist-monorepo",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"pnpm dev:web\" \"pnpm dev:backend\" \"pnpm dev:firebase\"",
+    "dev": "concurrently \"pnpm dev:web\" \"pnpm dev:backend\" \"pnpm dev:desktop\" \"pnpm dev:firebase\"",
     "dev:web": "pnpm --filter web dev",
     "dev:backend": "pnpm --filter backend start:dev",
+    "dev:desktop": "pnpm --filter harness-desktop dev",
     "dev:firebase": "firebase emulators:start",
     "build": "pnpm -r build",
     "build:web": "pnpm --filter web build",

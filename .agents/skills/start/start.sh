@@ -22,6 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && cd .. && pwd)"
 
 MCP_JSON="$PLUGIN_ROOT/.mcp.json"
+CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
 
 if [ ! -f "$MCP_JSON" ]; then
   echo "ERROR: .mcp.json not found at $MCP_JSON"
@@ -50,7 +51,7 @@ if [ ! -d "$PLUGIN_ROOT/node_modules" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Kill any existing processes on the Vite (3200) and MCP (3602) ports
+# 4. Kill any existing processes on the Vite (3200) and MCP (${PORT}) ports
 # ---------------------------------------------------------------------------
 VITE_PORT=3200
 for P in $PORT $VITE_PORT; do
@@ -63,13 +64,13 @@ done
 sleep 1
 
 # ---------------------------------------------------------------------------
-# 5. Launch the monorepo — cd into root and run pnpm harness:dev
+# 5. Launch the monorepo — cd into plugin root and run pnpm harness:dev
 #    This starts:
 #      - pnpm --filter harness-renderer dev  → Vite at :3200 (HMR)
 #      - wait-on http://localhost:3200       → readiness gate
 #      - pnpm --filter harness-desktop dev   → Electrobun desktop app
 # ---------------------------------------------------------------------------
-cd "$PLUGIN_ROOT"
+cd "$CLAUDE_PLUGIN_ROOT"
 
 echo "================================================================"
 echo "  Launching Harness (Electrobun + Vite)"
