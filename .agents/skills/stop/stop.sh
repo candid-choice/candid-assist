@@ -13,6 +13,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 HARNESS_DIR="$(cd "$SCRIPT_DIR/.." && cd .. && pwd)"
+CLAUDE_PLUGIN_ROOT="$HARNESS_DIR"
 
 MCP_JSON="$HARNESS_DIR/.mcp.json"
 PID_FILE="$HARNESS_DIR/.harness.pid"

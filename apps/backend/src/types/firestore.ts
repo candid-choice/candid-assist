@@ -20,7 +20,7 @@ export declare class Timestamp {
   readonly nanoseconds: number;
 }
 
-type Nullable<T> = T | null;
+export type Nullable<T> = T | null;
 
 /** ISO-8601 UTC string timestamp */
 export type TimestampString = string;

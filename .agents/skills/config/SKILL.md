@@ -4,13 +4,13 @@ description: Configure harness environment settings, validate ports, and update 
 disable-model-invocation: true
 ---
 
-@../rules/harness-context.md
+@../../rules/harness-context.md
 
 1. **Read current configuration:**
-   - Read the port from `.mcp.json` in the harness plugin directory:
+   - Read the port from `.mcp.json`:
      ```bash
-     export CLAUDE_PLUGIN_ROOT="/Users/szhao/candid-choice/candid-organization/.claude/skills/harness"
-     PORT=$(node -e "const s=JSON.parse(require('fs').readFileSync('${CLAUDE_PLUGIN_ROOT}/.mcp.json','utf8'));console.log(s.mcpServers.harness.url?.match(/:(\d+)/)?.[1] ?? '3602');")
+     export PLUGIN_ROOT="/Users/szhao/candid-choice/candid-organization/.claude/skills/harness"
+     PORT=$(node -e "const s=JSON.parse(require('fs').readFileSync('${PLUGIN_ROOT}/.mcp.json','utf8'));console.log(s.mcpServers.harness.url?.match(/:(\d+)/)?.[1] ?? '3602');")
      echo "Current harness port: $PORT"
      ```
 
@@ -30,7 +30,7 @@ disable-model-invocation: true
    - **If the port is available:** Proceed to the next step.
 
 3. **Validate `.mcp.json` structure:**
-   - Ensure `.mcp.json` exists in the plugin root (`${CLAUDE_PLUGIN_ROOT}/.mcp.json`). If missing, create it.
+   - Ensure `.mcp.json` exists in the plugin root. If missing, create it.
    - Verify the `mcpServers.harness` entry has the correct schema: `{"type": "http", "url": "http://127.0.0.1:$PORT/mcp"}`.
    - Ensure the server entry is not disabled.
 
@@ -38,7 +38,7 @@ disable-model-invocation: true
    - If updating the port, use Node to safely mutate and rewrite the JSON:
      ```bash
      node -e "
-       const p = '${CLAUDE_PLUGIN_ROOT}/.mcp.json';
+       const p = '${PLUGIN_ROOT}/.mcp.json';
        const s = JSON.parse(require('fs').readFileSync(p, 'utf8'));
        s.mcpServers.harness.url = 'http://127.0.0.1:$PORT/mcp';
        require('fs').writeFileSync(p, JSON.stringify(s, null, 2) + '\n');

@@ -4,7 +4,7 @@ description: Update harness plugin skills, regenerate README.md, and enforce int
 disable-model-invocation: true
 ---
 
-@../rules/harness-context.md
+@../../rules/harness-context.md
 
 # Harness Update
 
@@ -17,7 +17,7 @@ All modifications to harness skills must go through this skill — never edit ha
    ```bash
    HARNESS_DIR="${CLAUDE_PLUGIN_ROOT}"
    SKILLS_DIR="$HARNESS_DIR/skills"
-   README_FILE="$SKILLS_DIR/README.md"
+   README_FILE="$HARNESS_DIR/README.md"
    echo "Updating harness plugin at $HARNESS_DIR"
    ```
 

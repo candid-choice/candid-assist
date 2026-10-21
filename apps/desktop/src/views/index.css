@@ -37,8 +37,8 @@ html,
 body {
   margin: 0;
   padding: 0;
-  height: 100%;
-  width: 100%;
+  height: 100vh;
+  width: 100vw;
   overflow: hidden;
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif;
@@ -49,8 +49,8 @@ body {
 }
 
 #root {
-  height: 100%;
-  width: 100%;
+  height: 100vh;
+  width: 100vw;
 }
 
 /* ── Utility ─────────────────────────────────────────────────────── */
