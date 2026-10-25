@@ -29,11 +29,17 @@ interface SurfaceEvent {
 
 type Listener = (event: SurfaceEvent) => void;
 
+import type { ConnectionState } from "../store";
+
+type ConnectionListener = (state: ConnectionState) => void;
+
 // ── Singleton ─────────────────────────────────────────────────────────────
 
 class WsService {
   private ws: WebSocket | null = null;
   private listeners = new Set<Listener>();
+  private connectionListeners = new Set<ConnectionListener>();
+  private lastConnectionState: ConnectionState = "disconnected";
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private backoffMs = 1000;
   private maxBackoffMs = 30_000;
@@ -47,6 +53,7 @@ class WsService {
 
   connect(): void {
     if (this.connected) return;
+    this.emitConnectionState("connecting");
 
     // In production (ElectroBun), the WebSocket port is relative.
     // In dev we hit localhost:3614.
@@ -67,6 +74,7 @@ class WsService {
     this.ws.onopen = () => {
       this.connected = true;
       this.backoffMs = 1000; // reset
+      this.emitConnectionState("connected");
       console.log("[WsService] Connected to surface event stream");
     };
 
@@ -84,6 +92,7 @@ class WsService {
     this.ws.onclose = () => {
       this.connected = false;
       this.ws = null;
+      this.emitConnectionState("disconnected");
       console.warn("[WsService] Connection closed, scheduling reconnect…");
       this.scheduleReconnect();
     };
@@ -92,6 +101,7 @@ class WsService {
       this.connected = false;
       this.ws?.close();
       this.ws = null;
+      this.emitConnectionState("disconnected");
       console.error("[WsService] WebSocket error");
     };
   }
@@ -106,6 +116,13 @@ class WsService {
       this.ws.close();
       this.ws = null;
     }
+    this.emitConnectionState("disconnected");
+  }
+
+  /** Subscribe to connection state changes. Returns an unsubscribe fn. */
+  onConnectionChange(listener: ConnectionListener): () => void {
+    this.connectionListeners.add(listener);
+    return () => this.connectionListeners.delete(listener);
   }
 
   subscribe(listener: Listener): () => void {
@@ -114,6 +131,14 @@ class WsService {
   }
 
   // ── Internal ───────────────────────────────────────────────────────────
+
+  private emitConnectionState(state: ConnectionState): void {
+    if (this.lastConnectionState === state) return;
+    this.lastConnectionState = state;
+    for (const listener of this.connectionListeners) {
+      listener(state);
+    }
+  }
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer) return;

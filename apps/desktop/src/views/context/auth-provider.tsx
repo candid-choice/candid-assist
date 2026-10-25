@@ -13,11 +13,11 @@ import { createContext, useContext, useEffect, useState } from 'react';
 
 import { useStore } from '../store';
 import { authService } from '../services/auth/auth-api';
-import type { AuthStatus } from '../services/auth/types';
+import type { AuthStatus, AuthUser } from '../services/auth/types';
 
 interface AuthContextValue {
   status: AuthStatus;
-  user: { id: string; email: string; name: string; photoURL?: string } | null;
+  user: AuthUser | null;
   isLoading: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -34,7 +34,7 @@ export function useAuth(): AuthContextValue {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('checking');
-  const [user, setUser] = useState<{ id: string; email: string; name: string; photoURL?: string } | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const storeLogin = useStore((s) => s.login);
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (response.ok) {
           const data = await response.json();
           setUser(data.user);
-          storeLogin(token);
+          storeLogin(token, data.user as AuthUser);
           setStatus('authorized');
         } else {
           // Invalid/expired token — clear and show sign-in
@@ -88,9 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const token = await authService.signInWithGoogle();
       const user = authService.getUser();
       if (user) {
-        setUser(user as { id: string; email: string; name: string; photoURL?: string } | null);
+        setUser(user);
       }
-      storeLogin(token);
+      storeLogin(token, user ?? undefined);
       setStatus('authorized');
     } catch (err: any) {
       setAuthError(err.message || 'Sign-in failed');
@@ -106,9 +106,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const token = await authService.signInWithEmail(email, password);
       const user = authService.getUser();
       if (user) {
-        setUser(user as { id: string; email: string; name: string; photoURL?: string } | null);
+        setUser(user);
       }
-      storeLogin(token);
+      storeLogin(token, user ?? undefined);
       setStatus('authorized');
     } catch (err: any) {
       setAuthError(err.message || 'Sign-in failed');

@@ -9,7 +9,7 @@ Usage:
   store.login(token);
 */
 
-import type { AuthError } from './types';
+import type { AuthError, AuthUser } from './types';
 
 const BACKEND_URL = import.meta.env?.["VITE_BACKEND_URL"]
   ? import.meta.env.VITE_BACKEND_URL
@@ -68,7 +68,7 @@ export async function signInWithEmail(email: string, password: string): Promise<
  */
 export async function exchangeTokenForSession(firebaseToken: string): Promise<{
   token: string;
-  user: { id: string; email: string; name: string; photoURL?: string };
+  user: AuthUser;
 }> {
   const response = await fetch(`${BACKEND_URL}/auth/verify`, {
     method: 'POST',
@@ -112,8 +112,8 @@ export const authService = {
     return localStorage.getItem('ha_auth_token');
   },
 
-  getUser(): Record<string, unknown> | null {
+  getUser(): AuthUser | null {
     const user = localStorage.getItem('ha_user');
-    return user ? JSON.parse(user) : null;
+    return user ? (JSON.parse(user) as AuthUser) : null;
   },
 };

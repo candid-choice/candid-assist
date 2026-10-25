@@ -26,6 +26,11 @@ if (window.__electrobun) {
   // Connect WebSocket for surface events
   wsService.connect();
 
+  // Mirror WS connection state into the store (UI: status bar / banner)
+  wsService.onConnectionChange((state) => {
+    useStore.getState().setConnectionState(state);
+  });
+
   // Subscribe surface push events to store
   wsService.subscribe((event) => {
     if (event.event === "surface:push") {

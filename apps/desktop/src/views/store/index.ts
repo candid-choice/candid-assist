@@ -1,10 +1,17 @@
 /** Human Assist — Zustand store.
 
-Consolidates surface lifecycle and view management into a single global
-store.  Selector-based subscriptions mean components only re-render when
-the pieces of state they actually use change.
+Consolidates surface lifecycle, view management, auth, and connection
+state into a single global store.  Selector-based subscriptions mean
+components only re-render when the pieces of state they actually use
+change.
 
 Replaces the former `useSurfaceState` + `useViewManager` hooks.
+
+Persistence (offline-first):
+  The store is wrapped with the Zustand `persist` middleware backed by
+  IndexedDB (see ./persist-middleware).  Only the data-only slice from
+  `persistableSlice` is saved — volatile state (connectionState,
+  authError, callbacks) is intentionally excluded.
 */
 
 import { create } from 'zustand';
@@ -18,6 +25,13 @@ import type {
   SurfacePayload,
   BrowserPayload,
 } from '../types';
+
+import type { AuthUser } from '../services/auth/types';
+
+// ── Connection ─────────────────────────────────────────────────────────
+
+/** Runtime WS connection state (never persisted). */
+export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
 // ── Store ────────────────────────────────────────────────────────────────
 
@@ -33,6 +47,18 @@ interface AppState {
   toggleHelpPalette: () => void;
   closeHelpPalette: () => void;
   registerOnComplete: (fn: (result: SurfaceResult) => void) => void;
+
+  // ── Auth state ─────────────────────────────────────────────────────────
+  authToken: string | null;
+  authUser: AuthUser | null;
+  authError: string | null;
+  login: (token: string, user?: AuthUser) => void;
+  logout: () => void;
+  setAuthError: (message: string | null) => void;
+
+  // ── Connection state ───────────────────────────────────────────────────
+  connectionState: ConnectionState;
+  setConnectionState: (state: ConnectionState) => void;
 
   // ── View manager ───────────────────────────────────────────────────────
   activeViewId: string;
@@ -64,7 +90,9 @@ const defaultViews: SurfaceConfig<BrowserPayload>[] = [
   },
 ];
 
-/** Data-only slice persisted to IndexedDB (functions are dropped). */
+/** Data-only slice persisted to IndexedDB (functions are dropped).
+ *  Volatile state (connectionState, authError, onSurfaceComplete) is
+ *  intentionally excluded. */
 function persistableSlice(state: AppState) {
   return {
     activeSurface: state.activeSurface,
@@ -72,6 +100,8 @@ function persistableSlice(state: AppState) {
     completedSurfaces: state.completedSurfaces,
     activeViewId: state.activeViewId,
     views: state.views,
+    authToken: state.authToken,
+    authUser: state.authUser,
   };
 }
 
@@ -105,6 +135,29 @@ export const useStore = create<AppState>()(
 
       registerOnComplete: (fn: (result: SurfaceResult) => void) =>
         set({ onSurfaceComplete: fn }),
+
+      // ── Auth state ─────────────────────────────────────────────────────
+      authToken: null,
+      authUser: null,
+      authError: null,
+
+      login: (token: string, user?: AuthUser) =>
+        set({
+          authToken: token,
+          authUser: user ?? null,
+          authError: null,
+        }),
+
+      logout: () =>
+        set({ authToken: null, authUser: null, authError: null }),
+
+      setAuthError: (message: string | null) => set({ authError: message }),
+
+      // ── Connection state ───────────────────────────────────────────────
+      connectionState: 'disconnected',
+
+      setConnectionState: (state: ConnectionState) =>
+        set({ connectionState: state }),
 
       // ── View manager ───────────────────────────────────────────────────
       activeViewId: 'view-a',
