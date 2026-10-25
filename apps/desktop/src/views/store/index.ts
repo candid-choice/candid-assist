@@ -8,6 +8,9 @@ Replaces the former `useSurfaceState` + `useViewManager` hooks.
 */
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+
+import { idbStorage, PERSIST_KEY } from './persist-middleware';
 
 import type {
   SurfaceConfig,
@@ -61,48 +64,68 @@ const defaultViews: SurfaceConfig<BrowserPayload>[] = [
   },
 ];
 
-export const useStore = create<AppState>((set, get) => ({
-  // ── Surface state ──────────────────────────────────────────────────────
-  activeSurface: null,
-  helpPaletteOpen: false,
-  completedSurfaces: [],
-  onSurfaceComplete: null,
+/** Data-only slice persisted to IndexedDB (functions are dropped). */
+function persistableSlice(state: AppState) {
+  return {
+    activeSurface: state.activeSurface,
+    helpPaletteOpen: state.helpPaletteOpen,
+    completedSurfaces: state.completedSurfaces,
+    activeViewId: state.activeViewId,
+    views: state.views,
+  };
+}
 
-  openSurface: (config: SurfaceConfig<SurfacePayload>) => {
-    set({ activeSurface: config, helpPaletteOpen: false });
-  },
-
-  completeSurface: (result: SurfaceResult) => {
-    set((state) => ({
-      completedSurfaces: [...state.completedSurfaces, result],
+export const useStore = create<AppState>()(
+  persist(
+    (set, get) => ({
+      // ── Surface state ──────────────────────────────────────────────────
       activeSurface: null,
-    }));
-    get().onSurfaceComplete?.(result);
-  },
+      helpPaletteOpen: false,
+      completedSurfaces: [],
+      onSurfaceComplete: null,
 
-  cancelSurface: () => set({ activeSurface: null }),
+      openSurface: (config: SurfaceConfig<SurfacePayload>) => {
+        set({ activeSurface: config, helpPaletteOpen: false });
+      },
 
-  toggleHelpPalette: () =>
-    set((s) => ({ helpPaletteOpen: !s.helpPaletteOpen })),
+      completeSurface: (result: SurfaceResult) => {
+        set((state) => ({
+          completedSurfaces: [...state.completedSurfaces, result],
+          activeSurface: null,
+        }));
+        get().onSurfaceComplete?.(result);
+      },
 
-  closeHelpPalette: () => set({ helpPaletteOpen: false }),
+      cancelSurface: () => set({ activeSurface: null }),
 
-  registerOnComplete: (fn: (result: SurfaceResult) => void) =>
-    set({ onSurfaceComplete: fn }),
+      toggleHelpPalette: () =>
+        set((s) => ({ helpPaletteOpen: !s.helpPaletteOpen })),
 
-  // ── View manager ───────────────────────────────────────────────────────
-  activeViewId: 'view-a',
-  views: defaultViews,
+      closeHelpPalette: () => set({ helpPaletteOpen: false }),
 
-  setActiveView: (id: string) => set({ activeViewId: id }),
+      registerOnComplete: (fn: (result: SurfaceResult) => void) =>
+        set({ onSurfaceComplete: fn }),
 
-  updateViewUrl: (id: string, url: string) =>
-    set((s) => ({
-      views: s.views.map((v) =>
-        v.id === id ? { ...v, payload: { url } } : v,
-      ),
-    })),
-}));
+      // ── View manager ───────────────────────────────────────────────────
+      activeViewId: 'view-a',
+      views: defaultViews,
+
+      setActiveView: (id: string) => set({ activeViewId: id }),
+
+      updateViewUrl: (id: string, url: string) =>
+        set((s) => ({
+          views: s.views.map((v) =>
+            v.id === id ? { ...v, payload: { url } } : v,
+          ),
+        })),
+    }),
+    {
+      name: PERSIST_KEY,
+      storage: createJSONStorage(() => idbStorage),
+      partialize: persistableSlice,
+    },
+  ),
+);
 
 // ── Typed hook ────────────────────────────────────────────────────────────
 

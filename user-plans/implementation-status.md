@@ -1,8 +1,8 @@
 # Implementation Status — Master
 
-**Last Updated:** 2024-12-XX  
+**Last Updated:** 2025-10-22  
 **Current Branch:** `phase-2-4-integration`  
-**Latest Commit:** `a741faa` — Phase 6: Notifications & UX
+**Latest Commit:** `f411e94` — Phase 6 & 7: macOS notifications, IndexedDB persistence, component fixes
 
 ---
 
@@ -10,13 +10,13 @@
 
 | Phase | Phase Name | Status | Progress |
 |-------|-----------|--------|----------|
-| 1 | Foundation | ✅ Done | ~85% |
+| 1 | Foundation | ✅ Done | ~90% |
 | 2 | MCP & Surface Delivery | ✅ Done | ~95% |
 | 3 | Surface UI | ✅ Done | ~90% |
 | 4 | User Flow | ✅ Done | ~75% |
 | 5 | Error Handling | ✅ Done | ~95% |
 | 6 | Notifications & UX | ✅ Done | ~90% |
-| 7 | Operations | ❌ Not Started | 0% |
+| 7 | Operations | ✅ Partial | ~20% |
 
 ---
 
@@ -33,10 +33,10 @@
 | `pre-firebase-rules.md` | Security rules, auth, Firestore rules | ✅ | Rules at root `firestore.rules`. Auth requires `request.auth != null`. Access scoped to user. Write validation partial. |
 | `pre-desktop-app-architecture.md` | Electron process model, IPC | ⚠️ | Bun side exists (`bun/index.ts`, `mcp-server.ts`), preload script missing. IPC channels partially implemented. |
 | `pre-desktop-app-shell.md` | Shell layout, preload API, IPC security | ⚠️ | WindowShell exists (title bar, controls). Shared components (SurfaceShell, Frame, AddressBar, etc.) built. Sidebar, dashboard, toast overlays not built. IPC channels: 5/11 implemented. |
-| `pre-state-management.md` | State tree, persistence, sync | ❌ | Zustand store has correct shape (auth, sessions, surfaces, ui). But no IndexedDB, no Firestore sync, no offline support, no connection state. |
+| `pre-state-management.md` | State tree, persistence, sync | ⚠️ | Zustand store has correct shape (auth, sessions, surfaces, ui). **IndexedDB persistence now wired** via `store/persist-middleware.ts` (`idbStorage` StateStorage adapter + `createJSONStorage`) with `partialize` (data-only slice: activeSurface, helpPaletteOpen, completedSurfaces, activeViewId, views) and a 5MB soft-quota guard. Still missing: Firestore sync, connection state. |
 
 **Deliverable:** Working auth flow, session CRUD, base state management.  
-**Actual:** Session CRUD works (backend), auth flow partial (frontend auth provider exists but no dashboard/sidebar wired). State management has store shape but no persistence layer.
+**Actual:** Session CRUD works (backend), auth flow partial (frontend auth provider exists but no dashboard/sidebar wired). State management has store shape **plus IndexedDB persistence** (offline-first state survives restart).
 
 ---
 
@@ -119,7 +119,7 @@
 
 ---
 
-## Phase 6: Notifications & UX
+## Phase 6 & 7: Notifications, UX, Persistence
 
 **Dependency:** Depends on Phase 3 (Surface UI).
 
@@ -164,7 +164,7 @@ Phase 1 (Foundation)
     ├── pre-firebase-rules.md            → ✅
     ├── pre-desktop-app-architecture.md   → ⚠️
     ├── pre-desktop-app-shell.md          → ⚠️
-    └── pre-state-management.md           → ❌
+    └── pre-state-management.md           → ⚠️ (IndexedDB persistence wired; Firestore sync + connection state pending)
 
 Phase 2 (MCP & Surface Delivery) ← depends on Phase 1
     ├── pre-mcp-protocol.md              → ✅
