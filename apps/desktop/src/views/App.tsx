@@ -7,6 +7,7 @@ import {
   WindowShell,
   HelpPalette,
   SurfaceHost,
+  ConnectionIndicator,
 } from "./components";
 import { useStoreSelector } from "./store";
 
@@ -43,7 +44,7 @@ function App() {
         }
         footer={
           <span className="ha-footer-status">
-            <span className="ha-connection-dot" />0 active connection
+            <ConnectionIndicator />
           </span>
         }
       >

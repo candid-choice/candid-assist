@@ -43,6 +43,11 @@ function openDatabase(): Promise<IDBDatabase | null> {
     }
 
     const request = indexedDB.open(DB_NAME, DB_VERSION);
+    if (!request) {
+      // Malformed/absent return (e.g. broken mocks) — treat as no DB.
+      resolve(null);
+      return;
+    }
 
     request.onerror = () => resolve(null);
 

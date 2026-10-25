@@ -33,7 +33,7 @@
 | `pre-firebase-rules.md` | Security rules, auth, Firestore rules | ✅ | Rules at root `firestore.rules`. Auth requires `request.auth != null`. Access scoped to user. Write validation partial. |
 | `pre-desktop-app-architecture.md` | Electron process model, IPC | ⚠️ | Bun side exists (`bun/index.ts`, `mcp-server.ts`), preload script missing. IPC channels partially implemented. |
 | `pre-desktop-app-shell.md` | Shell layout, preload API, IPC security | ⚠️ | WindowShell exists (title bar, controls). Shared components (SurfaceShell, Frame, AddressBar, etc.) built. Sidebar, dashboard, toast overlays not built. IPC channels: 5/11 implemented. |
-| `pre-state-management.md` | State tree, persistence, sync | ⚠️ | Zustand store: surface + view state, **auth state** (`authToken`, `authUser`, `authError`, `login`/`logout`/`setAuthError` — fixes prior TS2339 in auth-provider), **connection state** (`connectionState: disconnected/connecting/connected`, driven by `wsService.onConnectionChange`). **IndexedDB persistence wired** via `store/persist-middleware.ts` (`idbStorage` StateStorage adapter + `createJSONStorage`), `partialize` (data-only: surfaces, views, auth token+user), 5MB soft-quota guard. Still missing: Firestore sync. |
+| `pre-state-management.md` | State tree, persistence, sync | ⚠️ | Zustand store: surface + view state, **auth state** (`authToken`, `authUser`, `authError`, `login`/`logout`/`setAuthError` — fixes prior TS2339 in auth-provider), **connection state** (`connectionState: disconnected/connecting/connected`, driven by `wsService.onConnectionChange`, surfaced in UI via `ConnectionIndicator` in window footer). **IndexedDB persistence wired** via `store/persist-middleware.ts` (`idbStorage` StateStorage adapter + `createJSONStorage`), `partialize` (data-only: surfaces, views, auth token+user), 5MB soft-quota guard. Still missing: Firestore sync. |
 
 **Deliverable:** Working auth flow, session CRUD, base state management.  
 **Actual:** Session CRUD works (backend), auth flow partial (frontend auth provider exists but no dashboard/sidebar wired). State management has store shape **plus IndexedDB persistence, auth state, and WS connection state** (offline-first: session + UI state survive restart).
@@ -146,7 +146,7 @@
 | Plan File | What It Defines | Status | Implementation Details |
 |-----------|----------------|--------|----------------------|
 | `pre-cicd-pipeline.md` | CI/CD, builds, releases | ❌ | Not implemented. No GitHub Actions, no CI jobs. |
-| `pre-test-strategy.md` | Unit, integration, E2E, component tests | ✅ | Vitest configured (jsdom environment). 48 tests passing across error hierarchy, keyboard shortcuts, context menus, offline queue, store structure. |
+| `pre-test-strategy.md` | Unit, integration, E2E, component tests | ✅ | Vitest configured (jsdom environment). 69 tests passing: error hierarchy, keyboard shortcuts, context menus, offline queue, store structure + store state (auth/connection/partialize), ws-service connection state (mocked WebSocket), ConnectionIndicator component (react-testing-library). Test setup now has in-memory localStorage + IndexedDB mocks. |
 | `pre-crash-recovery.md` (operations) | Crash reporting, analysis | ❌ | Not implemented. No crash reporting to monitoring service. |
 | `pre-launch-checklist-v2.md` | Launch readiness, testing, operations | ❌ | Not implemented. |
 

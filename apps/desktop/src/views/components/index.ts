@@ -1,6 +1,9 @@
 // ── Core components ──────────────────────────────────────────────
-export { WindowShell } from "./WindowShell";
+export {
+  WindowShell
+} from "./WindowShell";
 export { IdleState } from "./IdleState";
+export { ConnectionIndicator } from "./ConnectionIndicator";
 export { HelpPalette } from "./HelpPalette";
 export { SurfaceHost } from "./SurfaceHost";
 export { ContextMenu } from "./ContextMenu";
