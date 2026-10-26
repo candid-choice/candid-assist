@@ -10,7 +10,7 @@
   /* Primary — muted violet/purple */
   --ha-primary: #7c6fa8;
   --ha-primary-hover: #6b5d94;
-  --ha-primary-light: #f0ee f6;
+  --ha-primary-light: #f0eef6;
   /* Secondary — muted peach/terracotta */
   --ha-secondary: #e8927f;
   /* Text — warm charcoal */
@@ -205,4 +205,19 @@ electrobun-webview {
 .ha-chrome-content {
   position: relative;
   flex: 1;
+}
+
+/* ── App row: sidebar + main column ── */
+.ha-app-row {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.ha-app-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }

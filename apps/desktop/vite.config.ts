@@ -1,11 +1,18 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import tailwindcss from "@tailwindcss/vite";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const devkitRoot = resolve(__dirname, "../.hutch/devkit");
+
+// The Electrobun browser devkit is generated & gitignored. When absent
+// (e.g. CI), alias the devkit specifier to a no-op stub so the renderer
+// still builds — it is never executed outside Electrobun.
+const browserDevkit = resolve(__dirname, ".hutch/devkit/api/browser/index.ts");
+const devkitPresent = existsSync(browserDevkit);
 
 export default defineConfig({
   root: "./src/views",
@@ -25,14 +32,22 @@ export default defineConfig({
   },
   plugins: [react(), tailwindcss()],
   resolve: {
-    alias: {
-      electrobun: `${devkitRoot}/api/sdks/main/index.ts`,
-      "electrobun/main": `${devkitRoot}/api/sdks/main/index.ts`,
-      "electrobun/view": `${devkitRoot}/api/browser/index.ts`,
-      "electrobun/events": `${devkitRoot}/api/sdks/main/entries/events.ts`,
-      "electrobun/rpc": `${devkitRoot}/api/sdks/main/entries/rpc.ts`,
-      "electrobun/bun": `${devkitRoot}/api/sdks/main/index.ts`,
-    },
+    alias: [
+      ...(devkitPresent
+        ? []
+        : [
+            {
+              find: /^.*\.hutch\/devkit\/api\/browser\/index(\.js)?$/,
+              replacement: resolve(__dirname, "src/views/devkit-stub.ts"),
+            },
+          ]),
+      { find: "electrobun", replacement: `${devkitRoot}/api/sdks/main/index.ts` },
+      { find: "electrobun/main", replacement: `${devkitRoot}/api/sdks/main/index.ts` },
+      { find: "electrobun/view", replacement: `${devkitRoot}/api/browser/index.ts` },
+      { find: "electrobun/events", replacement: `${devkitRoot}/api/sdks/main/entries/events.ts` },
+      { find: "electrobun/rpc", replacement: `${devkitRoot}/api/sdks/main/entries/rpc.ts` },
+      { find: "electrobun/bun", replacement: `${devkitRoot}/api/sdks/main/index.ts` },
+    ],
   },
   define: {
     "process.env.ELECTROBUN_BUILD_ENVIRONMENT": JSON.stringify("development"),

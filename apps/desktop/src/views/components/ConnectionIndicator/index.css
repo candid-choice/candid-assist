@@ -1,0 +1,42 @@
+.ha-connection-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ha-text-secondary);
+}
+
+.ha-connection-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ha-border);
+  flex-shrink: 0;
+}
+
+.ha-connection-dot--connected {
+  background: var(--ha-success);
+}
+
+.ha-connection-dot--connecting {
+  background: var(--ha-secondary);
+  animation: ha-connection-pulse 1.2s ease-in-out infinite;
+}
+
+.ha-connection-dot--disconnected {
+  background: #c0564f;
+}
+
+.ha-connection-label {
+  white-space: nowrap;
+}
+
+@keyframes ha-connection-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

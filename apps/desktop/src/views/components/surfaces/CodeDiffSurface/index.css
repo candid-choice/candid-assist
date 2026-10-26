@@ -1,0 +1,213 @@
+/* CodeDiffSurface — structured diff viewer. */
+
+.ha-cd-surface {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ── File list ──────────────────────────────────────────────────── */
+
+.ha-cd-files {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ha-border);
+  background: var(--ha-surface);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.ha-cd-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--ha-radius-sm);
+  background: var(--ha-primary-light);
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ha-cd-file--mod {
+  background: #fff3e0;
+}
+
+.ha-cd-file--add {
+  background: #e8f5e9;
+}
+
+.ha-cd-file--del {
+  background: #ffebee;
+}
+
+.ha-cd-file-path {
+  color: var(--ha-text);
+}
+
+.ha-cd-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--ha-border);
+  color: var(--ha-text-secondary);
+}
+
+.ha-cd-badge--modified {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.ha-cd-badge--added {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.ha-cd-badge--deleted {
+  background: #ffebee;
+  color: #c62828;
+}
+
+/* ── Diff viewer ────────────────────────────────────────────────── */
+
+.ha-cd-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+.ha-cd-diff {
+  margin: 0;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.ha-cd-line {
+  display: flex;
+  gap: 0;
+  padding: 0 4px;
+}
+
+.ha-cd-line:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.ha-cd-ln {
+  display: inline-block;
+  min-width: 40px;
+  text-align: right;
+  color: var(--ha-text-secondary);
+  user-select: none;
+  padding-right: 8px;
+  font-size: 12px;
+}
+
+.ha-cd-text {
+  flex: 1;
+}
+
+.ha-cd-line-header {
+  background: #f5f5f5;
+  color: var(--ha-text-secondary);
+  font-weight: 600;
+}
+
+.ha-cd-line-hunk {
+  background: #f0f0f0;
+  color: var(--ha-text-secondary);
+  font-weight: 600;
+}
+
+.ha-cd-line-add {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.ha-cd-line-del {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.ha-cd-line-context {
+  color: var(--ha-text);
+}
+
+/* ── Comment section ────────────────────────────────────────────── */
+
+.ha-cd-comment-section {
+  padding: 12px;
+  border-top: 1px solid var(--ha-border);
+  background: var(--ha-surface);
+  flex-shrink: 0;
+}
+
+.ha-cd-comment-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ha-text);
+  margin-bottom: 4px;
+}
+
+.ha-cd-comment {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-sm);
+  background: var(--ha-surface);
+  color: var(--ha-text);
+  font-size: 13px;
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ha-cd-comment:focus {
+  border-color: var(--ha-primary);
+  box-shadow: 0 0 0 3px var(--ha-primary-light);
+  outline: none;
+}
+
+.ha-cd-comment::placeholder {
+  color: var(--ha-text-secondary);
+}
+
+/* ── Action buttons ─────────────────────────────────────────────── */
+
+.ha-cd-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--ha-border);
+  background: var(--ha-surface);
+  flex-shrink: 0;
+}
+
+.ha-cd-action {
+  flex: 1;
+}
+
+.ha-cd-action--done {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.ha-btn--danger {
+  border-color: #ef9a9a;
+  color: #c62828;
+}
+
+.ha-btn--danger:hover {
+  background: #ffebee;
+  border-color: #c62828;
+  color: #c62828;
+}
+
+.ha-btn--sm.ha-btn--danger[disabled] {
+  opacity: 0.5;
+}

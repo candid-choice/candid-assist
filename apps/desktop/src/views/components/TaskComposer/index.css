@@ -1,0 +1,115 @@
+/* ── Task Composer ──────────────────────────────────────────────────── */
+
+.ha-composer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 999;
+}
+
+.ha-composer {
+  width: 100%;
+  max-width: 640px;
+  background: var(--ha-surface);
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
+  padding: 0;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+
+.ha-composer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--ha-border);
+}
+
+.ha-composer-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ha-text);
+}
+
+.ha-composer-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--ha-text-tertiary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ha-composer-close:hover {
+  background: var(--ha-bg-hover);
+  color: var(--ha-text);
+}
+
+/* ── Input ──────────────────────────────────────────────────────────── */
+
+.ha-composer-input {
+  padding: 12px 20px;
+  transition: background 0.15s;
+}
+
+.ha-composer-input.focused {
+  background: var(--ha-bg-hover);
+}
+
+.ha-composer-input input {
+  width: 100%;
+  border: none;
+  background: none;
+  outline: none;
+  font-size: 15px;
+  color: var(--ha-text);
+  font-family: inherit;
+}
+
+.ha-composer-input input::placeholder {
+  color: var(--ha-text-tertiary);
+}
+
+/* ── Hints ──────────────────────────────────────────────────────────── */
+
+.ha-composer-hints {
+  padding: 8px 20px;
+  font-size: 12px;
+  color: var(--ha-text-tertiary);
+}
+
+/* ── Actions ────────────────────────────────────────────────────────── */
+
+.ha-composer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 20px 16px;
+}
+
+.ha-composer-suggestion {
+  padding: 8px 14px;
+  background: var(--ha-bg);
+  border: 1px solid var(--ha-border);
+  border-radius: 20px;
+  font-size: 13px;
+  color: var(--ha-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.ha-composer-suggestion:hover {
+  background: var(--ha-primary-light, color-mix(in srgb, var(--ha-primary) 15%, transparent));
+  color: var(--ha-primary);
+  border-color: var(--ha-primary);
+}

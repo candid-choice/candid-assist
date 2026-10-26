@@ -56,7 +56,7 @@ export class AuthService {
         createdAt: now,
       },
       mcp: {
-        endpoint: 'http://localhost:3602/mcp',
+        endpoint: 'http://localhost:3615/mcp',
         active: false,
       },
       preferences: {

@@ -11,6 +11,8 @@ import {
   handleWindowControlRequest,
 } from "../rpc/window-controls.js";
 
+import { startMcpServer } from "../mcp-server.js";
+
 // ── Bun-side RPC ────────────────────────────────────────────────────
 
 const bunRPC = BrowserView.defineRPC<
@@ -37,10 +39,14 @@ const bunRPC = BrowserView.defineRPC<
   },
 });
 
+// ── MCP Server ──────────────────────────────────────────────────────
+
+startMcpServer(3615);
+
 // ── Main window ─────────────────────────────────────────────────────
 
 const mainWindow = new BrowserWindow({
-  title: "Hello Electrobun",
+  title: "Human Assist",
   url: "http://localhost:5173/",
   titleBarStyle: "hiddenInset",
   frame: {
@@ -66,4 +72,4 @@ function sendWindowState(messageName: string, payload: unknown): void {
 
 startWindowStateSync(sendWindowState);
 
-console.log("Hello Electrobun app started!");
+console.log("Human Assist started — MCP server on :3615, WS on :3614");

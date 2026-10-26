@@ -1,13 +1,23 @@
 /** Human Assist — Zustand store.
 
-Consolidates surface lifecycle and view management into a single global
-store.  Selector-based subscriptions mean components only re-render when
-the pieces of state they actually use change.
+Consolidates surface lifecycle, view management, auth, and connection
+state into a single global store.  Selector-based subscriptions mean
+components only re-render when the pieces of state they actually use
+change.
 
 Replaces the former `useSurfaceState` + `useViewManager` hooks.
+
+Persistence (offline-first):
+  The store is wrapped with the Zustand `persist` middleware backed by
+  IndexedDB (see ./persist-middleware).  Only the data-only slice from
+  `persistableSlice` is saved — volatile state (connectionState,
+  authError, callbacks) is intentionally excluded.
 */
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+
+import { idbStorage, PERSIST_KEY } from './persist-middleware';
 
 import type {
   SurfaceConfig,
@@ -15,6 +25,14 @@ import type {
   SurfacePayload,
   BrowserPayload,
 } from '../types';
+
+import type { AuthUser } from '../services/auth/types';
+import type { SessionDoc } from '../services/sync/types';
+
+// ── Connection ─────────────────────────────────────────────────────────
+
+/** Runtime WS connection state (never persisted). */
+export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
 // ── Store ────────────────────────────────────────────────────────────────
 
@@ -30,6 +48,30 @@ interface AppState {
   toggleHelpPalette: () => void;
   closeHelpPalette: () => void;
   registerOnComplete: (fn: (result: SurfaceResult) => void) => void;
+
+  // ── Auth state ─────────────────────────────────────────────────────────
+  authToken: string | null;
+  authUser: AuthUser | null;
+  authError: string | null;
+  login: (token: string, user?: AuthUser) => void;
+  logout: () => void;
+  setAuthError: (message: string | null) => void;
+
+  // ── Connection state ───────────────────────────────────────────────────
+  connectionState: ConnectionState;
+  setConnectionState: (state: ConnectionState) => void;
+
+  // ── Session state (synced with backend/Firestore) ─────────────────────
+  sessions: SessionDoc[];
+  activeSessionId: string | null;
+  setSessions: (sessions: SessionDoc[]) => void;
+  addSession: (session: SessionDoc) => void;
+  updateSession: (
+    id: string,
+    patch: Partial<Pick<SessionDoc, 'title' | 'status' | 'surfaces'>>,
+  ) => void;
+  removeSession: (id: string) => void;
+  setActiveSession: (id: string | null) => void;
 
   // ── View manager ───────────────────────────────────────────────────────
   activeViewId: string;
@@ -61,48 +103,121 @@ const defaultViews: SurfaceConfig<BrowserPayload>[] = [
   },
 ];
 
-export const useStore = create<AppState>((set, get) => ({
-  // ── Surface state ──────────────────────────────────────────────────────
-  activeSurface: null,
-  helpPaletteOpen: false,
-  completedSurfaces: [],
-  onSurfaceComplete: null,
+/** Data-only slice persisted to IndexedDB (functions are dropped).
+ *  Volatile state (connectionState, authError, onSurfaceComplete) is
+ *  intentionally excluded. */
+function persistableSlice(state: AppState) {
+  return {
+    activeSurface: state.activeSurface,
+    helpPaletteOpen: state.helpPaletteOpen,
+    completedSurfaces: state.completedSurfaces,
+    activeViewId: state.activeViewId,
+    views: state.views,
+    authToken: state.authToken,
+    authUser: state.authUser,
+    sessions: state.sessions,
+    activeSessionId: state.activeSessionId,
+  };
+}
 
-  openSurface: (config: SurfaceConfig<SurfacePayload>) => {
-    set({ activeSurface: config, helpPaletteOpen: false });
-  },
-
-  completeSurface: (result: SurfaceResult) => {
-    set((state) => ({
-      completedSurfaces: [...state.completedSurfaces, result],
+export const useStore = create<AppState>()(
+  persist(
+    (set, get) => ({
+      // ── Surface state ──────────────────────────────────────────────────
       activeSurface: null,
-    }));
-    get().onSurfaceComplete?.(result);
-  },
+      helpPaletteOpen: false,
+      completedSurfaces: [],
+      onSurfaceComplete: null,
 
-  cancelSurface: () => set({ activeSurface: null }),
+      openSurface: (config: SurfaceConfig<SurfacePayload>) => {
+        set({ activeSurface: config, helpPaletteOpen: false });
+      },
 
-  toggleHelpPalette: () =>
-    set((s) => ({ helpPaletteOpen: !s.helpPaletteOpen })),
+      completeSurface: (result: SurfaceResult) => {
+        set((state) => ({
+          completedSurfaces: [...state.completedSurfaces, result],
+          activeSurface: null,
+        }));
+        get().onSurfaceComplete?.(result);
+      },
 
-  closeHelpPalette: () => set({ helpPaletteOpen: false }),
+      cancelSurface: () => set({ activeSurface: null }),
 
-  registerOnComplete: (fn: (result: SurfaceResult) => void) =>
-    set({ onSurfaceComplete: fn }),
+      toggleHelpPalette: () =>
+        set((s) => ({ helpPaletteOpen: !s.helpPaletteOpen })),
 
-  // ── View manager ───────────────────────────────────────────────────────
-  activeViewId: 'view-a',
-  views: defaultViews,
+      closeHelpPalette: () => set({ helpPaletteOpen: false }),
 
-  setActiveView: (id: string) => set({ activeViewId: id }),
+      registerOnComplete: (fn: (result: SurfaceResult) => void) =>
+        set({ onSurfaceComplete: fn }),
 
-  updateViewUrl: (id: string, url: string) =>
-    set((s) => ({
-      views: s.views.map((v) =>
-        v.id === id ? { ...v, payload: { url } } : v,
-      ),
-    })),
-}));
+      // ── Auth state ─────────────────────────────────────────────────────
+      authToken: null,
+      authUser: null,
+      authError: null,
+
+      login: (token: string, user?: AuthUser) =>
+        set({
+          authToken: token,
+          authUser: user ?? null,
+          authError: null,
+        }),
+
+      logout: () =>
+        set({ authToken: null, authUser: null, authError: null }),
+
+      setAuthError: (message: string | null) => set({ authError: message }),
+
+      // ── Connection state ───────────────────────────────────────────────
+      connectionState: 'disconnected',
+
+      setConnectionState: (state: ConnectionState) =>
+        set({ connectionState: state }),
+
+      // ── Session state ────────────────────────────────────────────────
+      sessions: [],
+      activeSessionId: null,
+
+      setSessions: (sessions: SessionDoc[]) => set({ sessions }),
+
+      addSession: (session: SessionDoc) =>
+        set((s) => ({ sessions: [session, ...s.sessions] })),
+
+      updateSession: (id: string, patch: Partial<Pick<SessionDoc, 'title' | 'status' | 'surfaces'>>) =>
+        set((s) => ({
+          sessions: s.sessions.map((sess) =>
+            sess.id === id ? { ...sess, ...patch } : sess,
+          ),
+        })),
+
+      removeSession: (id: string) =>
+        set((s) => ({
+          sessions: s.sessions.filter((sess) => sess.id !== id),
+          activeSessionId: s.activeSessionId === id ? null : s.activeSessionId,
+        })),
+
+      setActiveSession: (id: string | null) => set({ activeSessionId: id }),
+
+      // ── View manager ───────────────────────────────────────────────────
+      activeViewId: 'view-a',
+      views: defaultViews,
+
+      setActiveView: (id: string) => set({ activeViewId: id }),
+
+      updateViewUrl: (id: string, url: string) =>
+        set((s) => ({
+          views: s.views.map((v) =>
+            v.id === id ? { ...v, payload: { url } } : v,
+          ),
+        })),
+    }),
+    {
+      name: PERSIST_KEY,
+      storage: createJSONStorage(() => idbStorage),
+      partialize: persistableSlice,
+    },
+  ),
+);
 
 // ── Typed hook ────────────────────────────────────────────────────────────
 
