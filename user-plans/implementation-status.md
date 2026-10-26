@@ -48,14 +48,14 @@
 
 | Plan File | What It Defines | Status | Implementation Details |
 |-----------|----------------|--------|----------------------|
-| `pre-mcp-protocol.md` | MCP server, tools, SSE transport, WS server | ✅ | `mcp-server.ts` implements HTTP SSE on :3613, WS on :3614. All 6 tools exposed. |
-| `pre-mcp-tools-detail.md` | 6 tool specs, params, returns | ✅ | `openBrowserSurface`, `openCanvasSurface`, `openImageSurface`, `openScreenCapture`, `openCodeDiff`, `openTerminalOutput` — all implemented with correct params/returns. |
+| `pre-mcp-protocol.md` | MCP server, tools, SSE transport, WS server | ✅ | `mcp-server.ts`: HTTP on **:3615** (moved off :3613 — Firestore emulator collision), WS on :3614. **7 tools** exposed (added `openInputSurface`). `tools/call` router fixed: was looking up handlers by `method` (always `"tools/call"` → every call -32601); now resolves `params.name`. WS broadcast now carries the stored surface `type` (was always `"unknown"` → renderer couldn't route components). 9 integration tests (`tests/mcp-server.test.ts`). |
+| `pre-mcp-tools-detail.md` | 6 tool specs, params, returns | ✅ | `openBrowserSurface`, `openCanvasSurface`, `openImageSurface`, `openScreenCapture`, `openCodeDiff`, `openTerminalOutput` + `openInputSurface` (question/kind/options) — all implemented with validation (MCP_001–003, max surfaces). |
 | `pre-mcp-validation.md` | Validation rules, error codes | ⚠️ | Basic validation exists (`isValidUrl`, surface count check, size limits). No structured schema validation (no zod). No error code system. |
 | `pre-surface-render-pipeline.md` | Tool call → Firestore → WebSocket → Render | ✅ | Claude → MCP (SSE) → WS → Store → Component. Pipeline works end-to-end. Firestore bridge missing. |
-| `pre-ws-events.md` | WebSocket events, delivery guarantees | ⚠️ | `ws-service.ts` exists with auto-reconnect and backoff. Only `surface:push` event implemented. No session events, no connection status, no error events. |
+| `pre-ws-events.md` | WebSocket events, delivery guarantees | ⚠️ | `ws-service.ts` with auto-reconnect + backoff, `onConnectionChange` (connecting/connected/disconnected, deduped) feeding the store + footer indicator. Only `surface:push` payload event; no session/error events yet. |
 
 **Deliverable:** One surface works end-to-end (tool call → render → respond → complete).  
-**Actual:** All 7 surfaces work end-to-end. Claude Code can push any surface to the desktop app and it renders correctly.
+**Actual:** ✅ **Verified live (E2E)** — `curl` `openInputSurface` → MCP :3615 → WS :3614 → renderer → `InputSurface` rendered choices on screen (Playwright-confirmed). All 7 surface types wired through `SurfaceHost`.
 
 ---
 
@@ -145,8 +145,8 @@
 
 | Plan File | What It Defines | Status | Implementation Details |
 |-----------|----------------|--------|----------------------|
-| `pre-cicd-pipeline.md` | CI/CD, builds, releases | ❌ | Not implemented. No GitHub Actions, no CI jobs. |
-| `pre-test-strategy.md` | Unit, integration, E2E, component tests | ✅ | Vitest configured (jsdom environment). 123 tests passing: error hierarchy, keyboard shortcuts, context menus, offline queue + replay-executor integration, store structure/state/sessions, ws-service (mocked WebSocket), sync-service (mocked fetch), ConnectionIndicator + AppSidebar/AppDashboard/AppSessionDetail containers (react-testing-library). Test setup has functional in-memory localStorage + IndexedDB mocks. |
+| `pre-cicd-pipeline.md` | CI/CD, builds, releases | ✅ | GitHub Actions `.github/workflows/ci.yml`: 3 parallel jobs (desktop: vitest + Vite renderer build; backend: nest build; web: next build), pnpm 12 / Node 22, `--ignore-scripts` skips electrobun native prepare. All three build steps verified locally. |
+| `pre-test-strategy.md` | Unit, integration, E2E, component tests | ✅ | Vitest configured (jsdom environment). 132 tests passing: error hierarchy, keyboard shortcuts, context menus, offline queue + replay-executor integration, store structure/state/sessions, ws-service (mocked WebSocket), sync-service (mocked fetch), MCP server HTTP+WS integration (tools/call router, validation errors, surface:push type mapping), ConnectionIndicator + AppSidebar/AppDashboard/AppSessionDetail containers (react-testing-library). Test setup has functional in-memory localStorage + IndexedDB mocks. |
 | `pre-crash-recovery.md` (operations) | Crash reporting, analysis | ❌ | Not implemented. No crash reporting to monitoring service. |
 | `pre-launch-checklist-v2.md` | Launch readiness, testing, operations | ❌ | Not implemented. |
 
@@ -157,7 +157,7 @@
 
 ## Live Smoke Test — 2026-10-26 ✅
 
-Full stack via `pnpm dev` (web :3600, backend :3601, Electrobun desktop, emulators auth :3602 / firestore :3613 / storage :3604, MCP :3613, WS :3614).
+Full stack via `pnpm dev` (web :3600, backend :3601, Electrobun desktop, emulators auth :3602 / firestore :3613 / storage :3604, MCP :3615, WS :3614).
 
 | Check | Result |
 |-------|--------|
@@ -174,7 +174,11 @@ Full stack via `pnpm dev` (web :3600, backend :3601, Electrobun desktop, emulato
 
 **Backend bug found & fixed during smoke test:** `AuthGuard` parsed the Bearer header but never verified the token nor set `req.user` — every authed request 400'd with "User not authenticated". Guard now calls `AuthService.verifyIdToken()` (emulator-aware via `FIREBASE_AUTH_EMULATOR_HOST`) and attaches `req.user`; `AuthGuard` registered in `AuthModule` and `AuthModule` imported into `SessionModule`/`SurfaceModule` for DI.
 
-**Known issue (follow-up):** desktop MCP server binds `:3613` — same port as the Firestore emulator (they coexist only via IPv4/IPv6 split). Recommend moving MCP to e.g. :3615.
+**Known issue (follow-up):** desktop MCP server bound `:3613`, colliding with the Firestore emulator port. **FIXED:** MCP moved to `:3615` (all UI/docs/defaults updated); verified no collision + live push E2E.
+
+### Surface Push E2E — 2026-10-26 ✅
+
+`curl` → `openInputSurface` (question + choices) → MCP HTTP :3615 → WS broadcast (`type: "input"`, payload passthrough) → renderer `wsService` → `openSurface` → `SurfaceHost` → **`InputSurface` rendered question + both option buttons** (Playwright snapshot), footer "Connected", option click handled without crash. This required fixing two real server bugs found only under real traffic: handler lookup by `method` instead of `params.name` (every call failed -32601) and WS broadcast always sending `type: "unknown"` (renderer could never route). `openInputSurface` tool added; renderer WS/sync now also run outside Electrobun (browser dev mode). New `tests/mcp-server.test.ts`: 9 integration tests.
 
 ---
 

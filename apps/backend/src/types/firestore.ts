@@ -41,7 +41,7 @@ export interface UserWorkspace {
 
 /** MCP server connection info. */
 export interface UserMcpConfig {
-  /** Server endpoint, e.g. "http://localhost:3613/mcp". */
+  /** Server endpoint, e.g. "http://localhost:3615/mcp". */
   endpoint: string;
   /** Whether the connection is active / verified. */
   active: boolean;

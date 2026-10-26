@@ -3,7 +3,7 @@
 Exposes 6 tools to Claude Code via MCP's tools/call method (SSE transport).
 Pushes surface events to the app via WebSocket (port 3614).
 
-Starts on port 3613, retries 3614–3622 if in use.
+Starts on port 3615, retries 3616–3624 if in use.
 */
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -95,6 +95,31 @@ function handleOpenCanvasSurface(args: unknown): Record<string, unknown> {
     surfaceId: id,
     type: "canvas",
     payload: { prompt: obj["prompt"] as string | undefined },
+    createdAt: Date.now(),
+    lastActive: Date.now(),
+    status: "open",
+  });
+  return { surfaceId: id, status: "opened" };
+}
+
+function handleOpenInputSurface(args: unknown): Record<string, unknown> {
+  const obj = args as Record<string, unknown>;
+  const question = obj["question"] as string | undefined;
+  if (!question || typeof question !== "string" || question.trim().length === 0) {
+    throw new Error("MCP_003: Missing question");
+  }
+  if (openSurfaces.size >= MAX_SURFACES) {
+    throw new Error("MCP_002: Maximum surfaces reached");
+  }
+  const id = generateSurfaceId();
+  openSurfaces.set(id, {
+    surfaceId: id,
+    type: "input",
+    payload: {
+      kind: (obj["kind"] as string) ?? "text",
+      question,
+      options: obj["options"] as string[] | undefined,
+    },
     createdAt: Date.now(),
     lastActive: Date.now(),
     status: "open",
@@ -197,6 +222,7 @@ const TOOL_HANDLERS: Record<string, (args: unknown) => Record<string, unknown>> 
   openScreenCapture: handleOpenScreenCapture,
   openCodeDiff: handleOpenCodeDiff,
   openTerminalOutput: handleOpenTerminalOutput,
+  openInputSurface: handleOpenInputSurface,
 };
 
 // ── MCP Server (HTTP + SSE) ───────────────────────────────────────────────
@@ -220,11 +246,13 @@ function createMcpServer(port: number): { server: ReturnType<typeof createServer
             return;
           }
 
-          const handler = TOOL_HANDLERS[method];
+          // MCP contract: method === "tools/call", tool selected by params.name
+          const toolName = (params as Record<string, unknown>)["name"] as string;
+          const handler = TOOL_HANDLERS[toolName];
           if (!handler) {
             sendJsonResponse(res, {
               jsonrpc: "2.0",
-              error: { code: -32601, message: `Method not found: ${method}` },
+              error: { code: -32601, message: `Method not found: ${toolName}` },
               id: id ?? null,
             });
             return;
@@ -237,15 +265,16 @@ function createMcpServer(port: number): { server: ReturnType<typeof createServer
               result,
               id: id ?? null,
             });
-            // Notify WebSocket clients
+            // Notify WebSocket clients with the stored surface type so the
+            // renderer can route to the correct surface component.
+            const surfaceId = (result as Record<string, unknown>)?.[
+              "surfaceId"
+            ] as string;
+            const entry = openSurfaces.get(surfaceId);
             notifySurfacePush({
-              surfaceId: (result as Record<string, unknown>)?.surfaceId as string,
-              type: typeof result === "object" && result !== null
-                ? Object.keys(result).find(k => typeof result[k] === "string" && result[k] !== "opened" && result[k] !== "started")
-                  ? "unknown"
-                  : "unknown"
-                : "unknown",
-              payload: params.arguments as Record<string, unknown>,
+              surfaceId,
+              type: entry?.type ?? "unknown",
+              payload: (params.arguments ?? {}) as Record<string, unknown>,
               status: "pushed",
             });
           } catch (err) {
@@ -354,7 +383,10 @@ export function getServerState(): {
 
 // ── Start ─────────────────────────────────────────────────────────────────
 
-export function startMcpServer(initialPort: number = 3613): void {
+export function startMcpServer(
+  initialPort: number = 3615,
+  wsPort: number = 3614,
+): void {
   const portRange = Array.from({ length: 10 }, (_, i) => initialPort + i);
 
   for (const port of portRange) {
@@ -364,7 +396,7 @@ export function startMcpServer(initialPort: number = 3613): void {
         console.log(`MCP server listening on http://localhost:${port}/mcp`);
         server = s;
 
-        startWebSocketServer(3614);
+        startWebSocketServer(wsPort);
 
         s.on("error", (err: NodeJS.ErrnoException) => {
           if (err.code === "EADDRINUSE") {

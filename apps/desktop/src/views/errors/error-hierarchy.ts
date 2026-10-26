@@ -308,7 +308,7 @@ export const Errors = {
       ErrorCode.MCP_START_FAILED,
       ErrorSeverity.P0,
       `MCP server cannot start — port ${port} blocked`,
-      { recovery: 'Close other processes using port 3613' },
+      { recovery: 'Close other processes using port 3615' },
     ),
 
   appCrash: () =>

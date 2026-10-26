@@ -41,7 +41,7 @@ const bunRPC = BrowserView.defineRPC<
 
 // ── MCP Server ──────────────────────────────────────────────────────
 
-startMcpServer(3613);
+startMcpServer(3615);
 
 // ── Main window ─────────────────────────────────────────────────────
 
@@ -72,4 +72,4 @@ function sendWindowState(messageName: string, payload: unknown): void {
 
 startWindowStateSync(sendWindowState);
 
-console.log("Human Assist started — MCP server on :3613, WS on :3614");
+console.log("Human Assist started — MCP server on :3615, WS on :3614");

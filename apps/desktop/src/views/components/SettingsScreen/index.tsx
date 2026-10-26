@@ -146,7 +146,7 @@ function McpSettings() {
       <div className="ha-settings-row">
         <label className="ha-settings-label">
           <span>Server URL</span>
-          <span className="ha-settings-value ha-settings-value--mono">http://localhost:3613</span>
+          <span className="ha-settings-value ha-settings-value--mono">http://localhost:3615</span>
         </label>
       </div>
 

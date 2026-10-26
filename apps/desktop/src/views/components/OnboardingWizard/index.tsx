@@ -139,13 +139,13 @@ function OnboardingConnect({ onStepComplete }: OnboardingConnectProps) {
     <div className="ha-onboarding-step-content">
       <h3 className="ha-onboarding-title">Step 1: MCP Server Running</h3>
       <p className="ha-onboarding-desc">
-        The MCP server is starting on port 3613. Claude Code will connect to this server to push surfaces.
+        The MCP server is starting on port 3615. Claude Code will connect to this server to push surfaces.
       </p>
       <div className={`ha-onboarding-status ${status === "ready" ? "ready" : ""}`}>
         {status === "ready" ? (
           <>
             <span className="ha-onboarding-status-dot ready" />
-            <span>Port 3613 — Active</span>
+            <span>Port 3615 — Active</span>
           </>
         ) : (
           <>
@@ -155,7 +155,7 @@ function OnboardingConnect({ onStepComplete }: OnboardingConnectProps) {
         )}
       </div>
       <div className="ha-onboarding-code">
-        <code>curl http://localhost:3613/health</code>
+        <code>curl http://localhost:3615/health</code>
       </div>
     </div>
   );
@@ -175,7 +175,7 @@ function OnboardingConfigure({ onStepComplete }: OnboardingConfigureProps) {
         Add the following to your Claude Code configuration to enable Human Assist:
       </p>
       <div className="ha-onboarding-code">
-        <code>echo 'export HUMAN_ASSIST_URL=http://localhost:3613' {'>>'} ~/.bashrc</code>
+        <code>echo 'export HUMAN_ASSIST_URL=http://localhost:3615' {'>>'} ~/.bashrc</code>
       </div>
       <p className="ha-onboarding-desc-small">
         Run this in your terminal. Then restart Claude Code.
