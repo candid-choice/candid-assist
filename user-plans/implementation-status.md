@@ -151,7 +151,30 @@
 | `pre-launch-checklist-v2.md` | Launch readiness, testing, operations | ❌ | Not implemented. |
 
 **Deliverable:** CI/CD pipeline, tests, crash reporting, launch-ready.  
-**Actual:** Completely unimplemented. No tests, no CI, no crash reporting.
+**Actual:** Test infrastructure done (123 tests) + live smoke test passed (see below). CI/CD and crash reporting still unimplemented.
+
+---
+
+## Live Smoke Test — 2026-10-26 ✅
+
+Full stack via `pnpm dev` (web :3600, backend :3601, Electrobun desktop, emulators auth :3602 / firestore :3613 / storage :3604, MCP :3613, WS :3614).
+
+| Check | Result |
+|-------|--------|
+| All 4 services boot cleanly | ✅ |
+| `GET /health` | ✅ 200 |
+| `GET /sessions` unauthenticated | ✅ 401 |
+| Emulator sign-up + verified Bearer token | ✅ (Auth emulator :3602, `accounts:signInWithPassword`) |
+| `POST /sessions` (authed) → doc in Firestore emulator | ✅ 201, real `userId` from verified token |
+| List / rename / archive / list-after-archive | ✅ (archive drops from active list) |
+| Bad token | ✅ 401 |
+| Electrobun webview → `wsService` connected to :3614 | ✅ (`[WsService] Connected` in dev log) |
+| Renderer UI (Playwright @ :5173): titlebar, sidebar (New Task/search/empty/Settings), View A/B tabs, "Waiting for Claude", footer ConnectionIndicator | ✅ all rendered |
+| New Task without token → 401 caught → offline queue, no crash | ✅ |
+
+**Backend bug found & fixed during smoke test:** `AuthGuard` parsed the Bearer header but never verified the token nor set `req.user` — every authed request 400'd with "User not authenticated". Guard now calls `AuthService.verifyIdToken()` (emulator-aware via `FIREBASE_AUTH_EMULATOR_HOST`) and attaches `req.user`; `AuthGuard` registered in `AuthModule` and `AuthModule` imported into `SessionModule`/`SurfaceModule` for DI.
+
+**Known issue (follow-up):** desktop MCP server binds `:3613` — same port as the Firestore emulator (they coexist only via IPv4/IPv6 split). Recommend moving MCP to e.g. :3615.
 
 ---
 
