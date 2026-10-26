@@ -11,7 +11,6 @@ import { useCallback } from "react";
 import { Sidebar, type SidebarSession } from "../Sidebar";
 import { useStore } from "../../store";
 import type { SessionDoc } from "../../services/sync/types";
-import { useCreateSession } from "../../hooks/use-create-session";
 
 // ── Mapping ────────────────────────────────────────────────────────────────
 
@@ -48,12 +47,11 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const sessions = useStore((s) => s.sessions);
   const activeSessionId = useStore((s) => s.activeSessionId);
-
-  const { create } = useCreateSession();
+  const openComposer = useStore((s) => s.openComposer);
 
   const handleNewTask = useCallback(async () => {
-    await create();
-  }, [create]);
+    openComposer();
+  }, [openComposer]);
 
   const handleSessionClick = useCallback(
     (id: string) => useStore.getState().setActiveSession(id),

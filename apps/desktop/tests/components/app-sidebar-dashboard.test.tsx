@@ -47,6 +47,7 @@ beforeEach(async () => {
     sessions: [],
     activeSessionId: null,
     authToken: 'test-token',
+    composerOpen: false,
   });
 });
 
@@ -114,36 +115,27 @@ describe('AppSidebar', () => {
     expect(useStore.getState().activeSessionId).toBe('a');
   });
 
-  it('New Task creates session on server and activates it', async () => {
-    const created = makeSession('new-1', { title: 'Created' });
+  it('New Task opens the task composer', () => {
+    useStore.setState({ composerOpen: false });
+    render(<AppSidebar open width={240} />);
+    fireEvent.click(screen.getByText('New Task'));
+
+    expect(useStore.getState().composerOpen).toBe(true);
+  });
+
+  it('does not create sessions directly anymore', async () => {
     const fn = mockFetch(async () => ({
       ok: true,
       status: 200,
-      json: async () => created,
+      json: async () => makeSession('new-1'),
     }));
 
+    useStore.setState({ composerOpen: false });
     render(<AppSidebar open width={240} />);
     fireEvent.click(screen.getByText('New Task'));
 
-    await waitFor(() => {
-      expect(useStore.getState().sessions.map((s) => s.id)).toEqual(['new-1']);
-    });
-    expect(useStore.getState().activeSessionId).toBe('new-1');
-    expect(fn.mock.calls[0]![0]).toBe('http://localhost:3601/sessions');
-  });
-
-  it('New Task queues createSession when offline', async () => {
-    mockFetch(async () => {
-      throw new Error('offline');
-    });
-
-    render(<AppSidebar open width={240} />);
-    fireEvent.click(screen.getByText('New Task'));
-
-    await waitFor(async () => {
-      expect(await getQueueSize()).toBe(1);
-    });
     expect(useStore.getState().sessions).toEqual([]);
+    expect(fn).not.toHaveBeenCalled();
   });
 });
 
@@ -168,6 +160,13 @@ describe('AppDashboard', () => {
 
     fireEvent.click(screen.getByText('Dashboard session'));
     expect(useStore.getState().activeSessionId).toBe('a');
+  });
+
+  it('New Task opens the task composer', () => {
+    useStore.setState({ composerOpen: false });
+    render(<AppDashboard active />);
+    fireEvent.click(screen.getByText('New Task'));
+    expect(useStore.getState().composerOpen).toBe(true);
   });
 
   it('renders nothing when inactive', () => {

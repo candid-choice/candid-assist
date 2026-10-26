@@ -13,8 +13,10 @@ import {
   AppSessionDetail,
   UserMenu,
   SettingsScreen,
+  TaskComposer,
 } from "./components";
 import { useStoreSelector } from "./store";
+import { deriveTaskTitle, useCreateSession } from "./hooks/use-create-session";
 
 function App() {
   // ── Surface state ─────────────────────────────────────────────────────
@@ -25,6 +27,9 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const theme = useStoreSelector((s) => s.settings.theme);
+  const composerOpen = useStoreSelector((s) => s.composerOpen);
+  const closeComposer = useStoreSelector((s) => s.closeComposer);
+  const { create } = useCreateSession();
 
   // Apply theme to <html data-theme> (CSS variables swap)
   useEffect(() => {
@@ -107,6 +112,17 @@ function App() {
         onClose={closeHelpPalette}
         onAction={handleHelpAction}
       />
+
+      {composerOpen && (
+        <TaskComposer
+          open
+          onClose={closeComposer}
+          onSubmit={(prompt) => {
+            closeComposer();
+            void create(deriveTaskTitle(prompt));
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -64,6 +64,14 @@ interface AppState {
   closeHelpPalette: () => void;
   registerOnComplete: (fn: (result: SurfaceResult) => void) => void;
 
+  // ── UI overlays (transient, not persisted) ────────────────────────────
+  composerOpen: boolean;
+  signInOpen: boolean;
+  openComposer: () => void;
+  closeComposer: () => void;
+  openSignIn: () => void;
+  closeSignIn: () => void;
+
   // ── Auth state ─────────────────────────────────────────────────────────
   authToken: string | null;
   authUser: AuthUser | null;
@@ -169,6 +177,14 @@ export const useStore = create<AppState>()(
 
       registerOnComplete: (fn: (result: SurfaceResult) => void) =>
         set({ onSurfaceComplete: fn }),
+
+      composerOpen: false,
+      signInOpen: false,
+
+      openComposer: () => set({ composerOpen: true }),
+      closeComposer: () => set({ composerOpen: false }),
+      openSignIn: () => set({ signInOpen: true }),
+      closeSignIn: () => set({ signInOpen: false }),
 
       // ── Auth state ─────────────────────────────────────────────────────
       authToken: null,

@@ -6,7 +6,6 @@ Idle/empty state connected to the store: shows session count and
 
 import { Dashboard } from "../Dashboard";
 import { useStore } from "../../store";
-import { useCreateSession } from "../../hooks/use-create-session";
 
 export interface AppDashboardProps {
   /** Render the dashboard (false → null). */
@@ -17,7 +16,7 @@ export interface AppDashboardProps {
 export function AppDashboard({ active, onConnectMCP }: AppDashboardProps) {
   const sessions = useStore((s) => s.sessions);
   const setActiveSession = useStore((s) => s.setActiveSession);
-  const { create } = useCreateSession();
+  const openComposer = useStore((s) => s.openComposer);
 
   return (
     <Dashboard
@@ -28,9 +27,7 @@ export function AppDashboard({ active, onConnectMCP }: AppDashboardProps) {
         title: s.title,
       }))}
       onSessionClick={(id) => setActiveSession(id)}
-      onNewTask={() => {
-        void create();
-      }}
+      onNewTask={() => openComposer()}
       onConnectMCP={onConnectMCP}
     />
   );

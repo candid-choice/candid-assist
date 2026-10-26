@@ -17,6 +17,13 @@ export interface UseCreateSession {
   creating: boolean;
 }
 
+/** Derive a session title from a composer prompt (first line, ≤ 40 chars). */
+export function deriveTaskTitle(prompt: string): string {
+  const line = prompt.trim().split("\n")[0]?.trim() ?? "";
+  if (!line) return "Task";
+  return line.length > 40 ? `${line.slice(0, 40)}…` : line;
+}
+
 export function useCreateSession(): UseCreateSession {
   const addSession = useStore((s) => s.addSession);
   const setActiveSession = useStore((s) => s.setActiveSession);

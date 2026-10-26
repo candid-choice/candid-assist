@@ -32,6 +32,8 @@ export interface SurfaceConfig<T = unknown> {
   source: 'mcp' | 'proactive';
   /** Creation timestamp (ms) */
   createdAt: number;
+  /** Session this surface was pushed into (if any) — enables response round-trip */
+  sessionId?: string;
 }
 
 // ── Surface Payload Shapes ─────────────────────────────────────────────────
