@@ -103,6 +103,20 @@ function createFakeIndexedDB() {
               });
               return putReq;
             },
+            add: (value: { id: string }) => {
+              const addReq = {} as FakeRequest;
+              queueMicrotask(() => {
+                if (storeData.has(value.id)) {
+                  addReq.error = new Error('ConstraintError: key already exists');
+                  addReq.onerror?.();
+                  return;
+                }
+                storeData.set(value.id, value);
+                tx.oncomplete?.();
+                addReq.onsuccess?.();
+              });
+              return addReq;
+            },
             delete: (key: string) => {
               const delReq = {} as FakeRequest;
               queueMicrotask(() => {
@@ -111,6 +125,31 @@ function createFakeIndexedDB() {
                 delReq.onsuccess?.();
               });
               return delReq;
+            },
+            count: () => {
+              const countReq = {} as FakeRequest;
+              queueMicrotask(() => {
+                countReq.result = storeData.size;
+                countReq.onsuccess?.();
+              });
+              return countReq;
+            },
+            clear: () => {
+              const clearReq = {} as FakeRequest;
+              queueMicrotask(() => {
+                storeData.clear();
+                tx.oncomplete?.();
+                clearReq.onsuccess?.();
+              });
+              return clearReq;
+            },
+            getAll: () => {
+              const allReq = {} as FakeRequest;
+              queueMicrotask(() => {
+                allReq.result = Array.from(storeData.values());
+                allReq.onsuccess?.();
+              });
+              return allReq;
             },
           }),
         };

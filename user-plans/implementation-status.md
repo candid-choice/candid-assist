@@ -10,7 +10,7 @@
 
 | Phase | Phase Name | Status | Progress |
 |-------|-----------|--------|----------|
-| 1 | Foundation | ✅ Done | ~90% |
+| 1 | Foundation | ✅ Done | ~95% |
 | 2 | MCP & Surface Delivery | ✅ Done | ~95% |
 | 3 | Surface UI | ✅ Done | ~90% |
 | 4 | User Flow | ✅ Done | ~75% |
@@ -33,10 +33,10 @@
 | `pre-firebase-rules.md` | Security rules, auth, Firestore rules | ✅ | Rules at root `firestore.rules`. Auth requires `request.auth != null`. Access scoped to user. Write validation partial. |
 | `pre-desktop-app-architecture.md` | Electron process model, IPC | ⚠️ | Bun side exists (`bun/index.ts`, `mcp-server.ts`), preload script missing. IPC channels partially implemented. |
 | `pre-desktop-app-shell.md` | Shell layout, preload API, IPC security | ⚠️ | WindowShell exists (title bar, controls). Shared components (SurfaceShell, Frame, AddressBar, etc.) built. Sidebar, dashboard, toast overlays not built. IPC channels: 5/11 implemented. |
-| `pre-state-management.md` | State tree, persistence, sync | ⚠️ | Zustand store: surface + view state, **auth state** (`authToken`, `authUser`, `authError`, `login`/`logout`/`setAuthError` — fixes prior TS2339 in auth-provider), **connection state** (`connectionState: disconnected/connecting/connected`, driven by `wsService.onConnectionChange`, surfaced in UI via `ConnectionIndicator` in window footer). **IndexedDB persistence wired** via `store/persist-middleware.ts` (`idbStorage` StateStorage adapter + `createJSONStorage`), `partialize` (data-only: surfaces, views, auth token+user), 5MB soft-quota guard. Still missing: Firestore sync. |
+| `pre-state-management.md` | State tree, persistence, sync | ⚠️ | Zustand store: surface + view state, **auth state**, **connection state** (surfaced via `ConnectionIndicator`), **session state** (`sessions`, `activeSessionId` + CRUD actions, persisted). **IndexedDB persistence wired** (`persist-middleware.ts`). **Firestore sync (initial)**: `services/sync/sync-service.ts` — REST client (Bearer from store), `syncFromServer()` hydrates sessions (401 → auto-logout), startup sync in `main.tsx`; offline-queue now has real `setReplayExecutor` (was a no-op stub) + replay-drain bug fixed; queue flushes on WS reconnect. Still missing: settings/notifications sync, Firestore live listeners. |
 
 **Deliverable:** Working auth flow, session CRUD, base state management.  
-**Actual:** Session CRUD works (backend), auth flow partial (frontend auth provider exists but no dashboard/sidebar wired). State management has store shape **plus IndexedDB persistence, auth state, and WS connection state** (offline-first: session + UI state survive restart).
+**Actual:** Session CRUD works (backend), auth flow partial (frontend auth provider exists but no dashboard/sidebar wired). State management has store shape **plus IndexedDB persistence, auth state, WS connection state (with footer indicator), and initial Firestore sync** (session pull + offline write queue replay).
 
 ---
 
@@ -146,7 +146,7 @@
 | Plan File | What It Defines | Status | Implementation Details |
 |-----------|----------------|--------|----------------------|
 | `pre-cicd-pipeline.md` | CI/CD, builds, releases | ❌ | Not implemented. No GitHub Actions, no CI jobs. |
-| `pre-test-strategy.md` | Unit, integration, E2E, component tests | ✅ | Vitest configured (jsdom environment). 69 tests passing: error hierarchy, keyboard shortcuts, context menus, offline queue, store structure + store state (auth/connection/partialize), ws-service connection state (mocked WebSocket), ConnectionIndicator component (react-testing-library). Test setup now has in-memory localStorage + IndexedDB mocks. |
+| `pre-test-strategy.md` | Unit, integration, E2E, component tests | ✅ | Vitest configured (jsdom environment). 104 tests passing: error hierarchy, keyboard shortcuts, context menus, offline queue + replay-executor integration, store structure/state/sessions, ws-service (mocked WebSocket), sync-service (mocked fetch), ConnectionIndicator component (react-testing-library). Test setup has functional in-memory localStorage + IndexedDB mocks. |
 | `pre-crash-recovery.md` (operations) | Crash reporting, analysis | ❌ | Not implemented. No crash reporting to monitoring service. |
 | `pre-launch-checklist-v2.md` | Launch readiness, testing, operations | ❌ | Not implemented. |
 
@@ -164,7 +164,7 @@ Phase 1 (Foundation)
     ├── pre-firebase-rules.md            → ✅
     ├── pre-desktop-app-architecture.md   → ⚠️
     ├── pre-desktop-app-shell.md          → ⚠️
-    └── pre-state-management.md           → ⚠️ (IndexedDB persistence + auth + connection state wired; Firestore sync pending)
+    └── pre-state-management.md           → ⚠️ (persistence + auth + connection + initial Firestore sync; settings/notifications sync pending)
 
 Phase 2 (MCP & Surface Delivery) ← depends on Phase 1
     ├── pre-mcp-protocol.md              → ✅

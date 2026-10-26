@@ -27,6 +27,7 @@ import type {
 } from '../types';
 
 import type { AuthUser } from '../services/auth/types';
+import type { SessionDoc } from '../services/sync/types';
 
 // ── Connection ─────────────────────────────────────────────────────────
 
@@ -59,6 +60,18 @@ interface AppState {
   // ── Connection state ───────────────────────────────────────────────────
   connectionState: ConnectionState;
   setConnectionState: (state: ConnectionState) => void;
+
+  // ── Session state (synced with backend/Firestore) ─────────────────────
+  sessions: SessionDoc[];
+  activeSessionId: string | null;
+  setSessions: (sessions: SessionDoc[]) => void;
+  addSession: (session: SessionDoc) => void;
+  updateSession: (
+    id: string,
+    patch: Partial<Pick<SessionDoc, 'title' | 'status' | 'surfaces'>>,
+  ) => void;
+  removeSession: (id: string) => void;
+  setActiveSession: (id: string | null) => void;
 
   // ── View manager ───────────────────────────────────────────────────────
   activeViewId: string;
@@ -102,6 +115,8 @@ function persistableSlice(state: AppState) {
     views: state.views,
     authToken: state.authToken,
     authUser: state.authUser,
+    sessions: state.sessions,
+    activeSessionId: state.activeSessionId,
   };
 }
 
@@ -158,6 +173,30 @@ export const useStore = create<AppState>()(
 
       setConnectionState: (state: ConnectionState) =>
         set({ connectionState: state }),
+
+      // ── Session state ────────────────────────────────────────────────
+      sessions: [],
+      activeSessionId: null,
+
+      setSessions: (sessions: SessionDoc[]) => set({ sessions }),
+
+      addSession: (session: SessionDoc) =>
+        set((s) => ({ sessions: [session, ...s.sessions] })),
+
+      updateSession: (id: string, patch: Partial<Pick<SessionDoc, 'title' | 'status' | 'surfaces'>>) =>
+        set((s) => ({
+          sessions: s.sessions.map((sess) =>
+            sess.id === id ? { ...sess, ...patch } : sess,
+          ),
+        })),
+
+      removeSession: (id: string) =>
+        set((s) => ({
+          sessions: s.sessions.filter((sess) => sess.id !== id),
+          activeSessionId: s.activeSessionId === id ? null : s.activeSessionId,
+        })),
+
+      setActiveSession: (id: string | null) => set({ activeSessionId: id }),
 
       // ── View manager ───────────────────────────────────────────────────
       activeViewId: 'view-a',

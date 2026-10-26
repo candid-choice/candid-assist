@@ -10,6 +10,8 @@ import { Electroview } from "../../.hutch/devkit/api/browser/index";
 
 import { wsService } from "./services/ws-service";
 import { useStore } from "./store";
+import { syncFromServer, executeSyncAction } from "./services/sync/sync-service";
+import { setReplayExecutor, onReconnect } from "./errors/offline-queue";
 
 const rootElement = document.getElementById("root");
 
@@ -29,7 +31,21 @@ if (window.__electrobun) {
   // Mirror WS connection state into the store (UI: status bar / banner)
   wsService.onConnectionChange((state) => {
     useStore.getState().setConnectionState(state);
+    if (state === "connected") {
+      // WS back up → flush queued writes immediately
+      onReconnect();
+    }
   });
+
+  // Offline queue → backend executor
+  setReplayExecutor(executeSyncAction);
+
+  // Initial sync: hydrate sessions from Firestore (via backend) when authed
+  if (useStore.getState().authToken) {
+    syncFromServer().catch(() => {
+      // Offline / backend down — store keeps IndexedDB data; queue will replay.
+    });
+  }
 
   // Subscribe surface push events to store
   wsService.subscribe((event) => {

@@ -151,6 +151,21 @@ export async function queueAction(
   }
 }
 
+// ── Replay Executor ─────────────────────────────────────────────
+
+type ReplayExecutor = (action: QueuedAction) => Promise<void>;
+
+let replayExecutor: ReplayExecutor | null = null;
+
+/**
+ * Register the function that actually delivers queued actions to the
+ * backend.  Called once at app startup by the sync service.  Until an
+ * executor is registered, replay treats actions as no-ops (dropped).
+ */
+export function setReplayExecutor(fn: ReplayExecutor): void {
+  replayExecutor = fn;
+}
+
 // ── Replay ──────────────────────────────────────────────────────────────────
 
 let replayScheduled = false;
@@ -191,7 +206,11 @@ export async function replayQueue(): Promise<void> {
 
     for (const action of actions) {
       try {
-        await executeQueuedAction();
+        if (replayExecutor) {
+          await replayExecutor(action);
+        } else {
+          await executeQueuedAction();
+        }
       } catch {
         // Still queued — increment retry count
         action.attempts += 1;
@@ -206,7 +225,7 @@ export async function replayQueue(): Promise<void> {
     }
 
     // Remove successfully replayed items, keep failed ones
-    if (remaining.length > 0) {
+    if (actions.length > 0) {
       const writeTx = db.transaction(STORE_NAME, 'readwrite');
       const writeStore = writeTx.objectStore(STORE_NAME);
 
