@@ -5,11 +5,12 @@ build
 artifacts
 .hutch
 .cottontail-tmp
+.playwright-mcp/
 .env
 .env.*
 !*.example
 
-user-plans# Firebase debug logs
+# Firebase debug logs
 *-debug.log
 firebase-debug.log
 firestore-debug.log
