@@ -10,6 +10,7 @@ import {
   ConnectionIndicator,
   AppSidebar,
   AppDashboard,
+  AppSessionDetail,
 } from "./components";
 import { useStoreSelector } from "./store";
 
@@ -18,6 +19,7 @@ function App() {
   const helpPaletteOpen = useStoreSelector((s) => s.helpPaletteOpen);
   const closeHelpPalette = useStoreSelector((s) => s.closeHelpPalette);
   const activeSurface = useStoreSelector((s) => s.activeSurface);
+  const activeSessionId = useStoreSelector((s) => s.activeSessionId);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // ── View state ────────────────────────────────────────────────────────
@@ -73,7 +75,13 @@ function App() {
 
             {/* ── Content ── */}
             <div className="ha-chrome-content" style={{ overflow: "hidden" }}>
-              {!activeSurface && <AppDashboard active />}
+              {activeSurface ? (
+                <SurfaceHost config={activeSurface} isViewActive />
+              ) : activeSessionId ? (
+                <AppSessionDetail />
+              ) : (
+                <AppDashboard active />
+              )}
               {views.map((view) => (
                 <SurfaceHost
                   key={view.id}

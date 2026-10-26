@@ -36,7 +36,7 @@
 | `pre-state-management.md` | State tree, persistence, sync | ⚠️ | Zustand store: surface + view state, **auth state**, **connection state** (surfaced via `ConnectionIndicator`), **session state** (`sessions`, `activeSessionId` + CRUD actions, persisted). **IndexedDB persistence wired** (`persist-middleware.ts`). **Firestore sync (initial)**: `services/sync/sync-service.ts` — REST client (Bearer from store), `syncFromServer()` hydrates sessions (401 → auto-logout), startup sync in `main.tsx`; offline-queue now has real `setReplayExecutor` (was a no-op stub) + replay-drain bug fixed; queue flushes on WS reconnect. Still missing: settings/notifications sync, Firestore live listeners. |
 
 **Deliverable:** Working auth flow, session CRUD, base state management.  
-**Actual:** Session CRUD works (backend), auth flow partial (frontend auth provider exists). State management has store shape **plus IndexedDB persistence, auth state, WS connection state (with footer indicator), and initial Firestore sync** (session pull + offline write queue replay). **Sidebar + Dashboard now mounted** in App via store-connected containers (`AppSidebar`, `AppDashboard`): session list from store, session selection, New Task (server-first create, offline-queue fallback).
+**Actual:** Session CRUD works (backend), auth flow partial (frontend auth provider exists). State management has store shape **plus IndexedDB persistence, auth state, WS connection state (with footer indicator), and initial Firestore sync** (session pull + offline write queue replay). **Sidebar, Dashboard, and SessionDetail now mounted** in App via store-connected containers (`AppSidebar`, `AppDashboard`, `AppSessionDetail`): session list, selection, surface history, archive/delete, New Task (server-first + offline queue). `activeSurface` renders via `SurfaceHost`.
 
 ---
 
@@ -87,12 +87,12 @@
 |-----------|----------------|--------|----------------------|
 | `pre-onboarding-flow-detail.md` | 3-step wizard: MCP start, Claude Code config, verify connection | ✅ | `OnboardingWizard` built (3 steps: connect → configure → verify) |
 | `pre-task-composer-detail.md` | Command palette, attachments (⌘+N) | ✅ | `TaskComposer` built with command palette, attachment, submit |
-| `pre-02-page-navigation-flow.md` | Route map, guards, transitions | ⚠️ | No router; state-based view management in Zustand store |
+| `pre-02-page-navigation-flow.md` | Route map, guards, transitions | ⚠️ | No router; state-based view management in Zustand store. App-level panel precedence: activeSurface → session detail → dashboard (with browser views alongside). |
 | `pre-workspace-config.md` | Workspace detection, config | ❌ | Not implemented. No workspace detection or config UI. |
 | `03-screen-sequence-login.md` (reviewed) | Login flow | ✅ | `SignInScreen` built (Google + email/password, error handling) |
-| `04-screen-sequence-dashboard.md` (reviewed) | Dashboard shell, session list | ✅ | `Dashboard` + `Sidebar` built (session list, search, settings nav) |
-| `05-screen-sequence-surfaces.md` (reviewed) | Surface interaction flow | ✅ | `SurfaceHost` + lifecycle context wired. `SessionDetail` built. |
-| `06-screen-detail-settings-history.md` (reviewed) | Session detail, settings | ✅ | `SettingsScreen` (4 sections: general, account, MCP, about) + `SessionDetail` |
+| `04-screen-sequence-dashboard.md` (reviewed) | Dashboard shell, session list | ✅ | `Dashboard` + `Sidebar` built **and mounted** in App via store-connected `AppSidebar`/`AppDashboard` (live session list from store, search, New Task with offline-queue fallback) |
+| `05-screen-sequence-surfaces.md` (reviewed) | Surface interaction flow | ✅ | `SurfaceHost` + lifecycle context wired. `activeSurface` now rendered in App. `SessionDetail` shows embedded surface history (responded/open/closed) |
+| `06-screen-detail-settings-history.md` (reviewed) | Session detail, settings | ✅ | `SettingsScreen` (4 sections: general, account, MCP, about) + `SessionDetail` **mounted** via `AppSessionDetail` (back/archive/delete — archive queues offline) |
 
 **Deliverable:** Complete user journey: login → onboarding → dashboard → surface.  
 **Actual:** All user-facing screens built. Auth flow, session management, surface lifecycle wired. Missing: real data connection to backend.
@@ -146,7 +146,7 @@
 | Plan File | What It Defines | Status | Implementation Details |
 |-----------|----------------|--------|----------------------|
 | `pre-cicd-pipeline.md` | CI/CD, builds, releases | ❌ | Not implemented. No GitHub Actions, no CI jobs. |
-| `pre-test-strategy.md` | Unit, integration, E2E, component tests | ✅ | Vitest configured (jsdom environment). 114 tests passing: error hierarchy, keyboard shortcuts, context menus, offline queue + replay-executor integration, store structure/state/sessions, ws-service (mocked WebSocket), sync-service (mocked fetch), ConnectionIndicator + AppSidebar/AppDashboard containers (react-testing-library). Test setup has functional in-memory localStorage + IndexedDB mocks. |
+| `pre-test-strategy.md` | Unit, integration, E2E, component tests | ✅ | Vitest configured (jsdom environment). 123 tests passing: error hierarchy, keyboard shortcuts, context menus, offline queue + replay-executor integration, store structure/state/sessions, ws-service (mocked WebSocket), sync-service (mocked fetch), ConnectionIndicator + AppSidebar/AppDashboard/AppSessionDetail containers (react-testing-library). Test setup has functional in-memory localStorage + IndexedDB mocks. |
 | `pre-crash-recovery.md` (operations) | Crash reporting, analysis | ❌ | Not implemented. No crash reporting to monitoring service. |
 | `pre-launch-checklist-v2.md` | Launch readiness, testing, operations | ❌ | Not implemented. |
 
@@ -182,7 +182,7 @@ Phase 3 (Surface UI) ← depends on Phase 2
 Phase 4 (User Flow) ← depends on Phase 1, 2
     ├── pre-onboarding-flow-detail.md     → ❌
     ├── pre-task-composer-detail.md       → ❌
-    ├── pre-02-page-navigation-flow.md     → ❌
+    ├── pre-02-page-navigation-flow.md     → ⚠️
     ├── pre-workspace-config.md           → ❌
     └── (reviewed: login, dashboard, surfaces) → ❌/⚠️
 

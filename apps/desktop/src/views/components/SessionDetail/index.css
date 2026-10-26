@@ -144,3 +144,42 @@
   color: var(--ha-text-tertiary);
   font-size: 13px;
 }
+
+/* ── Surface history list ── */
+.ha-session-detail-surface {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-sm);
+  margin-bottom: 6px;
+  cursor: pointer;
+  background: var(--ha-surface);
+}
+
+.ha-session-detail-surface:hover {
+  background: var(--ha-primary-light);
+}
+
+.ha-session-detail-surface-type {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--ha-primary);
+  flex-shrink: 0;
+}
+
+.ha-session-detail-surface-prompt {
+  flex: 1;
+  font-size: 12px;
+  color: var(--ha-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ha-session-detail-surface-status {
+  font-size: 11px;
+  color: var(--ha-text-secondary);
+  flex-shrink: 0;
+}

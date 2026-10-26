@@ -6,9 +6,17 @@ Shows details for a specific session:
 - Actions (Archive, Delete)
 */
 
-import { useState } from "react";
 import { IconArchive, IconTrash, IconClock } from "@tabler/icons-react";
 import "./index.css";
+
+export interface SessionSurfaceView {
+  surfaceId: string;
+  type: string;
+  prompt: string;
+  createdAt: string;
+  closedAt: string | null;
+  responded: boolean;
+}
 
 export interface SessionDetailProps {
   session: {
@@ -18,12 +26,14 @@ export interface SessionDetailProps {
     createdAt: string;
     surfaceCount: number;
   };
+  surfaces?: SessionSurfaceView[];
+  onSurfaceClick?: (surfaceId: string) => void;
   onArchive?: () => void;
   onDelete?: () => void;
   onBack?: () => void;
 }
 
-function SessionDetail({ session, onArchive, onDelete, onBack }: SessionDetailProps) {
+function SessionDetail({ session, surfaces = [], onSurfaceClick, onArchive, onDelete, onBack }: SessionDetailProps) {
   return (
     <div className="ha-session-detail">
       {/* ── Header ─────────────────────────────────────────────────── */}
@@ -66,9 +76,27 @@ function SessionDetail({ session, onArchive, onDelete, onBack }: SessionDetailPr
       {/* ── Surface History ────────────────────────────────────────── */}
       <div className="ha-session-detail-section">
         <h3 className="ha-session-detail-section-title">Surface History</h3>
-        <div className="ha-session-detail-empty">
-          <p>No surfaces in this session yet.</p>
-        </div>
+        {surfaces.length === 0 ? (
+          <div className="ha-session-detail-empty">
+            <p>No surfaces in this session yet.</p>
+          </div>
+        ) : (
+          <div className="ha-session-detail-surfaces">
+            {surfaces.map((s) => (
+              <div
+                key={s.surfaceId}
+                className="ha-session-detail-surface"
+                onClick={() => onSurfaceClick?.(s.surfaceId)}
+              >
+                <span className="ha-session-detail-surface-type">{s.type}</span>
+                <span className="ha-session-detail-surface-prompt">{s.prompt}</span>
+                <span className="ha-session-detail-surface-status">
+                  {s.responded ? "responded" : s.closedAt ? "closed" : "open"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
