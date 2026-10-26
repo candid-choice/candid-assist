@@ -37,7 +37,7 @@ export default defineConfig({
         ? []
         : [
             {
-              find: /(^|\/)\.hutch\/devkit\/api\/browser\/index(\.js)?$/,
+              find: /^.*\.hutch\/devkit\/api\/browser\/index(\.js)?$/,
               replacement: resolve(__dirname, "src/views/devkit-stub.ts"),
             },
           ]),
