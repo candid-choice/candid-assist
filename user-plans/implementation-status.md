@@ -145,7 +145,7 @@
 
 | Plan File | What It Defines | Status | Implementation Details |
 |-----------|----------------|--------|----------------------|
-| `pre-cicd-pipeline.md` | CI/CD, builds, releases | ✅ | GitHub Actions `.github/workflows/ci.yml`: 3 parallel jobs (desktop: vitest + Vite renderer build; backend: nest build; web: next build), pnpm 12 / Node 22, `--ignore-scripts` skips electrobun native prepare. All three build steps verified locally. |
+| `pre-cicd-pipeline.md` | CI/CD, builds, releases | ❌ | Not enabled (user not ready). A working `.github/workflows/ci.yml` (desktop tests+build, backend build, web build — all verified green) was built and then removed at user request; recover from git history (commit cb1f297) when ready. |
 | `pre-test-strategy.md` | Unit, integration, E2E, component tests | ✅ | Vitest configured (jsdom environment). 132 tests passing: error hierarchy, keyboard shortcuts, context menus, offline queue + replay-executor integration, store structure/state/sessions, ws-service (mocked WebSocket), sync-service (mocked fetch), MCP server HTTP+WS integration (tools/call router, validation errors, surface:push type mapping), ConnectionIndicator + AppSidebar/AppDashboard/AppSessionDetail containers (react-testing-library). Test setup has functional in-memory localStorage + IndexedDB mocks. |
 | `pre-crash-recovery.md` (operations) | Crash reporting, analysis | ❌ | Not implemented. No crash reporting to monitoring service. |
 | `pre-launch-checklist-v2.md` | Launch readiness, testing, operations | ❌ | Not implemented. |
