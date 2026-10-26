@@ -206,3 +206,18 @@ electrobun-webview {
   position: relative;
   flex: 1;
 }
+
+/* ── App row: sidebar + main column ── */
+.ha-app-row {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.ha-app-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}

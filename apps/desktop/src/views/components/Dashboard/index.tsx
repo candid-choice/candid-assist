@@ -11,11 +11,13 @@ import "./index.css";
 export interface DashboardProps {
   active: boolean;
   sessionCount?: number;
+  recentSessions?: { id: string; title: string }[];
+  onSessionClick?: (id: string) => void;
   onNewTask?: () => void;
   onConnectMCP?: () => void;
 }
 
-function Dashboard({ active, sessionCount = 0, onNewTask, onConnectMCP }: DashboardProps) {
+function Dashboard({ active, sessionCount = 0, recentSessions = [], onSessionClick, onNewTask, onConnectMCP }: DashboardProps) {
 
   if (!active) return null;
 
@@ -53,9 +55,21 @@ function Dashboard({ active, sessionCount = 0, onNewTask, onConnectMCP }: Dashbo
         <div className="ha-dashboard-sessions">
           <h3 className="ha-dashboard-sessions-title">Recent Sessions</h3>
           <div className="ha-dashboard-sessions-list">
-            <div className="ha-dashboard-sessions-placeholder">
-              <p>No sessions yet. Start a conversation to see them here.</p>
-            </div>
+            {recentSessions.length === 0 ? (
+              <div className="ha-dashboard-sessions-placeholder">
+                <p>No sessions yet. Start a conversation to see them here.</p>
+              </div>
+            ) : (
+              recentSessions.map((s) => (
+                <button
+                  key={s.id}
+                  className="ha-dashboard-session-item"
+                  onClick={() => onSessionClick?.(s.id)}
+                >
+                  {s.title}
+                </button>
+              ))
+            )}
           </div>
         </div>
       )}

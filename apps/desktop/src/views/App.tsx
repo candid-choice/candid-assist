@@ -1,6 +1,6 @@
 /** Human Assist — the main application. */
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import {
   AddressBar,
@@ -8,6 +8,8 @@ import {
   HelpPalette,
   SurfaceHost,
   ConnectionIndicator,
+  AppSidebar,
+  AppDashboard,
 } from "./components";
 import { useStoreSelector } from "./store";
 
@@ -15,6 +17,8 @@ function App() {
   // ── Surface state ─────────────────────────────────────────────────────
   const helpPaletteOpen = useStoreSelector((s) => s.helpPaletteOpen);
   const closeHelpPalette = useStoreSelector((s) => s.closeHelpPalette);
+  const activeSurface = useStoreSelector((s) => s.activeSurface);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // ── View state ────────────────────────────────────────────────────────
   const activeViewId = useStoreSelector((s) => s.activeViewId);
@@ -48,25 +52,37 @@ function App() {
           </span>
         }
       >
-        {/* ── Chrome bar: address bar ── */}
-        <div className="ha-chrome-bar">
-          <AddressBar
-            tabs={addressBarTabs}
-            activeTabId={activeViewId}
-            onTabClick={setActiveView}
+        {/* ── App row: sidebar + main ── */}
+        <div className="ha-app-row">
+          <AppSidebar
+            open={sidebarOpen}
+            width={240}
+            onToggle={() => setSidebarOpen((v) => !v)}
           />
-          <div className="ha-chrome-spacer" />
-        </div>
 
-        {/* ── Content ── */}
-        <div className="ha-chrome-content" style={{ overflow: "hidden" }}>
-          {views.map((view) => (
-            <SurfaceHost
-              key={view.id}
-              config={view}
-              isViewActive={view.id === activeViewId}
-            />
-          ))}
+          <div className="ha-app-main">
+            {/* ── Chrome bar: address bar ── */}
+            <div className="ha-chrome-bar">
+              <AddressBar
+                tabs={addressBarTabs}
+                activeTabId={activeViewId}
+                onTabClick={setActiveView}
+              />
+              <div className="ha-chrome-spacer" />
+            </div>
+
+            {/* ── Content ── */}
+            <div className="ha-chrome-content" style={{ overflow: "hidden" }}>
+              {!activeSurface && <AppDashboard active />}
+              {views.map((view) => (
+                <SurfaceHost
+                  key={view.id}
+                  config={view}
+                  isViewActive={view.id === activeViewId}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </WindowShell>
 

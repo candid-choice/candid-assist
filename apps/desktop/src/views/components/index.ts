@@ -4,6 +4,8 @@ export {
 } from "./WindowShell";
 export { IdleState } from "./IdleState";
 export { ConnectionIndicator } from "./ConnectionIndicator";
+export { AppSidebar } from "./AppSidebar";
+export { AppDashboard } from "./AppDashboard";
 export { HelpPalette } from "./HelpPalette";
 export { SurfaceHost } from "./SurfaceHost";
 export { ContextMenu } from "./ContextMenu";
@@ -29,6 +31,7 @@ export { useKeyboardShortcuts, DEFAULT_SHORTCUTS, isMacPlatform } from "../hooks
 export { useDropZone, DropZoneOverlay, ComposerDropTarget } from "../hooks/use-drop-zone";
 export { useIndexedDBPersist } from "../hooks/use-indexeddb-persist";
 export { useNotifications } from "../hooks/use-notifications";
+export { useCreateSession } from "../hooks/use-create-session";
 
 // ── Types & state ────────────────────────────────────────────────
 export { type SurfaceConfig, type SurfacePayload, type SurfaceResult } from "../types";

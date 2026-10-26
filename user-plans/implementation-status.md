@@ -36,7 +36,7 @@
 | `pre-state-management.md` | State tree, persistence, sync | ⚠️ | Zustand store: surface + view state, **auth state**, **connection state** (surfaced via `ConnectionIndicator`), **session state** (`sessions`, `activeSessionId` + CRUD actions, persisted). **IndexedDB persistence wired** (`persist-middleware.ts`). **Firestore sync (initial)**: `services/sync/sync-service.ts` — REST client (Bearer from store), `syncFromServer()` hydrates sessions (401 → auto-logout), startup sync in `main.tsx`; offline-queue now has real `setReplayExecutor` (was a no-op stub) + replay-drain bug fixed; queue flushes on WS reconnect. Still missing: settings/notifications sync, Firestore live listeners. |
 
 **Deliverable:** Working auth flow, session CRUD, base state management.  
-**Actual:** Session CRUD works (backend), auth flow partial (frontend auth provider exists but no dashboard/sidebar wired). State management has store shape **plus IndexedDB persistence, auth state, WS connection state (with footer indicator), and initial Firestore sync** (session pull + offline write queue replay).
+**Actual:** Session CRUD works (backend), auth flow partial (frontend auth provider exists). State management has store shape **plus IndexedDB persistence, auth state, WS connection state (with footer indicator), and initial Firestore sync** (session pull + offline write queue replay). **Sidebar + Dashboard now mounted** in App via store-connected containers (`AppSidebar`, `AppDashboard`): session list from store, session selection, New Task (server-first create, offline-queue fallback).
 
 ---
 
@@ -146,7 +146,7 @@
 | Plan File | What It Defines | Status | Implementation Details |
 |-----------|----------------|--------|----------------------|
 | `pre-cicd-pipeline.md` | CI/CD, builds, releases | ❌ | Not implemented. No GitHub Actions, no CI jobs. |
-| `pre-test-strategy.md` | Unit, integration, E2E, component tests | ✅ | Vitest configured (jsdom environment). 104 tests passing: error hierarchy, keyboard shortcuts, context menus, offline queue + replay-executor integration, store structure/state/sessions, ws-service (mocked WebSocket), sync-service (mocked fetch), ConnectionIndicator component (react-testing-library). Test setup has functional in-memory localStorage + IndexedDB mocks. |
+| `pre-test-strategy.md` | Unit, integration, E2E, component tests | ✅ | Vitest configured (jsdom environment). 114 tests passing: error hierarchy, keyboard shortcuts, context menus, offline queue + replay-executor integration, store structure/state/sessions, ws-service (mocked WebSocket), sync-service (mocked fetch), ConnectionIndicator + AppSidebar/AppDashboard containers (react-testing-library). Test setup has functional in-memory localStorage + IndexedDB mocks. |
 | `pre-crash-recovery.md` (operations) | Crash reporting, analysis | ❌ | Not implemented. No crash reporting to monitoring service. |
 | `pre-launch-checklist-v2.md` | Launch readiness, testing, operations | ❌ | Not implemented. |
 
