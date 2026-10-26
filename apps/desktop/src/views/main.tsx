@@ -63,6 +63,9 @@ wsService.subscribe((event) => {
       payload,
       source: "mcp",
       createdAt: Date.now(),
+      // Bind to the session that was active when the surface arrived,
+      // so the user's response round-trips into that session's history.
+      sessionId: useStore.getState().activeSessionId ?? undefined,
     });
   }
 });
@@ -74,3 +77,9 @@ createRoot(rootElement).render(
     </AuthProvider>
   </StrictMode>,
 );
+
+// Dev/debug hook (browser dev mode only): inspect the store from the
+// console or E2E harness.
+if (!window.__electrobun && typeof window !== "undefined") {
+  (window as any).__haStore = useStore;
+}

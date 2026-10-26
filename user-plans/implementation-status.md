@@ -55,7 +55,7 @@
 | `pre-ws-events.md` | WebSocket events, delivery guarantees | ⚠️ | `ws-service.ts` with auto-reconnect + backoff, `onConnectionChange` (connecting/connected/disconnected, deduped) feeding the store + footer indicator. Only `surface:push` payload event; no session/error events yet. |
 
 **Deliverable:** One surface works end-to-end (tool call → render → respond → complete).  
-**Actual:** ✅ **Verified live (E2E)** — `curl` `openInputSurface` → MCP :3615 → WS :3614 → renderer → `InputSurface` rendered choices on screen (Playwright-confirmed). All 7 surface types wired through `SurfaceHost`.
+**Actual:** ✅ **Full loop verified** — push via MCP → render → user responds → response persisted into session history (offline queue fallback). 7 surface types routed through `SurfaceHost`; input round-trip covered by integration tests + live browser run.
 
 ---
 
@@ -91,7 +91,7 @@
 | `pre-workspace-config.md` | Workspace detection, config | ❌ | Not implemented. No workspace detection or config UI. |
 | `03-screen-sequence-login.md` (reviewed) | Login flow | ✅ | `SignInScreen` built (Google + email/password, error handling) |
 | `04-screen-sequence-dashboard.md` (reviewed) | Dashboard shell, session list | ✅ | `Dashboard` + `Sidebar` built **and mounted** in App via store-connected `AppSidebar`/`AppDashboard` (live session list from store, search, New Task with offline-queue fallback) |
-| `05-screen-sequence-surfaces.md` (reviewed) | Surface interaction flow | ✅ | `SurfaceHost` + lifecycle context wired. `activeSurface` now rendered in App. `SessionDetail` shows embedded surface history (responded/open/closed) |
+| `05-screen-sequence-surfaces.md` (reviewed) | Surface interaction flow | ✅ | `SurfaceHost` + lifecycle context wired. `activeSurface` rendered in App. `SessionDetail` shows embedded surface history (responded/open/closed). **Response round-trip complete**: InputSurface (confirm/choices/text) submits → `completeSurface` → `POST /sessions/:id/surfaces` with `userResponse` (offline: `pushSurface` queue op) → session history updates |
 | `06-screen-detail-settings-history.md` (reviewed) | Session detail, settings | ✅ | `SessionDetail` **mounted** via `AppSessionDetail` (back/archive/delete — archive queues offline). `SettingsScreen` now **store-backed** (theme/auto-minimize/notifications/auto-close via persisted settings slice; real account from authUser + sign-out; live MCP status from connectionState) and **opened from the title-bar `UserMenu`** — sidebar Settings button removed per design |
 
 **Deliverable:** Complete user journey: login → onboarding → dashboard → surface.  

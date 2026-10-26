@@ -17,6 +17,7 @@ import type {
   SessionDoc,
   SessionStatus,
   SurfaceUserResponse,
+  EmbeddedSurface,
 } from './types';
 
 // ── Backend URL ──────────────────────────────────────────────────────────
@@ -131,6 +132,17 @@ export function deleteSession(
 
 // ── Surface API ──────────────────────────────────────────────────────────
 
+/** Attach (embed) a surface snapshot to a session document. */
+export function addSurfaceToSession(
+  sessionId: string,
+  surface: EmbeddedSurface,
+): Promise<{ success: boolean }> {
+  return apiFetch(`/sessions/${sessionId}/surfaces`, {
+    method: 'POST',
+    body: JSON.stringify(surface),
+  });
+}
+
 /** Submit the user's response on a surface (via session path). */
 export function sendSurfaceResponse(
   sessionId: string,
@@ -210,8 +222,14 @@ export async function executeSyncAction(action: {
       break;
     }
     case 'pushSurface': {
-      // Surface documents are backend-owned (MCP pushes via WS); the
-      // session embed copy is maintained server-side.  Nothing to send.
+      // Surface was pushed while offline — embed it into the session.
+      const { sessionId, surface } = action.data as {
+        sessionId?: string;
+        surface?: EmbeddedSurface;
+      };
+      if (sessionId && surface) {
+        await addSurfaceToSession(sessionId, surface);
+      }
       break;
     }
     case 'completeSurface': {

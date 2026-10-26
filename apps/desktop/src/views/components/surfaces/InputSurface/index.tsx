@@ -11,11 +11,18 @@ export interface InputSurfaceProps {
   onComplete: (data: unknown) => void;
 }
 
-export function InputSurface({ config }: InputSurfaceProps) {
+export function InputSurface({ config, onComplete }: InputSurfaceProps) {
   const payload = config.payload;
   const kind = payload.kind;
   const [textValue, setTextValue] = useState(payload.value ?? "");
   const [selectedValues, setSelectedValues] = useState<Set<string>>(new Set());
+
+  const submit = useCallback(
+    (type: "approval" | "dismiss" | "feedback", text: string) => {
+      onComplete?.({ type, text });
+    },
+    [onComplete],
+  );
 
   const handleTextChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setTextValue(e.target.value);
@@ -34,7 +41,27 @@ export function InputSurface({ config }: InputSurfaceProps) {
       <div className="ha-input-surface">
         <div className="ha-input-group">
           {payload.question && <label className="ha-input-label">{payload.question}</label>}
-          <input className="ha-input" type="text" value={textValue} onChange={handleTextChange} placeholder={payload.placeholder} autoFocus />
+          <input
+            className="ha-input"
+            type="text"
+            value={textValue}
+            onChange={handleTextChange}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && textValue.trim()) {
+                submit("feedback", textValue.trim());
+              }
+            }}
+            placeholder={payload.placeholder}
+            autoFocus
+          />
+          <button
+            className="ha-input-btn ha-input-btn--submit"
+            type="button"
+            disabled={!textValue.trim()}
+            onClick={() => submit("feedback", textValue.trim())}
+          >
+            Submit
+          </button>
         </div>
       </div>
     );
@@ -46,8 +73,8 @@ export function InputSurface({ config }: InputSurfaceProps) {
         <div className="ha-input-group">
           <p className="ha-input-question">{payload.question}</p>
           <div className="ha-input-confirm-buttons">
-            <button className="ha-input-btn ha-input-btn--yes" type="button">Yes</button>
-            <button className="ha-input-btn ha-input-btn--no" type="button">No</button>
+            <button className="ha-input-btn ha-input-btn--yes" type="button" onClick={() => submit("approval", "yes")}>Yes</button>
+            <button className="ha-input-btn ha-input-btn--no" type="button" onClick={() => submit("dismiss", "no")}>No</button>
           </div>
         </div>
       </div>
@@ -72,6 +99,14 @@ export function InputSurface({ config }: InputSurfaceProps) {
               </button>
             ))}
           </div>
+          <button
+            className="ha-input-btn ha-input-btn--submit"
+            type="button"
+            disabled={selectedValues.size === 0}
+            onClick={() => submit("feedback", Array.from(selectedValues).join(", "))}
+          >
+            Submit
+          </button>
         </div>
       </div>
     );

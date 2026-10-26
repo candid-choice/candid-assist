@@ -13,7 +13,10 @@ import type {
   TerminalPayload,
 } from "../../types";
 
-import { useStoreSelector } from "../../store";
+import { useStoreSelector, useStore } from "../../store";
+import { addSurfaceToSession } from "../../services/sync/sync-service";
+import { queueAction } from "../../errors/offline-queue";
+import type { EmbeddedSurface, SurfaceUserResponse } from "../../services/sync/types";
 
 import { BrowserSurface } from "../surfaces/BrowserSurface";
 import { CanvasSurface } from "../surfaces/CanvasSurface";
@@ -44,6 +47,58 @@ export function SurfaceHost({
 
   const handleDone = () => {};
   const handleCancel = () => {};
+
+  // ── Input surface completion: store + backend round-trip ─────────────
+  const handleInputComplete = useCallback(
+    (data: unknown) => {
+      const d = (data ?? {}) as { type?: string; text?: string };
+      const responseType: SurfaceUserResponse["type"] =
+        d.type === "approval" ? "approval" : d.type === "dismiss" ? "dismiss" : "feedback";
+      const response: SurfaceUserResponse = {
+        type: responseType,
+        text: String(d.text ?? ""),
+      };
+
+      useStore.getState().completeSurface({ completed: true, data: response });
+
+      const state = useStore.getState();
+      const sessionId = config.sessionId ?? state.activeSessionId ?? undefined;
+      if (!state.authToken || !sessionId) return;
+
+      const payload = (config.payload ?? {}) as Record<string, unknown>;
+      const nowIso = new Date().toISOString();
+      const embedded: EmbeddedSurface = {
+        surfaceId: config.id,
+        type: config.type,
+        url: null,
+        prompt: String(payload["question"] ?? payload["prompt"] ?? ""),
+        createdAt: new Date(config.createdAt).toISOString(),
+        userResponse: response,
+        claudeResponse: null,
+        closedAt: nowIso,
+      };
+
+      addSurfaceToSession(sessionId, embedded)
+        .then(() => {
+          // Optimistically mirror the embed into the local session doc
+          const sess = useStore
+            .getState()
+            .sessions.find((s) => s.id === sessionId);
+          if (!sess) return;
+          const exists = sess.surfaces.some((x) => x.surfaceId === config.id);
+          const surfaces = exists
+            ? sess.surfaces.map((x) =>
+                x.surfaceId === config.id ? embedded : x,
+              )
+            : [...sess.surfaces, embedded];
+          useStore.getState().updateSession(sessionId, { surfaces });
+        })
+        .catch(() => {
+          void queueAction("pushSurface", { sessionId, surface: embedded });
+        });
+    },
+    [config],
+  );
 
   const handleNavigate = useCallback(
     (url: string) => {
@@ -88,7 +143,7 @@ export function SurfaceHost({
         return (
           <InputSurface
             config={config as SurfaceConfig<InputPayload>}
-            onComplete={() => {}}
+            onComplete={handleInputComplete}
           />
         );
       case "code-diff":
