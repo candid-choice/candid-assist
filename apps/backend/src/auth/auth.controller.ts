@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Headers, UseGuards, Req, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Headers, UseGuards, Req, Body, BadRequestException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthGuard } from './auth.guard';
 import { UserRequest } from './interfaces';
@@ -12,6 +12,31 @@ export class AuthController {
       throw new BadRequestException('User not authenticated');
     }
     return req.user;
+  }
+
+  /**
+   * Verify a Firebase ID token (public endpoint).
+   * Desktop signs in via Firebase client SDK, then exchanges the ID
+   * token here for the user profile. Returns the same token back so
+   * the renderer can use it as its Bearer credential.
+   */
+  @Post('verify')
+  async verifyToken(@Body('token') token: string) {
+    if (!token) {
+      throw new BadRequestException('token is required');
+    }
+
+    const decoded = await this.authService.verifyIdToken(token);
+
+    return {
+      token,
+      user: {
+        id: decoded.uid,
+        email: decoded.email ?? '',
+        name: decoded.name ?? decoded.email?.split('@')[0] ?? 'User',
+        photoURL: decoded.picture ?? undefined,
+      },
+    };
   }
 
   /**

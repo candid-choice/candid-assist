@@ -10,7 +10,7 @@ user menu now.
 */
 
 import { useEffect, useRef, useState } from "react";
-import { IconSettings, IconLogout } from "@tabler/icons-react";
+import { IconSettings, IconLogout, IconLogin } from "@tabler/icons-react";
 import "./index.css";
 
 import { useStore } from "../../store";
@@ -23,6 +23,7 @@ export interface UserMenuProps {
 export function UserMenu({ onOpenSettings }: UserMenuProps) {
   const authUser = useStore((s) => s.authUser);
   const authToken = useStore((s) => s.authToken);
+  const openSignIn = useStore((s) => s.openSignIn);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -89,6 +90,20 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
             <IconSettings size={14} />
             <span>Settings</span>
           </button>
+
+          {!signedIn && (
+            <button
+              className="ha-usermenu-item"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                openSignIn();
+              }}
+            >
+              <IconLogin size={14} />
+              <span>Sign in</span>
+            </button>
+          )}
 
           {signedIn && (
             <button

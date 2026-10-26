@@ -9,6 +9,7 @@ export { AppDashboard } from "./AppDashboard";
 export { AppSessionDetail } from "./AppSessionDetail";
 export { UserMenu } from "./UserMenu";
 export { SettingsScreen } from "./SettingsScreen";
+export { SignInScreen } from "./SignInScreen";
 export { TaskComposer } from "./TaskComposer";
 export { HelpPalette } from "./HelpPalette";
 export { SurfaceHost } from "./SurfaceHost";

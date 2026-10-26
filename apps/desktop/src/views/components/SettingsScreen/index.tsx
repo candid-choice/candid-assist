@@ -137,6 +137,7 @@ function GeneralSettings() {
 function AccountSettings() {
   const authUser = useStore((s) => s.authUser);
   const authToken = useStore((s) => s.authToken);
+  const openSignIn = useStore((s) => s.openSignIn);
 
   const signedIn = Boolean(authToken);
 
@@ -180,6 +181,9 @@ function AccountSettings() {
           <p className="ha-settings-desc">
             Not signed in. Sign in to sync sessions across devices.
           </p>
+          <button className="ha-settings-btn" onClick={() => openSignIn()}>
+            Sign in
+          </button>
         </div>
       )}
     </div>

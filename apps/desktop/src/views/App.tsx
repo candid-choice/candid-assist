@@ -14,6 +14,7 @@ import {
   UserMenu,
   SettingsScreen,
   TaskComposer,
+  SignInScreen,
 } from "./components";
 import { useStoreSelector } from "./store";
 import { deriveTaskTitle, useCreateSession } from "./hooks/use-create-session";
@@ -29,7 +30,15 @@ function App() {
   const theme = useStoreSelector((s) => s.settings.theme);
   const composerOpen = useStoreSelector((s) => s.composerOpen);
   const closeComposer = useStoreSelector((s) => s.closeComposer);
+  const signInOpen = useStoreSelector((s) => s.signInOpen);
+  const closeSignIn = useStoreSelector((s) => s.closeSignIn);
+  const authToken = useStoreSelector((s) => s.authToken);
   const { create } = useCreateSession();
+
+  // Auto-dismiss the sign-in screen once authenticated
+  useEffect(() => {
+    if (authToken && signInOpen) closeSignIn();
+  }, [authToken, signInOpen, closeSignIn]);
 
   // Apply theme to <html data-theme> (CSS variables swap)
   useEffect(() => {
@@ -88,6 +97,8 @@ function App() {
             <div className="ha-chrome-content" style={{ overflow: "hidden" }}>
               {settingsOpen ? (
                 <SettingsScreen onBack={() => setSettingsOpen(false)} />
+              ) : signInOpen ? (
+                <SignInScreen onDismiss={closeSignIn} />
               ) : activeSurface ? (
                 <SurfaceHost config={activeSurface} isViewActive />
               ) : activeSessionId ? (

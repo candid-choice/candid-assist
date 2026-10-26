@@ -10,6 +10,7 @@ import { Electroview } from "../../.hutch/devkit/api/browser/index";
 
 import { wsService } from "./services/ws-service";
 import { useStore } from "./store";
+import { AuthProvider } from "./context/auth-provider";
 import { syncFromServer, executeSyncAction } from "./services/sync/sync-service";
 import { setReplayExecutor, onReconnect } from "./errors/offline-queue";
 
@@ -68,6 +69,8 @@ wsService.subscribe((event) => {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <App />
+    <AuthProvider>
+      <App />
+    </AuthProvider>
   </StrictMode>,
 );

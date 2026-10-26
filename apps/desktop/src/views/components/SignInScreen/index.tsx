@@ -6,7 +6,7 @@ import { useAuth } from "../../context/auth-provider";
 
 import "./index.css";
 
-export function SignInScreen() {
+export function SignInScreen({ onDismiss }: { onDismiss?: () => void }) {
   const { signInWithGoogle, signInWithEmail, isLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,6 +34,16 @@ export function SignInScreen() {
 
   return (
     <div className="ha-signin-screen">
+      {onDismiss && (
+        <button
+          className="ha-signin-dismiss"
+          onClick={onDismiss}
+          title="Continue without account"
+          aria-label="Continue without account"
+        >
+          ✕
+        </button>
+      )}
       <div className="ha-signin-card">
         {/* Logo & title */}
         <div className="ha-signin-header">
@@ -43,6 +53,9 @@ export function SignInScreen() {
             Your shared workspace with Claude Code
           </p>
         </div>
+
+        {/* Error (both modes) */}
+        {error && <div className="ha-signin-error">{error}</div>}
 
         {/* Google Sign In */}
         {!emailMode && (
@@ -66,7 +79,6 @@ export function SignInScreen() {
         {/* Email password form */}
         {emailMode && (
           <form className="ha-signin-form" onSubmit={handleEmailSignIn}>
-            {error && <div className="ha-signin-error">{error}</div>}
             <div className="ha-signin-field">
               <label>Email</label>
               <input
