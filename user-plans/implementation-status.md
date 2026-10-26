@@ -92,7 +92,7 @@
 | `03-screen-sequence-login.md` (reviewed) | Login flow | ✅ | `SignInScreen` built (Google + email/password, error handling) |
 | `04-screen-sequence-dashboard.md` (reviewed) | Dashboard shell, session list | ✅ | `Dashboard` + `Sidebar` built **and mounted** in App via store-connected `AppSidebar`/`AppDashboard` (live session list from store, search, New Task with offline-queue fallback) |
 | `05-screen-sequence-surfaces.md` (reviewed) | Surface interaction flow | ✅ | `SurfaceHost` + lifecycle context wired. `activeSurface` now rendered in App. `SessionDetail` shows embedded surface history (responded/open/closed) |
-| `06-screen-detail-settings-history.md` (reviewed) | Session detail, settings | ✅ | `SettingsScreen` (4 sections: general, account, MCP, about) + `SessionDetail` **mounted** via `AppSessionDetail` (back/archive/delete — archive queues offline) |
+| `06-screen-detail-settings-history.md` (reviewed) | Session detail, settings | ✅ | `SessionDetail` **mounted** via `AppSessionDetail` (back/archive/delete — archive queues offline). `SettingsScreen` now **store-backed** (theme/auto-minimize/notifications/auto-close via persisted settings slice; real account from authUser + sign-out; live MCP status from connectionState) and **opened from the title-bar `UserMenu`** — sidebar Settings button removed per design |
 
 **Deliverable:** Complete user journey: login → onboarding → dashboard → surface.  
 **Actual:** All user-facing screens built. Auth flow, session management, surface lifecycle wired. Missing: real data connection to backend.

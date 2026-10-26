@@ -34,6 +34,21 @@ import type { SessionDoc } from '../services/sync/types';
 /** Runtime WS connection state (never persisted). */
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
+/** User-adjustable preferences (persisted). */
+export interface AppSettings {
+  theme: 'light' | 'dark';
+  autoMinimize: boolean;
+  desktopNotifications: boolean;
+  autoCloseSurfaces: boolean;
+}
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  theme: 'light',
+  autoMinimize: true,
+  desktopNotifications: true,
+  autoCloseSurfaces: true,
+};
+
 // ── Store ────────────────────────────────────────────────────────────────
 
 interface AppState {
@@ -74,6 +89,9 @@ interface AppState {
   setActiveSession: (id: string | null) => void;
 
   // ── View manager ───────────────────────────────────────────────────────
+  settings: AppSettings;
+  updateSettings: (patch: Partial<AppSettings>) => void;
+
   activeViewId: string;
   views: SurfaceConfig<BrowserPayload>[];
   setActiveView: (id: string) => void;
@@ -117,6 +135,7 @@ function persistableSlice(state: AppState) {
     authUser: state.authUser,
     sessions: state.sessions,
     activeSessionId: state.activeSessionId,
+    settings: state.settings,
   };
 }
 
@@ -173,6 +192,11 @@ export const useStore = create<AppState>()(
 
       setConnectionState: (state: ConnectionState) =>
         set({ connectionState: state }),
+
+      settings: DEFAULT_SETTINGS,
+
+      updateSettings: (patch: Partial<AppSettings>) =>
+        set((s) => ({ settings: { ...s.settings, ...patch } })),
 
       // ── Session state ────────────────────────────────────────────────
       sessions: [],

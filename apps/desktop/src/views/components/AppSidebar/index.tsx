@@ -39,14 +39,12 @@ export interface AppSidebarProps {
   open?: boolean;
   width?: number;
   onToggle?: () => void;
-  onOpenSettings?: () => void;
 }
 
 export function AppSidebar({
   open = true,
   width = 240,
   onToggle,
-  onOpenSettings,
 }: AppSidebarProps) {
   const sessions = useStore((s) => s.sessions);
   const activeSessionId = useStore((s) => s.activeSessionId);
@@ -68,7 +66,6 @@ export function AppSidebar({
       width={width}
       onToggle={onToggle ?? (() => {})}
       onNewTask={handleNewTask}
-      onOpenSettings={onOpenSettings ?? (() => {})}
       sessions={sessions.map(toSidebarSession)}
       onSessionClick={handleSessionClick}
       activeSessionId={activeSessionId}

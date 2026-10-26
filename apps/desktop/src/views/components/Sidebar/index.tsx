@@ -5,7 +5,7 @@ Fixed width: 240px. Collapsible: 0px when closed.
 */
 
 import { useState } from "react";
-import { IconSearch, IconSettings, IconClock } from "@tabler/icons-react";
+import { IconSearch, IconClock } from "@tabler/icons-react";
 import "./index.css";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -23,7 +23,6 @@ export interface SidebarProps {
   width: number;
   onToggle: () => void;
   onNewTask: () => void;
-  onOpenSettings: () => void;
   sessions: SidebarSession[];
   onSessionClick: (id: string) => void;
   activeSessionId: string | null;
@@ -58,7 +57,6 @@ function Sidebar({
   width,
   onToggle,
   onNewTask,
-  onOpenSettings,
   sessions,
   onSessionClick,
   activeSessionId,
@@ -127,13 +125,6 @@ function Sidebar({
         ))}
       </div>
 
-      {/* ── Footer ─────────────────────────────────────────────── */}
-      <div className="ha-sidebar-footer">
-        <button className="ha-sidebar-footer-btn" onClick={onOpenSettings} title="Settings">
-          <IconSettings size={14} />
-          {open && <span>Settings</span>}
-        </button>
-      </div>
     </div>
   );
 }

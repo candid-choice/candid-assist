@@ -7,6 +7,8 @@ export { ConnectionIndicator } from "./ConnectionIndicator";
 export { AppSidebar } from "./AppSidebar";
 export { AppDashboard } from "./AppDashboard";
 export { AppSessionDetail } from "./AppSessionDetail";
+export { UserMenu } from "./UserMenu";
+export { SettingsScreen } from "./SettingsScreen";
 export { HelpPalette } from "./HelpPalette";
 export { SurfaceHost } from "./SurfaceHost";
 export { ContextMenu } from "./ContextMenu";

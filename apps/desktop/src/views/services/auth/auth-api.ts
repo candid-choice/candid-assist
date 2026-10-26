@@ -10,6 +10,7 @@ Usage:
 */
 
 import type { AuthError, AuthUser } from './types';
+import { clearAuthStorage } from './auth-storage';
 
 const BACKEND_URL = import.meta.env?.["VITE_BACKEND_URL"]
   ? import.meta.env.VITE_BACKEND_URL
@@ -104,8 +105,7 @@ export const authService = {
   },
 
   signOut(): void {
-    localStorage.removeItem('ha_auth_token');
-    localStorage.removeItem('ha_user');
+    clearAuthStorage();
   },
 
   getStoredToken(): string | null {

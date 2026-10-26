@@ -1,6 +1,6 @@
 /** Human Assist — the main application. */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   AddressBar,
@@ -11,6 +11,8 @@ import {
   AppSidebar,
   AppDashboard,
   AppSessionDetail,
+  UserMenu,
+  SettingsScreen,
 } from "./components";
 import { useStoreSelector } from "./store";
 
@@ -21,6 +23,13 @@ function App() {
   const activeSurface = useStoreSelector((s) => s.activeSurface);
   const activeSessionId = useStoreSelector((s) => s.activeSessionId);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const theme = useStoreSelector((s) => s.settings.theme);
+
+  // Apply theme to <html data-theme> (CSS variables swap)
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
   // ── View state ────────────────────────────────────────────────────────
   const activeViewId = useStoreSelector((s) => s.activeViewId);
@@ -43,10 +52,7 @@ function App() {
       <WindowShell
         title="Human Assist"
         userStatus={
-          <div className="ha-titlebar-user">
-            <span className="ha-titlebar-avatar">U</span>
-            <span className="ha-titlebar-name">User</span>
-          </div>
+          <UserMenu onOpenSettings={() => setSettingsOpen(true)} />
         }
         footer={
           <span className="ha-footer-status">
@@ -75,7 +81,9 @@ function App() {
 
             {/* ── Content ── */}
             <div className="ha-chrome-content" style={{ overflow: "hidden" }}>
-              {activeSurface ? (
+              {settingsOpen ? (
+                <SettingsScreen onBack={() => setSettingsOpen(false)} />
+              ) : activeSurface ? (
                 <SurfaceHost config={activeSurface} isViewActive />
               ) : activeSessionId ? (
                 <AppSessionDetail />

@@ -16,6 +16,7 @@
   /* Text — warm charcoal */
   --ha-text: #3d3d3d;
   --ha-text-secondary: #8a8178;
+  --ha-text-tertiary: #a89f95;
   /* Borders — soft beige */
   --ha-border: #e8e4de;
   /* Success */
@@ -29,6 +30,24 @@
   --ha-radius-md: 10px;
   --ha-radius-lg: 14px;
   --ha-radius-xl: 18px;
+}
+
+/* Dark theme — toggled via <html data-theme="dark"> (store: settings.theme) */
+:root[data-theme="dark"] {
+  --ha-bg: #1e1c24;
+  --ha-surface: #2a2733;
+  --ha-primary: #9c8fc4;
+  --ha-primary-hover: #b0a4d4;
+  --ha-primary-light: #353143;
+  --ha-secondary: #e8927f;
+  --ha-text: #ece9f2;
+  --ha-text-secondary: #a49cb0;
+  --ha-text-tertiary: #7d7688;
+  --ha-border: #3d3947;
+  --ha-success: #7fb98d;
+  --ha-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --ha-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --ha-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
 /* ── Global reset & base ─────────────────────────────────────────── */
