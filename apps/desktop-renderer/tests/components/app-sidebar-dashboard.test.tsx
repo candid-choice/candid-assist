@@ -115,27 +115,11 @@ describe('AppSidebar', () => {
     expect(useStore.getState().activeSessionId).toBe('a');
   });
 
-  it('New Task opens the task composer', () => {
+  it('has no New Task button — tasks arrive via MCP', () => {
     useStore.setState({ composerOpen: false });
     render(<AppSidebar open width={240} />);
-    fireEvent.click(screen.getByText('New Task'));
-
-    expect(useStore.getState().composerOpen).toBe(true);
-  });
-
-  it('does not create sessions directly anymore', async () => {
-    const fn = mockFetch(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => makeSession('new-1'),
-    }));
-
-    useStore.setState({ composerOpen: false });
-    render(<AppSidebar open width={240} />);
-    fireEvent.click(screen.getByText('New Task'));
-
-    expect(useStore.getState().sessions).toEqual([]);
-    expect(fn).not.toHaveBeenCalled();
+    expect(screen.queryByText('New Task')).toBeNull();
+    expect(useStore.getState().composerOpen).toBe(false);
   });
 });
 
@@ -162,11 +146,11 @@ describe('AppDashboard', () => {
     expect(useStore.getState().activeSessionId).toBe('a');
   });
 
-  it('New Task opens the task composer', () => {
+  it('has no New Task button — tasks arrive via MCP', () => {
     useStore.setState({ composerOpen: false });
     render(<AppDashboard active />);
-    fireEvent.click(screen.getByText('New Task'));
-    expect(useStore.getState().composerOpen).toBe(true);
+    expect(screen.queryByText('New Task')).toBeNull();
+    expect(useStore.getState().composerOpen).toBe(false);
   });
 
   it('renders nothing when inactive', () => {

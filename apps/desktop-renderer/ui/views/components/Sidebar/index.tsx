@@ -22,7 +22,6 @@ export interface SidebarProps {
   open: boolean;
   width: number;
   onToggle: () => void;
-  onNewTask: () => void;
   sessions: SidebarSession[];
   onSessionClick: (id: string) => void;
   activeSessionId: string | null;
@@ -56,7 +55,6 @@ function Sidebar({
   open,
   width,
   onToggle,
-  onNewTask,
   sessions,
   onSessionClick,
   activeSessionId,
@@ -71,10 +69,6 @@ function Sidebar({
     <div className={`ha-sidebar ${open ? "open" : ""}`} style={{ width: open ? `${width}px` : "0px" }}>
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="ha-sidebar-header">
-        <button className="ha-sidebar-new" onClick={onNewTask} title="New Task (⌘N)">
-          <span className="ha-sidebar-new-icon">+</span>
-          {open && <span>New Task</span>}
-        </button>
         <button className="ha-sidebar-toggle" onClick={onToggle} title={open ? "Collapse" : "Expand"}>
           {open ? (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

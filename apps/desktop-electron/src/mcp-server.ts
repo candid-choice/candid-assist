@@ -215,6 +215,82 @@ function handleOpenTerminalOutput(args: unknown): Record<string, unknown> {
 
 // ── Tool Router ───────────────────────────────────────────────────────────
 
+// MCP tools/list manifest (JSON Schema per tool).
+const TOOL_DEFINITIONS = [
+  {
+    name: 'openBrowserSurface',
+    description: 'Open an interactive web page in a Human Assist browser surface.',
+    inputSchema: {
+      type: 'object',
+      properties: { url: { type: 'string', description: 'Absolute http(s) URL to display' } },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'openCanvasSurface',
+    description: 'Show a generated canvas/visual surface with an optional prompt.',
+    inputSchema: {
+      type: 'object',
+      properties: { prompt: { type: 'string', description: 'Prompt/caption for the canvas' } },
+    },
+  },
+  {
+    name: 'openInputSurface',
+    description: 'Ask the human for input: free text, a choice among options, or a confirm.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        question: { type: 'string', description: 'The question to show' },
+        kind: { type: 'string', enum: ['text', 'choices', 'confirm'], description: 'Input mode (default text)' },
+        options: { type: 'array', items: { type: 'string' }, description: 'Choices when kind=choices' },
+      },
+      required: ['question'],
+    },
+  },
+  {
+    name: 'openImageSurface',
+    description: 'Display an image (URL or data URI) for human review.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        src: { type: 'string', description: 'Image URL or data: URI' },
+        prompt: { type: 'string', description: 'Caption/instruction' },
+      },
+      required: ['src'],
+    },
+  },
+  {
+    name: 'openScreenCapture',
+    description: 'Capture the screen (or a region) for human context.',
+    inputSchema: {
+      type: 'object',
+      properties: { mode: { type: 'string', description: 'Capture mode (e.g. full, region)' } },
+    },
+  },
+  {
+    name: 'openCodeDiff',
+    description: 'Present a unified diff (and optional file list) for human approval.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        diff: { type: 'string', description: 'Unified diff text' },
+        files: { type: 'array', items: { type: 'object' }, description: 'Changed file metadata' },
+      },
+    },
+  },
+  {
+    name: 'openTerminalOutput',
+    description: 'Stream terminal command output into a surface.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: 'Command that produced the output' },
+        output: { type: 'string', description: 'Terminal output text' },
+      },
+    },
+  },
+];
+
 const TOOL_HANDLERS: Record<string, (args: unknown) => Record<string, unknown>> = {
   openBrowserSurface: handleOpenBrowserSurface,
   openCanvasSurface: handleOpenCanvasSurface,
@@ -237,7 +313,54 @@ function createMcpServer(port: number): { server: ReturnType<typeof createServer
           const parsed = JSON.parse(body);
           const { jsonrpc, method, params, id } = parsed;
 
-          if (jsonrpc !== "2.0" || method !== "tools/call" || !params) {
+          if (jsonrpc !== "2.0") {
+            sendJsonResponse(res, {
+              jsonrpc: "2.0",
+              error: { code: -32600, message: "Invalid request" },
+              id: id ?? null,
+            });
+            return;
+          }
+
+          // ── MCP lifecycle ────────────────────────────────────────────
+          if (method === "initialize") {
+            const p = (params ?? {}) as Record<string, unknown>;
+            sendJsonResponse(res, {
+              jsonrpc: "2.0",
+              result: {
+                protocolVersion:
+                  typeof p["protocolVersion"] === "string"
+                    ? p["protocolVersion"]
+                    : "2025-03-26",
+                capabilities: { tools: {} },
+                serverInfo: { name: "human-assist", version: "1.0.0" },
+              },
+              id: id ?? null,
+            });
+            return;
+          }
+
+          if (method === "notifications/initialized" || method === "notifications/cancelled") {
+            res.writeHead(202);
+            res.end();
+            return;
+          }
+
+          if (method === "ping") {
+            sendJsonResponse(res, { jsonrpc: "2.0", result: {}, id: id ?? null });
+            return;
+          }
+
+          if (method === "tools/list") {
+            sendJsonResponse(res, {
+              jsonrpc: "2.0",
+              result: { tools: TOOL_DEFINITIONS },
+              id: id ?? null,
+            });
+            return;
+          }
+
+          if (method !== "tools/call" || !params) {
             sendJsonResponse(res, {
               jsonrpc: "2.0",
               error: { code: -32600, message: "Invalid request" },

@@ -81,12 +81,49 @@ describe('MCP tools/call router', () => {
     expect(res.error?.code).toBe(-32601);
   });
 
-  it('rejects a non tools/call method with -32600', async () => {
+  it('rejects an unknown method with -32600', async () => {
+    const res = await fetch(MCP_URL, {
+      method: 'POST',
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'resources/list', id: 1 }),
+    }).then((r) => r.json());
+    expect(res.error?.code).toBe(-32600);
+  });
+
+  it('answers initialize with protocolVersion + serverInfo', async () => {
+    const res = await fetch(MCP_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'initialize',
+        params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'pi', version: 'x' } },
+        id: 1,
+      }),
+    }).then((r) => r.json());
+    expect(res.result.protocolVersion).toBe('2025-03-26');
+    expect(res.result.serverInfo.name).toBe('human-assist');
+    expect(res.result.capabilities.tools).toBeDefined();
+  });
+
+  it('lists all 7 tools with input schemas (tools/list)', async () => {
     const res = await fetch(MCP_URL, {
       method: 'POST',
       body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
     }).then((r) => r.json());
-    expect(res.error?.code).toBe(-32600);
+    expect(res.result.tools).toHaveLength(7);
+    const names = res.result.tools.map((t: { name: string }) => t.name);
+    expect(names).toContain('openBrowserSurface');
+    expect(names).toContain('openInputSurface');
+    for (const t of res.result.tools) {
+      expect(t.inputSchema?.type).toBe('object');
+    }
+  });
+
+  it('accepts notifications/initialized with 202', async () => {
+    const r = await fetch(MCP_URL, {
+      method: 'POST',
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+    });
+    expect(r.status).toBe(202);
   });
 
   it('returns parse error -32700 for malformed JSON', async () => {

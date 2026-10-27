@@ -3,7 +3,7 @@
 Shows when there are no active surfaces. Displays:
 - "Waiting for Claude" idle state
 - Recent sessions list
-- Quick actions (New Task, Connect)
+- Quick actions (Connect MCP)
 */
 
 import "./index.css";
@@ -37,10 +37,6 @@ function Dashboard({ active, sessionCount = 0, recentSessions = [], onSessionCli
         </p>
 
         <div className="ha-dashboard-actions">
-          <button className="ha-dashboard-btn ha-dashboard-btn--primary" onClick={onNewTask}>
-            <span className="ha-dashboard-btn-icon">✎</span>
-            <span>New Task</span>
-          </button>
           {onConnectMCP && (
             <button className="ha-dashboard-btn ha-dashboard-btn--secondary" onClick={onConnectMCP}>
               <span className="ha-dashboard-btn-icon">⚡</span>

@@ -2,7 +2,7 @@
 
 Connects the presentational Sidebar to the Zustand store:
   - maps persisted SessionDoc[] → SidebarSession[]
-  - New Task → creates a session on the backend (queued when offline)
+  - Tasks arrive via MCP (pushed surfaces) — no manual New Task button.
   - session click → setActiveSession
 */
 
@@ -47,11 +47,6 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const sessions = useStore((s) => s.sessions);
   const activeSessionId = useStore((s) => s.activeSessionId);
-  const openComposer = useStore((s) => s.openComposer);
-
-  const handleNewTask = useCallback(async () => {
-    openComposer();
-  }, [openComposer]);
 
   const handleSessionClick = useCallback(
     (id: string) => useStore.getState().setActiveSession(id),
@@ -63,7 +58,6 @@ export function AppSidebar({
       open={open}
       width={width}
       onToggle={onToggle ?? (() => {})}
-      onNewTask={handleNewTask}
       sessions={sessions.map(toSidebarSession)}
       onSessionClick={handleSessionClick}
       activeSessionId={activeSessionId}

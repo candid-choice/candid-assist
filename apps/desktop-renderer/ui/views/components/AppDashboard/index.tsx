@@ -16,7 +16,6 @@ export interface AppDashboardProps {
 export function AppDashboard({ active, onConnectMCP }: AppDashboardProps) {
   const sessions = useStore((s) => s.sessions);
   const setActiveSession = useStore((s) => s.setActiveSession);
-  const openComposer = useStore((s) => s.openComposer);
 
   return (
     <Dashboard
@@ -27,7 +26,6 @@ export function AppDashboard({ active, onConnectMCP }: AppDashboardProps) {
         title: s.title,
       }))}
       onSessionClick={(id) => setActiveSession(id)}
-      onNewTask={() => openComposer()}
       onConnectMCP={onConnectMCP}
     />
   );
