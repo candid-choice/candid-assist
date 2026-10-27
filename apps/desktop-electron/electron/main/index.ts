@@ -14,6 +14,10 @@ import { app, BrowserWindow, WebContentsView, ipcMain, shell } from 'electron';
 import path from 'node:path';
 
 import { startMcpServer } from '../../src/mcp-server';
+import {
+  startMcpWebSocketServer,
+  stopMcpWebSocketServer,
+} from '../../src/mcp-websocket';
 
 // MCP/WS ports — overridable so the Electrobun desktop can coexist
 // during migration. The WS port is forwarded to the renderer via
@@ -197,9 +201,17 @@ app.whenReady().then(() => {
   // MCP (HTTP) + surface events (WS). Ports overridable so Electron and
   // the Electrobun desktop can run side by side during migration.
   startMcpServer(MCP_PORT, WS_PORT);
+  // WebSocket MCP for pi (@0xkobold/pi-mcp) — loopback only.
+  startMcpWebSocketServer();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+app.on('before-quit', () => {
+  void stopMcpWebSocketServer().catch((err) => {
+    console.error('[main] MCP WS shutdown failed:', err);
   });
 });
 

@@ -110,8 +110,8 @@ export function getMcpStatus(): McpStatus {
     ok: true,
     mcp: {
       agentLastSeen: lastAgentActivity,
-      agentConnected: active.length > 0,
-      agentCount: active.length,
+      agentConnected: active.length > 0 || wsPresenceProvider() > 0,
+      agentCount: active.length + wsPresenceProvider(),
       agents: active,
     },
     ws: { clients: wss?.clients.size ?? 0 },
@@ -379,6 +379,89 @@ const TOOL_HANDLERS: Record<string, (args: unknown) => Record<string, unknown>> 
 
 // ── MCP Server (HTTP + SSE) ───────────────────────────────────────────────
 
+
+// ── Shared MCP JSON-RPC dispatch (HTTP POST /mcp + WebSocket transport) ──
+
+/** Process one MCP JSON-RPC message. Returns response === null for
+ *  notifications (nothing to reply). Used by both transports so tool
+ *  behavior and surface broadcasts stay identical. */
+export function processMcpMessage(parsed: unknown): { response: unknown | null } {
+  const p = (parsed ?? {}) as Record<string, unknown>;
+  const jsonrpc = p["jsonrpc"];
+  const method = p["method"];
+  const params = p["params"];
+  const id = p["id"] ?? null;
+
+  if (jsonrpc !== "2.0") {
+    return { response: { jsonrpc: "2.0", error: { code: -32600, message: "Invalid request" }, id } };
+  }
+
+  if (method === "initialize") {
+    const init = (params ?? {}) as Record<string, unknown>;
+    return {
+      response: {
+        jsonrpc: "2.0",
+        result: {
+          protocolVersion:
+            typeof init["protocolVersion"] === "string" ? init["protocolVersion"] : "2025-03-26",
+          capabilities: { tools: {} },
+          serverInfo: { name: "human-assist", version: "1.0.0" },
+        },
+        id,
+      },
+    };
+  }
+
+  if (method === "notifications/initialized" || method === "notifications/cancelled") {
+    return { response: null };
+  }
+
+  if (method === "ping") {
+    return { response: { jsonrpc: "2.0", result: {}, id } };
+  }
+
+  if (method === "tools/list") {
+    return { response: { jsonrpc: "2.0", result: { tools: TOOL_DEFINITIONS }, id } };
+  }
+
+  if (method !== "tools/call" || !params) {
+    return { response: { jsonrpc: "2.0", error: { code: -32600, message: "Invalid request" }, id } };
+  }
+
+  const toolName = (params as Record<string, unknown>)["name"] as string;
+  const handler = TOOL_HANDLERS[toolName];
+  if (!handler) {
+    return { response: { jsonrpc: "2.0", error: { code: -32601, message: "Method not found: " + toolName }, id } };
+  }
+
+  try {
+    const result = handler((params as Record<string, unknown>)["arguments"]);
+    // Broadcast the surface push to renderer WS clients.
+    const surfaceId = (result as Record<string, unknown>)?.["surfaceId"] as string;
+    const entry = openSurfaces.get(surfaceId);
+    notifySurfacePush({
+      surfaceId,
+      type: entry?.type ?? "unknown",
+      payload: ((params as Record<string, unknown>)["arguments"] ?? {}) as Record<string, unknown>,
+      status: "pushed",
+    });
+    return { response: { jsonrpc: "2.0", result, id } };
+  } catch (err) {
+    const error = err as Error;
+    return { response: { jsonrpc: "2.0", error: { code: -32603, message: error.message }, id } };
+  }
+}
+
+function logMcpRequest(method: string, id: unknown, ip: string, port: number): void {
+  console.log("[mcp] \u2190 " + method + (id != null ? " (id " + String(id) + ")" : "") + " from " + ip + ":" + port);
+}
+
+/** WebSocket MCP server reports live connection count for /status here. */
+let wsPresenceProvider: () => number = () => 0;
+export function setWsPresenceProvider(fn: () => number): void {
+  wsPresenceProvider = fn;
+}
+
 function createMcpServer(port: number): { server: ReturnType<typeof createServer>; port: number } {
   const httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
     if (req.url === "/status" && req.method === "GET") {
@@ -390,120 +473,31 @@ function createMcpServer(port: number): { server: ReturnType<typeof createServer
       let body = "";
       req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
       req.on("end", () => {
+        let parsed: unknown;
         try {
-          const parsed = JSON.parse(body);
-          const { jsonrpc, method, params, id } = parsed;
-
-          if (jsonrpc === "2.0") {
-            lastAgentActivity = Date.now();
-            touchAgent(params, req.socket.remoteAddress ?? "?");
-            console.log(
-              `[mcp] \u2190 ${method}${id != null ? ` (id ${id})` : ""} from ${req.socket.remoteAddress}:${req.socket.remotePort}`,
-            );
-          }
-
-          if (jsonrpc !== "2.0") {
-            sendJsonResponse(res, {
-              jsonrpc: "2.0",
-              error: { code: -32600, message: "Invalid request" },
-              id: id ?? null,
-            });
-            return;
-          }
-
-          // ── MCP lifecycle ────────────────────────────────────────────
-          if (method === "initialize") {
-            const p = (params ?? {}) as Record<string, unknown>;
-            sendJsonResponse(res, {
-              jsonrpc: "2.0",
-              result: {
-                protocolVersion:
-                  typeof p["protocolVersion"] === "string"
-                    ? p["protocolVersion"]
-                    : "2025-03-26",
-                capabilities: { tools: {} },
-                serverInfo: { name: "human-assist", version: "1.0.0" },
-              },
-              id: id ?? null,
-            });
-            return;
-          }
-
-          if (method === "notifications/initialized" || method === "notifications/cancelled") {
-            res.writeHead(202);
-            res.end();
-            return;
-          }
-
-          if (method === "ping") {
-            sendJsonResponse(res, { jsonrpc: "2.0", result: {}, id: id ?? null });
-            return;
-          }
-
-          if (method === "tools/list") {
-            sendJsonResponse(res, {
-              jsonrpc: "2.0",
-              result: { tools: TOOL_DEFINITIONS },
-              id: id ?? null,
-            });
-            return;
-          }
-
-          if (method !== "tools/call" || !params) {
-            sendJsonResponse(res, {
-              jsonrpc: "2.0",
-              error: { code: -32600, message: "Invalid request" },
-              id: id ?? null,
-            });
-            return;
-          }
-
-          // MCP contract: method === "tools/call", tool selected by params.name
-          const toolName = (params as Record<string, unknown>)["name"] as string;
-          const handler = TOOL_HANDLERS[toolName];
-          if (!handler) {
-            sendJsonResponse(res, {
-              jsonrpc: "2.0",
-              error: { code: -32601, message: `Method not found: ${toolName}` },
-              id: id ?? null,
-            });
-            return;
-          }
-
-          try {
-            const result = handler(params.arguments);
-            sendJsonResponse(res, {
-              jsonrpc: "2.0",
-              result,
-              id: id ?? null,
-            });
-            // Notify WebSocket clients with the stored surface type so the
-            // renderer can route to the correct surface component.
-            const surfaceId = (result as Record<string, unknown>)?.[
-              "surfaceId"
-            ] as string;
-            const entry = openSurfaces.get(surfaceId);
-            notifySurfacePush({
-              surfaceId,
-              type: entry?.type ?? "unknown",
-              payload: (params.arguments ?? {}) as Record<string, unknown>,
-              status: "pushed",
-            });
-          } catch (err) {
-            const error = err as Error;
-            sendJsonResponse(res, {
-              jsonrpc: "2.0",
-              error: { code: -32603, message: error.message },
-              id: id ?? null,
-            });
-          }
+          parsed = JSON.parse(body);
         } catch {
           sendJsonResponse(res, {
             jsonrpc: "2.0",
             error: { code: -32700, message: "Parse error" },
             id: null,
           });
+          return;
         }
+        const p = parsed as Record<string, unknown>;
+        const ip = req.socket.remoteAddress ?? "?";
+        if (p["jsonrpc"] === "2.0") {
+          lastAgentActivity = Date.now();
+          touchAgent(p["params"], ip);
+          logMcpRequest(String(p["method"]), p["id"], ip, req.socket.remotePort ?? 0);
+        }
+        const { response } = processMcpMessage(parsed);
+        if (response === null) {
+          res.writeHead(202);
+          res.end();
+          return;
+        }
+        sendJsonResponse(res, response);
       });
     } else {
       sendJsonResponse(res, { jsonrpc: "2.0", error: { code: -32000, message: "Not Found" }, id: null });
