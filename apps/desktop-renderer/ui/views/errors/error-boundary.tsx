@@ -116,7 +116,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <button
                 style={{
                   padding: '10px 24px',
-                  background: '#6c63ff',
+                  background: 'var(--ha-primary)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '6px',

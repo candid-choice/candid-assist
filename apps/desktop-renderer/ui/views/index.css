@@ -3,26 +3,25 @@
 /* ── Design tokens ───────────────────────────────────────────────── */
 
 :root {
-  /* Background — warm cream / off-white */
-  --ha-bg: #faf7f2;
-  /* Titlebar — neutral charcoal from the web app's shadcn palette
-     (apps/web/src/app/globals.css), dark enough for traffic-light
-     contrast without being pure black */
+  /* Design tokens — mapped from apps/web/src/app/globals.css
+     (shadcn neutral oklch ramp). Names stay --ha-* (used repo-wide). */
+  /* Background / surface */
+  --ha-bg: #ffffff; /* web: --background */
+  /* Titlebar — neutral charcoal (web: chart-5 / dark secondary) */
   --ha-titlebar-bg: oklch(0.269 0 0);
-  /* Surface — warm white */
-  --ha-surface: #ffffff;
-  /* Primary — muted violet/purple */
-  --ha-primary: #7c6fa8;
-  --ha-primary-hover: #6b5d94;
-  --ha-primary-light: #f0eef6;
-  /* Secondary — muted peach/terracotta */
-  --ha-secondary: #e8927f;
-  /* Text — warm charcoal */
-  --ha-text: #3d3d3d;
-  --ha-text-secondary: #8a8178;
-  --ha-text-tertiary: #a89f95;
-  /* Borders — soft beige */
-  --ha-border: #e8e4de;
+  --ha-surface: oklch(1 0 0); /* web: --card */
+  /* Primary — shadcn near-black */
+  --ha-primary: oklch(0.205 0 0); /* web: --primary */
+  --ha-primary-hover: oklch(0.269 0 0);
+  --ha-primary-light: oklch(0.97 0 0); /* web: --accent (hover/chip tint) */
+  /* Secondary */
+  --ha-secondary: oklch(0.371 0 0); /* web: chart-4 */
+  /* Text */
+  --ha-text: #171717; /* web: --foreground */
+  --ha-text-secondary: oklch(0.556 0 0); /* web: --muted-foreground */
+  --ha-text-tertiary: oklch(0.708 0 0); /* web: --ring */
+  /* Borders */
+  --ha-border: oklch(0.922 0 0); /* web: --border */
   /* Success */
   --ha-success: #6b9e78;
   /* Shadow */
@@ -38,17 +37,17 @@
 
 /* Dark theme — toggled via <html data-theme="dark"> (store: settings.theme) */
 :root[data-theme="dark"] {
-  --ha-bg: #1e1c24;
-  --ha-titlebar-bg: oklch(0.145 0 0);
-  --ha-surface: #2a2733;
-  --ha-primary: #9c8fc4;
-  --ha-primary-hover: #b0a4d4;
-  --ha-primary-light: #353143;
-  --ha-secondary: #e8927f;
-  --ha-text: #ece9f2;
-  --ha-text-secondary: #a49cb0;
-  --ha-text-tertiary: #7d7688;
-  --ha-border: #3d3947;
+  --ha-bg: oklch(0.145 0 0); /* web dark: --background */
+  --ha-titlebar-bg: oklch(0.205 0 0); /* web dark: --card — reads as chrome on 0.145 bg */
+  --ha-surface: oklch(0.205 0 0); /* web dark: --card */
+  --ha-primary: oklch(0.922 0 0); /* web dark: --primary */
+  --ha-primary-hover: oklch(0.87 0 0);
+  --ha-primary-light: oklch(0.269 0 0); /* web dark: --accent */
+  --ha-secondary: oklch(0.708 0 0);
+  --ha-text: oklch(0.985 0 0); /* web dark: --foreground */
+  --ha-text-secondary: oklch(0.708 0 0); /* web dark: --muted-foreground */
+  --ha-text-tertiary: oklch(0.556 0 0);
+  --ha-border: oklch(1 0 0 / 10%); /* web dark: --border */
   --ha-success: #7fb98d;
   --ha-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
   --ha-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);

@@ -215,8 +215,10 @@ export function ComposerDropTarget({ onFilesSelected }: ComposerDropTargetProps)
       >
         <button
           style={{
-            background: isDragging ? '#6c63ff' : '#2a2a3e',
-            border: '1px solid isDragging ? #6c63ff : #444',
+            background: isDragging ? 'var(--ha-primary)' : 'var(--ha-titlebar-bg)',
+            border: isDragging
+              ? '1px solid var(--ha-primary)'
+              : '1px solid oklch(0.371 0 0)',
             borderRadius: '6px',
             color: '#ddd',
             padding: '6px 12px',
@@ -232,14 +234,14 @@ export function ComposerDropTarget({ onFilesSelected }: ComposerDropTargetProps)
           }}
           onMouseLeave={(e) => {
             if (!isDragging) {
-              e.currentTarget.style.background = '#2a2a3e';
+              e.currentTarget.style.background = 'var(--ha-titlebar-bg)';
             }
           }}
         >
           📎 Attach
         </button>
         {isDragging && (
-          <span style={{ fontSize: '12px', color: '#6c63ff' }}>
+          <span style={{ fontSize: '12px', color: 'var(--ha-primary)' }}>
             Drop files here
           </span>
         )}
