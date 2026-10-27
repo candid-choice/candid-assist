@@ -42,6 +42,82 @@ const wsClients: Set<WebSocket> = new Set();
 let server: ReturnType<typeof createServer> | null = null;
 let wss: WebSocketServer | null = null;
 
+// Agent presence: last time any MCP JSON-RPC request arrived (pi/Claude
+// Code calling initialize / tools/list / tools/call). The renderer polls
+// GET /status to decide whether an agent is actually connected.
+const AGENT_ONLINE_WINDOW_MS = 60_000;
+let lastAgentActivity = 0;
+
+interface AgentRecord {
+  name: string;
+  ip: string;
+  lastSeen: number;
+}
+/** Distinct MCP clients (pi sessions, Claude Code, scripts…). */
+const agents = new Map<string, AgentRecord>();
+
+function touchAgent(params: unknown, ip: string): void {
+  let name = 'client';
+  const p = params as Record<string, unknown> | undefined;
+  const ci = p?.["clientInfo"] as Record<string, unknown> | undefined;
+  if (ci && typeof ci["name"] === "string" && ci["name"].length > 0) {
+    name = ci["name"] as string;
+  } else {
+    // Requests without clientInfo inherit the name last seen from this ip.
+    for (const a of agents.values()) {
+      if (a.ip === ip && a.name !== "client") {
+        name = a.name;
+        break;
+      }
+    }
+  }
+  const key = `${name}@${ip}`;
+  const rec = agents.get(key) ?? { name, ip, lastSeen: 0 };
+  rec.name = name;
+  rec.lastSeen = Date.now();
+  agents.set(key, rec);
+}
+
+export interface AgentInfo {
+  name: string;
+  ip: string;
+  lastSeen: number;
+}
+
+export interface McpStatus {
+  ok: boolean;
+  mcp: {
+    agentLastSeen: number;
+    agentConnected: boolean;
+    agentCount: number;
+    agents: AgentInfo[];
+  };
+  ws: { clients: number };
+}
+
+export function getMcpStatus(): McpStatus {
+  const now = Date.now();
+  const active: AgentInfo[] = [];
+  for (const [key, a] of agents.entries()) {
+    if (now - a.lastSeen < AGENT_ONLINE_WINDOW_MS) {
+      active.push({ name: a.name, ip: a.ip, lastSeen: a.lastSeen });
+    } else if (now - a.lastSeen > 10 * 60_000) {
+      agents.delete(key); // prune long-gone agents
+    }
+  }
+  active.sort((x, y) => y.lastSeen - x.lastSeen);
+  return {
+    ok: true,
+    mcp: {
+      agentLastSeen: lastAgentActivity,
+      agentConnected: active.length > 0 || wsPresenceProvider() > 0,
+      agentCount: active.length + wsPresenceProvider(),
+      agents: active,
+    },
+    ws: { clients: wss?.clients.size ?? 0 },
+  };
+}
+
 // ── URL Validation ────────────────────────────────────────────────────────
 
 function isValidUrl(value: unknown): boolean {
@@ -215,6 +291,95 @@ function handleOpenTerminalOutput(args: unknown): Record<string, unknown> {
 
 // ── Tool Router ───────────────────────────────────────────────────────────
 
+// MCP tools/list manifest (JSON Schema per tool).
+const TOOL_DEFINITIONS = [
+  {
+    name: 'openBrowserSurface',
+    description: 'Open an interactive web page in a Human Assist browser surface.',
+    inputSchema: {
+      type: 'object',
+      properties: { url: { type: 'string', description: 'Absolute http(s) URL to display' } },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'openCanvasSurface',
+    description: 'Show a generated canvas/visual surface with an optional prompt.',
+    inputSchema: {
+      type: 'object',
+      properties: { prompt: { type: 'string', description: 'Prompt/caption for the canvas' } },
+    },
+  },
+  {
+    name: 'openInputSurface',
+    description: 'Ask the human for input: free text, a choice among options, or a confirm.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        question: { type: 'string', description: 'The question to show' },
+        kind: { type: 'string', enum: ['text', 'choices', 'confirm'], description: 'Input mode (default text)' },
+        options: { type: 'array', items: { type: 'string' }, description: 'Choices when kind=choices' },
+      },
+      required: ['question'],
+    },
+  },
+  {
+    name: 'openImageSurface',
+    description: 'Display an image (URL or data URI) for human review.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        src: { type: 'string', description: 'Image URL or data: URI' },
+        prompt: { type: 'string', description: 'Caption/instruction' },
+      },
+      required: ['src'],
+    },
+  },
+  {
+    name: 'openScreenCapture',
+    description: 'Capture the screen (or a region) for human context.',
+    inputSchema: {
+      type: 'object',
+      properties: { mode: { type: 'string', description: 'Capture mode (e.g. full, region)' } },
+    },
+  },
+  {
+    name: 'openCodeDiff',
+    description: 'Present a unified diff (and optional file list) for human approval.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        diff: { type: 'string', description: 'Unified diff text' },
+        files: { type: 'array', items: { type: 'object' }, description: 'Changed file metadata' },
+      },
+    },
+  },
+  {
+    name: 'showMessage',
+    description: 'Show a transient toast message in the Human Assist desktop app (proof-of-path from pi, notifications, status updates).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', description: 'Message text (<=2000 chars)' },
+        level: { type: 'string', enum: ['info', 'success', 'warning', 'error'], description: 'Toast style (default info)' },
+        title: { type: 'string', description: 'Optional title prefix (<=100 chars)' },
+      },
+      required: ['message'],
+    },
+  },
+  {
+    name: 'openTerminalOutput',
+    description: 'Stream terminal command output into a surface.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: 'Command that produced the output' },
+        output: { type: 'string', description: 'Terminal output text' },
+      },
+    },
+  },
+];
+
 const TOOL_HANDLERS: Record<string, (args: unknown) => Record<string, unknown>> = {
   openBrowserSurface: handleOpenBrowserSurface,
   openCanvasSurface: handleOpenCanvasSurface,
@@ -223,75 +388,136 @@ const TOOL_HANDLERS: Record<string, (args: unknown) => Record<string, unknown>> 
   openCodeDiff: handleOpenCodeDiff,
   openTerminalOutput: handleOpenTerminalOutput,
   openInputSurface: handleOpenInputSurface,
+  showMessage: handleShowMessage,
 };
 
 // ── MCP Server (HTTP + SSE) ───────────────────────────────────────────────
 
+
+// ── Shared MCP JSON-RPC dispatch (HTTP POST /mcp + WebSocket transport) ──
+
+/** Process one MCP JSON-RPC message. Returns response === null for
+ *  notifications (nothing to reply). Used by both transports so tool
+ *  behavior and surface broadcasts stay identical. */
+export function processMcpMessage(parsed: unknown): { response: unknown | null } {
+  const p = (parsed ?? {}) as Record<string, unknown>;
+  const jsonrpc = p["jsonrpc"];
+  const method = p["method"];
+  const params = p["params"];
+  const id = p["id"] ?? null;
+
+  if (jsonrpc !== "2.0") {
+    return { response: { jsonrpc: "2.0", error: { code: -32600, message: "Invalid request" }, id } };
+  }
+
+  if (method === "initialize") {
+    const init = (params ?? {}) as Record<string, unknown>;
+    return {
+      response: {
+        jsonrpc: "2.0",
+        result: {
+          protocolVersion:
+            typeof init["protocolVersion"] === "string" ? init["protocolVersion"] : "2025-03-26",
+          capabilities: { tools: {} },
+          serverInfo: { name: "human-assist", version: "1.0.0" },
+        },
+        id,
+      },
+    };
+  }
+
+  if (method === "notifications/initialized" || method === "notifications/cancelled") {
+    return { response: null };
+  }
+
+  if (method === "ping") {
+    return { response: { jsonrpc: "2.0", result: {}, id } };
+  }
+
+  if (method === "tools/list") {
+    return { response: { jsonrpc: "2.0", result: { tools: TOOL_DEFINITIONS }, id } };
+  }
+
+  if (method === "resources/list" || method === "resources/templates/list" || method === "prompts/list") {
+    // We advertise only the tools capability — unsupported capabilities
+    // must answer -32601 so clients mark them unavailable (not broken).
+    return { response: { jsonrpc: "2.0", error: { code: -32601, message: "Method not found: " + String(method) }, id } };
+  }
+
+  if (method !== "tools/call" || !params) {
+    return { response: { jsonrpc: "2.0", error: { code: -32600, message: "Invalid request" }, id } };
+  }
+
+  const toolName = (params as Record<string, unknown>)["name"] as string;
+  const handler = TOOL_HANDLERS[toolName];
+  if (!handler) {
+    return { response: { jsonrpc: "2.0", error: { code: -32601, message: "Method not found: " + toolName }, id } };
+  }
+
+  try {
+    const result = handler((params as Record<string, unknown>)["arguments"]);
+    // Broadcast the surface push to renderer WS clients.
+    const surfaceId = (result as Record<string, unknown>)?.["surfaceId"] as string;
+    const entry = openSurfaces.get(surfaceId);
+    notifySurfacePush({
+      surfaceId,
+      type: entry?.type ?? "unknown",
+      payload: ((params as Record<string, unknown>)["arguments"] ?? {}) as Record<string, unknown>,
+      status: "pushed",
+    });
+    return { response: { jsonrpc: "2.0", result, id } };
+  } catch (err) {
+    const error = err as Error;
+    return { response: { jsonrpc: "2.0", error: { code: -32603, message: error.message }, id } };
+  }
+}
+
+function logMcpRequest(method: string, id: unknown, ip: string, port: number): void {
+  console.log("[mcp] \u2190 " + method + (id != null ? " (id " + String(id) + ")" : "") + " from " + ip + ":" + port);
+}
+
+/** WebSocket MCP server reports live connection count for /status here. */
+let wsPresenceProvider: () => number = () => 0;
+export function setWsPresenceProvider(fn: () => number): void {
+  wsPresenceProvider = fn;
+}
+
 function createMcpServer(port: number): { server: ReturnType<typeof createServer>; port: number } {
   const httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
+    if (req.url === "/status" && req.method === "GET") {
+      sendJsonResponse(res, getMcpStatus());
+      return;
+    }
+
     if (req.url === "/mcp" && req.method === "POST") {
       let body = "";
       req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
       req.on("end", () => {
+        let parsed: unknown;
         try {
-          const parsed = JSON.parse(body);
-          const { jsonrpc, method, params, id } = parsed;
-
-          if (jsonrpc !== "2.0" || method !== "tools/call" || !params) {
-            sendJsonResponse(res, {
-              jsonrpc: "2.0",
-              error: { code: -32600, message: "Invalid request" },
-              id: id ?? null,
-            });
-            return;
-          }
-
-          // MCP contract: method === "tools/call", tool selected by params.name
-          const toolName = (params as Record<string, unknown>)["name"] as string;
-          const handler = TOOL_HANDLERS[toolName];
-          if (!handler) {
-            sendJsonResponse(res, {
-              jsonrpc: "2.0",
-              error: { code: -32601, message: `Method not found: ${toolName}` },
-              id: id ?? null,
-            });
-            return;
-          }
-
-          try {
-            const result = handler(params.arguments);
-            sendJsonResponse(res, {
-              jsonrpc: "2.0",
-              result,
-              id: id ?? null,
-            });
-            // Notify WebSocket clients with the stored surface type so the
-            // renderer can route to the correct surface component.
-            const surfaceId = (result as Record<string, unknown>)?.[
-              "surfaceId"
-            ] as string;
-            const entry = openSurfaces.get(surfaceId);
-            notifySurfacePush({
-              surfaceId,
-              type: entry?.type ?? "unknown",
-              payload: (params.arguments ?? {}) as Record<string, unknown>,
-              status: "pushed",
-            });
-          } catch (err) {
-            const error = err as Error;
-            sendJsonResponse(res, {
-              jsonrpc: "2.0",
-              error: { code: -32603, message: error.message },
-              id: id ?? null,
-            });
-          }
+          parsed = JSON.parse(body);
         } catch {
           sendJsonResponse(res, {
             jsonrpc: "2.0",
             error: { code: -32700, message: "Parse error" },
             id: null,
           });
+          return;
         }
+        const p = parsed as Record<string, unknown>;
+        const ip = req.socket.remoteAddress ?? "?";
+        if (p["jsonrpc"] === "2.0") {
+          lastAgentActivity = Date.now();
+          touchAgent(p["params"], ip);
+          logMcpRequest(String(p["method"]), p["id"], ip, req.socket.remotePort ?? 0);
+        }
+        const { response } = processMcpMessage(parsed);
+        if (response === null) {
+          res.writeHead(202);
+          res.end();
+          return;
+        }
+        sendJsonResponse(res, response);
       });
     } else {
       sendJsonResponse(res, { jsonrpc: "2.0", error: { code: -32000, message: "Not Found" }, id: null });
@@ -337,6 +563,33 @@ function notifySurfacePush(payload: Record<string, unknown>): void {
       client.send(event);
     }
   }
+}
+
+// ── UI messages (pi -> renderer toasts) ─────────────────────────────────
+
+function notifyUiMessage(data: { message: string; level: string; title?: string }): void {
+  const event = JSON.stringify({ event: "ui:message", data, timestamp: Date.now() });
+  for (const client of wsClients) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(event);
+    }
+  }
+}
+
+function handleShowMessage(args: unknown): Record<string, unknown> {
+  const obj = (args ?? {}) as Record<string, unknown>;
+  const message = obj["message"];
+  if (typeof message !== "string" || message.length === 0 || message.length > 2000) {
+    throw new Error("MCP_003: message must be a non-empty string (<=2000 chars)");
+  }
+  const level = typeof obj["level"] === "string" ? obj["level"] : "info";
+  if (!["info", "success", "warning", "error"].includes(level)) {
+    throw new Error("MCP_004: level must be info|success|warning|error");
+  }
+  const title = typeof obj["title"] === "string" ? obj["title"].slice(0, 100) : undefined;
+  notifyUiMessage({ message, level, title });
+  console.log("[mcp] ui message (" + level + ")" + (title ? " [" + title + "]" : "") + ": " + message);
+  return { status: "shown", level, deliveredTo: wsClients.size };
 }
 
 // ── Utility: Surface Push (used by surface-manager.ts in Vite app) ───────

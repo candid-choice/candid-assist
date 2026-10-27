@@ -1,0 +1,247 @@
+@import "tailwindcss";
+
+/* ── Design tokens ───────────────────────────────────────────────── */
+
+:root {
+  /* Design tokens — mapped from apps/web/src/app/globals.css
+     (shadcn neutral oklch ramp). Names stay --ha-* (used repo-wide). */
+  /* Background / surface */
+  --ha-bg: #ffffff; /* web: --background */
+  /* Titlebar — neutral charcoal (web: chart-5 / dark secondary) */
+  --ha-titlebar-bg: oklch(0.269 0 0);
+  --ha-surface: oklch(1 0 0); /* web: --card */
+  /* Primary — accent role stays purple (web neutrals used for
+     structure/text; purple for affordance: buttons, selections, links) */
+  --ha-primary: #7c6fa8;
+  --ha-primary-hover: #6b5d94;
+  --ha-primary-light: #f0eef6; /* purple-tinted hover/chip surface */
+  /* Secondary */
+  --ha-secondary: oklch(0.371 0 0); /* web: chart-4 */
+  /* Text */
+  --ha-text: #171717; /* web: --foreground */
+  --ha-text-secondary: oklch(0.556 0 0); /* web: --muted-foreground */
+  --ha-text-tertiary: oklch(0.708 0 0); /* web: --ring */
+  /* Borders */
+  --ha-border: oklch(0.922 0 0); /* web: --border */
+  /* Success */
+  --ha-success: #6b9e78;
+  /* Shadow */
+  --ha-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --ha-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --ha-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+  /* Radius */
+  --ha-radius-sm: 6px;
+  --ha-radius-md: 10px;
+  --ha-radius-lg: 14px;
+  --ha-radius-xl: 18px;
+}
+
+/* Dark theme — toggled via <html data-theme="dark"> (store: settings.theme) */
+:root[data-theme="dark"] {
+  --ha-bg: oklch(0.145 0 0); /* web dark: --background */
+  --ha-titlebar-bg: oklch(0.205 0 0); /* web dark: --card — reads as chrome on 0.145 bg */
+  --ha-surface: oklch(0.205 0 0); /* web dark: --card */
+  --ha-primary: #9c8fc4;
+  --ha-primary-hover: #b0a4d4;
+  --ha-primary-light: #353143;
+  --ha-secondary: oklch(0.708 0 0);
+  --ha-text: oklch(0.985 0 0); /* web dark: --foreground */
+  --ha-text-secondary: oklch(0.708 0 0); /* web dark: --muted-foreground */
+  --ha-text-tertiary: oklch(0.556 0 0);
+  --ha-border: oklch(1 0 0 / 10%); /* web dark: --border */
+  --ha-success: #7fb98d;
+  --ha-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --ha-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --ha-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Global reset & base ─────────────────────────────────────────── */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif;
+  background: var(--ha-bg);
+  color: var(--ha-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ── Utility ─────────────────────────────────────────────────────── */
+
+.human-assist-app {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--ha-bg);
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Button base ─────────────────────────────────────────────────── */
+
+.ha-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-md);
+  background: var(--ha-surface);
+  color: var(--ha-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.ha-btn:hover {
+  background: #fafaf8;
+  color: var(--ha-text);
+}
+
+.ha-btn:active {
+  background: #f5f4f1;
+}
+
+.ha-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ha-primary-light);
+}
+
+.ha-btn--primary {
+  background: var(--ha-primary);
+  border-color: var(--ha-primary);
+  color: #fff;
+}
+
+.ha-btn--primary:hover {
+  background: var(--ha-primary-hover);
+  border-color: var(--ha-primary-hover);
+  color: #fff;
+}
+
+.ha-btn--sm {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: var(--ha-radius-sm);
+}
+
+.ha-btn--icon {
+  padding: 6px;
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+  border-radius: var(--ha-radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--ha-text-secondary);
+}
+
+.ha-btn--icon:hover {
+  background: var(--ha-primary-light);
+  color: var(--ha-primary);
+}
+
+/* ── Input base ──────────────────────────────────────────────────── */
+
+.ha-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-md);
+  background: var(--ha-surface);
+  color: var(--ha-text);
+  font-size: 14px;
+  outline: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.ha-input:focus {
+  border-color: var(--ha-primary);
+  box-shadow: 0 0 0 3px var(--ha-primary-light);
+}
+
+.ha-input::placeholder {
+  color: var(--ha-text-secondary);
+}
+
+/* ── Pulse animation (idle state) ───────────────────────────────── */
+
+@keyframes ha-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.ha-pulse {
+  animation: ha-pulse 2s ease-in-out infinite;
+}
+
+/* ── Scrollbar styling ──────────────────────────────────────────── */
+
+.ha-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ha-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ha-scroll::-webkit-scrollbar-thumb {
+  background: var(--ha-border);
+  border-radius: 3px;
+}
+
+.ha-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--ha-text-secondary);
+}
+
+/* ── electrobun-webview ──────────────────────────────────────────── */
+
+electrobun-webview {
+  height: 100%;
+  width: 100%;
+}
+
+.ha-chrome-content {
+  position: relative;
+  flex: 1;
+}
+
+/* ── App row: sidebar + main column ── */
+.ha-app-row {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.ha-app-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}

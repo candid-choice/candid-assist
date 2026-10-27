@@ -81,12 +81,55 @@ describe('MCP tools/call router', () => {
     expect(res.error?.code).toBe(-32601);
   });
 
-  it('rejects a non tools/call method with -32600', async () => {
+  it('marks unsupported capabilities (resources/prompts) as -32601', async () => {
+    const res = await fetch(MCP_URL, {
+      method: 'POST',
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'resources/list', id: 1 }),
+    }).then((r) => r.json());
+    expect(res.error?.code).toBe(-32601);
+    const p = await fetch(MCP_URL, {
+      method: 'POST',
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'prompts/list', id: 2 }),
+    }).then((r) => r.json());
+    expect(p.error?.code).toBe(-32601);
+  });
+
+  it('answers initialize with protocolVersion + serverInfo', async () => {
+    const res = await fetch(MCP_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'initialize',
+        params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'pi', version: 'x' } },
+        id: 1,
+      }),
+    }).then((r) => r.json());
+    expect(res.result.protocolVersion).toBe('2025-03-26');
+    expect(res.result.serverInfo.name).toBe('human-assist');
+    expect(res.result.capabilities.tools).toBeDefined();
+  });
+
+  it('lists all 7 tools with input schemas (tools/list)', async () => {
     const res = await fetch(MCP_URL, {
       method: 'POST',
       body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
     }).then((r) => r.json());
-    expect(res.error?.code).toBe(-32600);
+    expect(res.result.tools).toHaveLength(8);
+    const names = res.result.tools.map((t: { name: string }) => t.name);
+    expect(names).toContain('openBrowserSurface');
+    expect(names).toContain('openInputSurface');
+    expect(names).toContain('showMessage');
+    for (const t of res.result.tools) {
+      expect(t.inputSchema?.type).toBe('object');
+    }
+  });
+
+  it('accepts notifications/initialized with 202', async () => {
+    const r = await fetch(MCP_URL, {
+      method: 'POST',
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+    });
+    expect(r.status).toBe(202);
   });
 
   it('returns parse error -32700 for malformed JSON', async () => {
@@ -134,5 +177,22 @@ describe('WebSocket surface:push broadcast', () => {
     expect(event.event).toBe('surface:push');
     expect(event.data.type).toBe('input');
     expect(event.data.payload).toMatchObject({ question: 'Approve deploy?', kind: 'confirm' });
+  });
+});
+
+describe('GET /status — agent presence', () => {
+  it('reports agentConnected true shortly after an MCP JSON-RPC request', async () => {
+    await fetch(MCP_URL, {
+      method: 'POST',
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
+    });
+    const s = await fetch(`http://localhost:${HTTP_PORT}/status`).then((r) => r.json());
+    expect(s.ok).toBe(true);
+    expect(s.mcp.agentConnected).toBe(true);
+    expect(s.mcp.agentLastSeen).toBeGreaterThan(0);
+    expect(typeof s.ws.clients).toBe('number');
+    expect(s.mcp.agentCount).toBeGreaterThanOrEqual(1);
+    expect(Array.isArray(s.mcp.agents)).toBe(true);
+    expect(s.mcp.agents[0]).toHaveProperty('lastSeen');
   });
 });
