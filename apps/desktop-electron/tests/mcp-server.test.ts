@@ -185,5 +185,8 @@ describe('GET /status — agent presence', () => {
     expect(s.mcp.agentConnected).toBe(true);
     expect(s.mcp.agentLastSeen).toBeGreaterThan(0);
     expect(typeof s.ws.clients).toBe('number');
+    expect(s.mcp.agentCount).toBeGreaterThanOrEqual(1);
+    expect(Array.isArray(s.mcp.agents)).toBe(true);
+    expect(s.mcp.agents[0]).toHaveProperty('lastSeen');
   });
 });

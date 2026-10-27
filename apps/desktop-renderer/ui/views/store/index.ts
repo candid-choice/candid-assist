@@ -88,10 +88,10 @@ interface AppState {
   connectionState: ConnectionState;
   setConnectionState: (state: ConnectionState) => void;
 
-  /** True while an MCP agent (pi / Claude Code) has been seen by the
-   *  server recently (GET /status polling). Volatile — never persisted. */
-  mcpAgentActive: boolean;
-  setMcpAgentActive: (active: boolean) => void;
+  /** Number of MCP agents (pi sessions, Claude Code, scripts) the
+   *  server has seen within its online window. Volatile — never persisted. */
+  mcpAgentCount: number;
+  setMcpAgentCount: (count: number) => void;
 
   // ── Session state (synced with backend/Firestore) ─────────────────────
   sessions: SessionDoc[];
@@ -222,9 +222,9 @@ export const useStore = create<AppState>()(
       setConnectionState: (state: ConnectionState) =>
         set({ connectionState: state }),
 
-      mcpAgentActive: false,
+      mcpAgentCount: 0,
 
-      setMcpAgentActive: (active: boolean) => set({ mcpAgentActive: active }),
+      setMcpAgentCount: (count: number) => set({ mcpAgentCount: Math.max(0, count) }),
 
       settings: DEFAULT_SETTINGS,
 

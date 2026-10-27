@@ -28,17 +28,19 @@ async function tick(url: string): Promise<void> {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
     const data = (await res.json()) as {
-      mcp?: { agentConnected?: boolean };
+      mcp?: { agentConnected?: boolean; agentCount?: number };
     };
-    useStore.getState().setMcpAgentActive(Boolean(data?.mcp?.agentConnected));
+    const count =
+      data?.mcp?.agentCount ?? (data?.mcp?.agentConnected ? 1 : 0);
+    useStore.getState().setMcpAgentCount(count);
   } catch {
     // Server unreachable → definitely no agent
-    useStore.getState().setMcpAgentActive(false);
+    useStore.getState().setMcpAgentCount(0);
   }
 }
 
 /** Start polling (idempotent). 10s cadence. */
-export function startMcpStatusPolling(intervalMs = 10_000): void {
+export function startMcpStatusPolling(intervalMs = 5_000): void {
   if (timer) return;
   const url = mcpStatusUrl();
   void tick(url);

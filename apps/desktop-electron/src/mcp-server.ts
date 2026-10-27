@@ -45,23 +45,74 @@ let wss: WebSocketServer | null = null;
 // Agent presence: last time any MCP JSON-RPC request arrived (pi/Claude
 // Code calling initialize / tools/list / tools/call). The renderer polls
 // GET /status to decide whether an agent is actually connected.
-const AGENT_ONLINE_WINDOW_MS = 90_000;
+const AGENT_ONLINE_WINDOW_MS = 60_000;
 let lastAgentActivity = 0;
+
+interface AgentRecord {
+  name: string;
+  ip: string;
+  lastSeen: number;
+}
+/** Distinct MCP clients (pi sessions, Claude Code, scripts…). */
+const agents = new Map<string, AgentRecord>();
+
+function touchAgent(params: unknown, ip: string): void {
+  let name = 'client';
+  const p = params as Record<string, unknown> | undefined;
+  const ci = p?.["clientInfo"] as Record<string, unknown> | undefined;
+  if (ci && typeof ci["name"] === "string" && ci["name"].length > 0) {
+    name = ci["name"] as string;
+  } else {
+    // Requests without clientInfo inherit the name last seen from this ip.
+    for (const a of agents.values()) {
+      if (a.ip === ip && a.name !== "client") {
+        name = a.name;
+        break;
+      }
+    }
+  }
+  const key = `${name}@${ip}`;
+  const rec = agents.get(key) ?? { name, ip, lastSeen: 0 };
+  rec.name = name;
+  rec.lastSeen = Date.now();
+  agents.set(key, rec);
+}
+
+export interface AgentInfo {
+  name: string;
+  ip: string;
+  lastSeen: number;
+}
 
 export interface McpStatus {
   ok: boolean;
-  mcp: { agentLastSeen: number; agentConnected: boolean };
+  mcp: {
+    agentLastSeen: number;
+    agentConnected: boolean;
+    agentCount: number;
+    agents: AgentInfo[];
+  };
   ws: { clients: number };
 }
 
 export function getMcpStatus(): McpStatus {
+  const now = Date.now();
+  const active: AgentInfo[] = [];
+  for (const [key, a] of agents.entries()) {
+    if (now - a.lastSeen < AGENT_ONLINE_WINDOW_MS) {
+      active.push({ name: a.name, ip: a.ip, lastSeen: a.lastSeen });
+    } else if (now - a.lastSeen > 10 * 60_000) {
+      agents.delete(key); // prune long-gone agents
+    }
+  }
+  active.sort((x, y) => y.lastSeen - x.lastSeen);
   return {
     ok: true,
     mcp: {
       agentLastSeen: lastAgentActivity,
-      agentConnected:
-        lastAgentActivity > 0 &&
-        Date.now() - lastAgentActivity < AGENT_ONLINE_WINDOW_MS,
+      agentConnected: active.length > 0,
+      agentCount: active.length,
+      agents: active,
     },
     ws: { clients: wss?.clients.size ?? 0 },
   };
@@ -345,6 +396,7 @@ function createMcpServer(port: number): { server: ReturnType<typeof createServer
 
           if (jsonrpc === "2.0") {
             lastAgentActivity = Date.now();
+            touchAgent(params, req.socket.remoteAddress ?? "?");
             console.log(
               `[mcp] \u2190 ${method}${id != null ? ` (id ${id})` : ""} from ${req.socket.remoteAddress}:${req.socket.remotePort}`,
             );
