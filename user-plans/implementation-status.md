@@ -17,6 +17,8 @@
 | 5 | Error Handling | ✅ Done | ~95% |
 | 6 | Notifications & UX | ✅ Done | ~90% |
 | 7 | Operations | ✅ Partial | ~20% |
+| 8 | Layout & Functionality (Phase 8 branch) | ✅ Done | ~95% |
+| 9 | Electron migration | 🚧 Starting | 0% — see `electron-migration-plan.md` |
 
 ---
 
