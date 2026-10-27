@@ -5,7 +5,10 @@
 :root {
   /* Background — warm cream / off-white */
   --ha-bg: #faf7f2;
-  --ha-titlebar-bg: #202124;
+  /* Titlebar — neutral charcoal from the web app's shadcn palette
+     (apps/web/src/app/globals.css), dark enough for traffic-light
+     contrast without being pure black */
+  --ha-titlebar-bg: oklch(0.269 0 0);
   /* Surface — warm white */
   --ha-surface: #ffffff;
   /* Primary — muted violet/purple */
@@ -36,7 +39,7 @@
 /* Dark theme — toggled via <html data-theme="dark"> (store: settings.theme) */
 :root[data-theme="dark"] {
   --ha-bg: #1e1c24;
-  --ha-titlebar-bg: #0e0e13;
+  --ha-titlebar-bg: oklch(0.145 0 0);
   --ha-surface: #2a2733;
   --ha-primary: #9c8fc4;
   --ha-primary-hover: #b0a4d4;

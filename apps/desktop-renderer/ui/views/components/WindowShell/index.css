@@ -20,7 +20,7 @@
   -webkit-user-select: none;
   user-select: none;
   flex-shrink: 0;
-  border-bottom: 1px solid #35363a;
+  border-bottom: 1px solid oklch(0.371 0 0);
   -webkit-app-region: drag;
   justify-content: center;
 }
