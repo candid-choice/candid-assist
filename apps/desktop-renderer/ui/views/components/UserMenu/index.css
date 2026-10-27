@@ -16,19 +16,28 @@
 }
 
 .ha-usermenu-chip:hover {
-  background: var(--ha-primary-light);
+  /* Hover = text recolor (no background fill) */
+  color: var(--ha-primary);
+}
+
+/* Keep hover effective over the dark titlebar (its own color override) */
+.ha-usermenu-chip:hover .ha-usermenu-name,
+.ha-usermenu-chip:hover .ha-usermenu-caret {
+  color: var(--ha-primary);
 }
 
 .ha-usermenu-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--ha-primary);
   color: #fff;
-  font-size: 11px;
+  font-size: 9px;
+  line-height: 1;
+  text-align: center;
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -37,11 +46,6 @@
   width: 32px;
   height: 32px;
   font-size: 14px;
-}
-
-.ha-usermenu-caret {
-  font-size: 10px;
-  color: var(--ha-text-secondary);
 }
 
 .ha-usermenu-dropdown {

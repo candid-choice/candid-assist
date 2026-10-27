@@ -61,7 +61,6 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
       >
         <span className="ha-usermenu-avatar">{initial}</span>
         <span className="ha-usermenu-name">{displayName}</span>
-        <span className="ha-usermenu-caret">▾</span>
       </button>
 
       {open && (
