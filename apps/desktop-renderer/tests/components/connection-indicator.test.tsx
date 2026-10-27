@@ -13,7 +13,7 @@ import { useStore } from '@/views/store';
 afterEach(() => {
   cleanup();
   // Reset volatile connection state between tests
-  useStore.setState({ connectionState: 'disconnected' });
+  useStore.setState({ connectionState: 'disconnected', mcpAgentActive: false });
 });
 
 describe('ConnectionIndicator', () => {
@@ -39,8 +39,8 @@ describe('ConnectionIndicator', () => {
     expect(dot?.className).toContain('ha-connection-dot--connecting');
   });
 
-  it('shows "Connected" when connected', () => {
-    useStore.setState({ connectionState: 'connected' });
+  it('shows "MCP connected" when transport is up AND an agent is seen', () => {
+    useStore.setState({ connectionState: 'connected', mcpAgentActive: true });
     render(<ConnectionIndicator />);
 
     const el = screen.getByRole('status');
@@ -50,13 +50,28 @@ describe('ConnectionIndicator', () => {
     expect(dot?.className).toContain('ha-connection-dot--connected');
   });
 
+  it('shows "Waiting for agent…" when transport is up but no agent connected', () => {
+    useStore.setState({ connectionState: 'connected', mcpAgentActive: false });
+    render(<ConnectionIndicator />);
+
+    const el = screen.getByRole('status');
+    expect(el.textContent).toBe('Waiting for agent…');
+    const dot = el.querySelector('.ha-connection-dot');
+    expect(dot?.className).toContain('ha-connection-dot--connecting');
+  });
+
   it('updates reactively when store state changes', () => {
-    useStore.setState({ connectionState: 'disconnected' });
+    useStore.setState({ connectionState: 'disconnected', mcpAgentActive: false });
     render(<ConnectionIndicator />);
     expect(screen.getByRole('status').textContent).toBe('MCP offline');
 
     act(() => {
-      useStore.setState({ connectionState: 'connected' });
+      useStore.setState({ connectionState: 'connected', mcpAgentActive: false });
+    });
+    expect(screen.getByRole('status').textContent).toBe('Waiting for agent…');
+
+    act(() => {
+      useStore.setState({ mcpAgentActive: true });
     });
     // Component subscribes via zustand — DOM updates without rerender
     expect(screen.getByRole('status').textContent).toBe('MCP connected');

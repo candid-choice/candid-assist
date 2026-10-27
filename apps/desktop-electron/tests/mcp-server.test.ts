@@ -173,3 +173,17 @@ describe('WebSocket surface:push broadcast', () => {
     expect(event.data.payload).toMatchObject({ question: 'Approve deploy?', kind: 'confirm' });
   });
 });
+
+describe('GET /status — agent presence', () => {
+  it('reports agentConnected true shortly after an MCP JSON-RPC request', async () => {
+    await fetch(MCP_URL, {
+      method: 'POST',
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
+    });
+    const s = await fetch(`http://localhost:${HTTP_PORT}/status`).then((r) => r.json());
+    expect(s.ok).toBe(true);
+    expect(s.mcp.agentConnected).toBe(true);
+    expect(s.mcp.agentLastSeen).toBeGreaterThan(0);
+    expect(typeof s.ws.clients).toBe('number');
+  });
+});

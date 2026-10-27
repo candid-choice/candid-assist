@@ -42,6 +42,31 @@ const wsClients: Set<WebSocket> = new Set();
 let server: ReturnType<typeof createServer> | null = null;
 let wss: WebSocketServer | null = null;
 
+// Agent presence: last time any MCP JSON-RPC request arrived (pi/Claude
+// Code calling initialize / tools/list / tools/call). The renderer polls
+// GET /status to decide whether an agent is actually connected.
+const AGENT_ONLINE_WINDOW_MS = 90_000;
+let lastAgentActivity = 0;
+
+export interface McpStatus {
+  ok: boolean;
+  mcp: { agentLastSeen: number; agentConnected: boolean };
+  ws: { clients: number };
+}
+
+export function getMcpStatus(): McpStatus {
+  return {
+    ok: true,
+    mcp: {
+      agentLastSeen: lastAgentActivity,
+      agentConnected:
+        lastAgentActivity > 0 &&
+        Date.now() - lastAgentActivity < AGENT_ONLINE_WINDOW_MS,
+    },
+    ws: { clients: wss?.clients.size ?? 0 },
+  };
+}
+
 // ── URL Validation ────────────────────────────────────────────────────────
 
 function isValidUrl(value: unknown): boolean {
@@ -305,6 +330,11 @@ const TOOL_HANDLERS: Record<string, (args: unknown) => Record<string, unknown>> 
 
 function createMcpServer(port: number): { server: ReturnType<typeof createServer>; port: number } {
   const httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
+    if (req.url === "/status" && req.method === "GET") {
+      sendJsonResponse(res, getMcpStatus());
+      return;
+    }
+
     if (req.url === "/mcp" && req.method === "POST") {
       let body = "";
       req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
@@ -312,6 +342,10 @@ function createMcpServer(port: number): { server: ReturnType<typeof createServer
         try {
           const parsed = JSON.parse(body);
           const { jsonrpc, method, params, id } = parsed;
+
+          if (jsonrpc === "2.0") {
+            lastAgentActivity = Date.now();
+          }
 
           if (jsonrpc !== "2.0") {
             sendJsonResponse(res, {

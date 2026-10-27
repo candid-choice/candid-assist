@@ -23,6 +23,7 @@ import {
   executeSyncAction,
 } from "./views/services/sync/sync-service";
 import { setReplayExecutor, onReconnect } from "./views/errors/offline-queue";
+import { startMcpStatusPolling } from "./views/services/mcp-status";
 
 // ── Live services (module scope — run once, not per StrictMode render) ──
 if (typeof window !== "undefined") {
@@ -40,6 +41,9 @@ if (typeof window !== "undefined") {
 
   // Offline queue → backend executor
   setReplayExecutor(executeSyncAction);
+
+  // Footer indicator: poll MCP server for agent (pi/Claude Code) presence
+  startMcpStatusPolling();
 
   // Initial sync: hydrate sessions from Firestore (via backend) when authed
   if (useStore.getState().authToken) {

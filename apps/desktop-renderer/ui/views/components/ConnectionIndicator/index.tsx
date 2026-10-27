@@ -1,7 +1,12 @@
-/** Human Assist — Connection status indicator.
+/** Footer indicator — truth about the MCP pipe.
 
-Shows the live WebSocket connection state from the store
-(disconnected / connecting / connected).  Used in the window footer.
+Two independent facts combine:
+  1. Transport (WS :3614 from Electron main) — store.connectionState
+  2. Agent presence — the MCP server saw pi/Claude Code JSON-RPC
+     recently (GET /status) — store.mcpAgentActive
+
+"MCP connected" only when BOTH hold; transport fine but no agent is
+"Waiting for agent…" (pushing a surface now would go nowhere).
 */
 
 import "./index.css";
@@ -9,27 +14,36 @@ import "./index.css";
 import { useStore } from "../../store";
 import type { ConnectionState } from "../../store";
 
-const STATE_META: Record<
-  ConnectionState,
-  { label: string; dotClass: string }
-> = {
-  connected: {
-    label: "MCP connected",
-    dotClass: "ha-connection-dot--connected",
-  },
-  connecting: {
-    label: "Connecting to MCP…",
-    dotClass: "ha-connection-dot--connecting",
-  },
-  disconnected: {
-    label: "MCP offline",
-    dotClass: "ha-connection-dot--disconnected",
-  },
-};
+interface IndicatorMeta {
+  label: string;
+  dotClass: string;
+}
+
+function resolve(
+  connectionState: ConnectionState,
+  agentActive: boolean,
+): IndicatorMeta {
+  if (connectionState === "disconnected") {
+    return { label: "MCP offline", dotClass: "ha-connection-dot--disconnected" };
+  }
+  if (connectionState === "connecting") {
+    return {
+      label: "Connecting to MCP…",
+      dotClass: "ha-connection-dot--connecting",
+    };
+  }
+  return agentActive
+    ? { label: "MCP connected", dotClass: "ha-connection-dot--connected" }
+    : {
+        label: "Waiting for agent…",
+        dotClass: "ha-connection-dot--connecting",
+      };
+}
 
 export function ConnectionIndicator() {
   const connectionState = useStore((s) => s.connectionState);
-  const meta = STATE_META[connectionState];
+  const agentActive = useStore((s) => s.mcpAgentActive);
+  const meta = resolve(connectionState, agentActive);
 
   return (
     <span

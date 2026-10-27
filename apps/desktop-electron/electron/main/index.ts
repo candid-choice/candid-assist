@@ -82,7 +82,7 @@ function createWindow(): void {
     // used for the web app).
     const baseUrl = process.env.DESKTOP_UI_URL ?? 'http://localhost:3616';
     const sep = baseUrl.includes('?') ? '&' : '?';
-    void win.loadURL(`${baseUrl}${sep}wsPort=${WS_PORT}`);
+    void win.loadURL(`${baseUrl}${sep}wsPort=${WS_PORT}&mcpPort=${MCP_PORT}`);
   } else {
     // Packaged: the desktop-renderer Next export, copied into the app
     // as resources/renderer by electron-builder (configured in P6).
