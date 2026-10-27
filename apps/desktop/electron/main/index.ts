@@ -1,4 +1,4 @@
-/** Human Assist — Electron main process (desktop-electron package).
+/** Human Assist — Electron main process (apps/desktop).
 
   - Frameless app window (WindowShell draws its own title bar)
   - WebContentsView host for embedded remote pages (View A/B)

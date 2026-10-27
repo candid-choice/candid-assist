@@ -13,7 +13,7 @@ Usage:
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-type SurfaceEventType = "surface:push" | "surface:response" | "surface:close" | "surface:error";
+type SurfaceEventType = "surface:push" | "surface:response" | "surface:close" | "surface:error" | "ui:message";
 
 interface SurfaceEvent {
   event: SurfaceEventType;

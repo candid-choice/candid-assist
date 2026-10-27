@@ -1,5 +1,5 @@
 {
-  "defaultModel": "nvidia/Qwen3.8-27B-NVFP4",
+  "defaultModel": "nvidia/Qwen3.8-Flash-Next-FP4-Local",
   "defaultProvider": "qwen38-next",
   "lastChangelogVersion": "1.2.0",
   "packages": [

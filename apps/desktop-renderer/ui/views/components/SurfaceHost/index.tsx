@@ -102,7 +102,7 @@ export function SurfaceHost({
 
   const handleNavigate = useCallback(
     (url: string) => {
-      updateViewUrl(activeViewId, url);
+      if (activeViewId) updateViewUrl(activeViewId, url);
     },
     [activeViewId, updateViewUrl],
   );

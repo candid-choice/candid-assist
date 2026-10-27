@@ -114,7 +114,7 @@ interface AppState {
   settings: AppSettings;
   updateSettings: (patch: Partial<AppSettings>) => void;
 
-  activeViewId: string;
+  activeViewId: string | null;
   views: SurfaceConfig<BrowserPayload>[];
   setActiveView: (id: string) => void;
   updateViewUrl: (id: string, url: string) => void;
@@ -122,26 +122,7 @@ interface AppState {
 
 export type { AppState };
 
-const defaultViews: SurfaceConfig<BrowserPayload>[] = [
-  {
-    id: 'view-a',
-    label: 'View A',
-    type: 'browser',
-    title: 'View A',
-    payload: { url: 'https://claude.ai' },
-    source: 'mcp',
-    createdAt: Date.now(),
-  },
-  {
-    id: 'view-b',
-    label: 'View B',
-    type: 'browser',
-    title: 'View B',
-    payload: { url: 'https://example.com' },
-    source: 'mcp',
-    createdAt: Date.now(),
-  },
-];
+const defaultViews: SurfaceConfig<BrowserPayload>[] = [];
 
 /** Data-only slice persisted to IndexedDB (functions are dropped).
  *  Volatile state (connectionState, authError, onSurfaceComplete) is
@@ -276,7 +257,7 @@ export const useStore = create<AppState>()(
       setActiveSession: (id: string | null) => set({ activeSessionId: id }),
 
       // ── View manager ───────────────────────────────────────────────────
-      activeViewId: 'view-a',
+      activeViewId: null,
       views: defaultViews,
 
       setActiveView: (id: string) => set({ activeViewId: id }),
@@ -290,6 +271,9 @@ export const useStore = create<AppState>()(
     }),
     {
       name: PERSIST_KEY,
+      // v1: purged the legacy View A / View B placeholder seeds; bump
+      // to discard stale persisted state when the durable shape changes.
+      version: 1,
       storage: createJSONStorage(() => idbStorage),
       partialize: persistableSlice,
     },

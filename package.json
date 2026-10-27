@@ -6,7 +6,7 @@
     "dev:web": "pnpm --filter web dev",
     "dev:backend": "pnpm --filter backend start:dev",
     "dev:renderer": "pnpm --filter desktop-renderer dev",
-    "dev:electron": "pnpm --filter harness-desktop-electron dev",
+    "dev:electron": "pnpm --filter harness-desktop dev",
     "dev:firebase": "firebase emulators:start",
     "build": "pnpm -r build",
     "build:web": "pnpm --filter web build",

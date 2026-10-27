@@ -1,36 +1,44 @@
 {
   "name": "harness-desktop",
-  "version": "1.0.0",
-  "description": "A simple Electrobun app showcasing core features",
+  "version": "0.1.0",
+  "description": "Human Assist desktop — Electron runtime. UI is served by apps/desktop-renderer (Next.js).",
+  "main": "out/main/index.js",
   "scripts": {
-    "postinstall": "electrobun prepare",
-    "build": "pnpm run vite:build && electrobun build --env=stable",
-    "vite:build": "vite build",
-    "dev": "vite & electrobun dev --watch",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "dist": "pnpm --filter desktop-renderer build && electron-vite build && electron-builder --mac",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "@tabler/icons-react": "^3.20.0",
-    "@tailwindcss/vite": "^4.0.0",
-    "@testing-library/react": "^16.3.3",
-    "@types/bun": "latest",
-    "@types/node": "^26.6.2",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^5.2.0",
-    "electrobun": "^2.0.1",
-    "jsdom": "^26.1.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "tailwindcss": "^4.0.0",
-    "vite": "^7.0.0",
-    "vitest": "^3.0.0"
+    "@types/ws": "^8",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3"
   },
   "dependencies": {
-    "firebase": "^13.1.0",
     "uuid": "^11.1.0",
-    "ws": "^8.18.2",
-    "zustand": "^5.0.15"
+    "ws": "^8.18.2"
+  },
+  "build": {
+    "appId": "com.candidchoice.humanassist",
+    "productName": "Human Assist",
+    "files": [
+      "out/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../desktop-renderer/out",
+        "to": "renderer"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dir"
+      ]
+    }
   }
 }

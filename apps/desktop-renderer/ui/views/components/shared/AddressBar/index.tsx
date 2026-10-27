@@ -6,7 +6,7 @@ export interface AddressBarProps {
   /** Tab definitions. */
   tabs: { id: string; label: string }[];
   /** Currently active tab ID. */
-  activeTabId: string;
+  activeTabId: string | null;
   /** Called when a tab is clicked. */
   onTabClick: (id: string) => void;
 }
