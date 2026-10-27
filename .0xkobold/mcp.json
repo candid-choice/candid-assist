@@ -1,0 +1,23 @@
+{
+  "servers": [
+    {
+      "name": "human-assist",
+      "transport": {
+        "type": "websocket",
+        "url": "ws://127.0.0.1:43179/mcp"
+      },
+      "enabled": true,
+      "autoReconnect": true
+    },
+    {
+      "name": "playwright",
+      "transport": {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["-y", "@playwright/mcp"]
+      },
+      "enabled": true,
+      "autoReconnect": true
+    }
+  ]
+}

@@ -3,6 +3,7 @@
   "defaultProvider": "qwen38-next",
   "lastChangelogVersion": "1.2.0",
   "packages": [
+    "npm:@0xkobold/pi-mcp@0.4.0",
     "@anthropics/frontend-design",
     "@anthropics/code-review",
     "@anthropics/playwright",
