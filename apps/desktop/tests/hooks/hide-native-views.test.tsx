@@ -18,6 +18,7 @@ beforeEach(() => {
     userMenuOpen: false,
     composerOpen: false,
     signInOpen: false,
+    settingsOpen: false,
   });
 });
 
@@ -56,6 +57,14 @@ describe('useHideNativeViews', () => {
     });
     act(() => {
       useStore.setState({ userMenuOpen: false });
+    });
+    expect(document.documentElement.classList.contains('ha-native-hidden')).toBe(true);
+  });
+
+  it('hides for settings overlay via store flag', () => {
+    render(<Harness />);
+    act(() => {
+      useStore.setState({ settingsOpen: true });
     });
     expect(document.documentElement.classList.contains('ha-native-hidden')).toBe(true);
   });

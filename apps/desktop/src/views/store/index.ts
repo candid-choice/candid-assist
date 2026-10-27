@@ -68,11 +68,13 @@ interface AppState {
   composerOpen: boolean;
   signInOpen: boolean;
   userMenuOpen: boolean;
+  settingsOpen: boolean;
   openComposer: () => void;
   closeComposer: () => void;
   openSignIn: () => void;
   closeSignIn: () => void;
   setUserMenuOpen: (open: boolean) => void;
+  setSettingsOpen: (open: boolean) => void;
 
   // ── Auth state ─────────────────────────────────────────────────────────
   authToken: string | null;
@@ -183,12 +185,14 @@ export const useStore = create<AppState>()(
       composerOpen: false,
       signInOpen: false,
       userMenuOpen: false,
+      settingsOpen: false,
 
       openComposer: () => set({ composerOpen: true }),
       closeComposer: () => set({ composerOpen: false }),
       openSignIn: () => set({ signInOpen: true }),
       closeSignIn: () => set({ signInOpen: false }),
       setUserMenuOpen: (open: boolean) => set({ userMenuOpen: open }),
+      setSettingsOpen: (open: boolean) => set({ settingsOpen: open }),
 
       // ── Auth state ─────────────────────────────────────────────────────
       authToken: null,

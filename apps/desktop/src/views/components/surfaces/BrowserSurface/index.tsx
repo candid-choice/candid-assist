@@ -5,6 +5,7 @@ import { useState, useCallback, useEffect } from "react";
 import { IconLock } from "@tabler/icons-react";
 
 import { SurfaceFrame } from "../../shared/SurfaceFrame";
+import { useNativeViewsHidden } from "../../../hooks/use-hide-native-views";
 
 import "./index.css";
 
@@ -15,6 +16,9 @@ export interface BrowserSurfaceProps {
 
 export function BrowserSurface({ url, onUrlChange }: BrowserSurfaceProps) {
   const [urlInput, setUrlInput] = useState(url);
+  // Native webview must be UNMOUNTED while DOM overlays are open — the
+  // native layer composites above all DOM and ignores display:none.
+  const nativeHidden = useNativeViewsHidden();
 
   const handleNavigate = useCallback(() => {
     let newUrl = urlInput.trim();
@@ -54,8 +58,12 @@ export function BrowserSurface({ url, onUrlChange }: BrowserSurfaceProps) {
 
   return (
     <SurfaceFrame addressBar={addressBar}>
-      {/* @ts-expect-error — electrobun custom element */}
-      <electrobun-webview src={url} />
+      {nativeHidden ? (
+        <div className="ha-webview-hidden" data-url={url} />
+      ) : (
+        // @ts-expect-error — electrobun custom element
+        <electrobun-webview src={url} />
+      )}
     </SurfaceFrame>
   );
 }

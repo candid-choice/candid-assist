@@ -27,7 +27,8 @@ function App() {
   const activeSurface = useStoreSelector((s) => s.activeSurface);
   const activeSessionId = useStoreSelector((s) => s.activeSessionId);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsOpen = useStoreSelector((s) => s.settingsOpen);
+  const setSettingsOpen = useStoreSelector((s) => s.setSettingsOpen);
   const theme = useStoreSelector((s) => s.settings.theme);
   const composerOpen = useStoreSelector((s) => s.composerOpen);
   const closeComposer = useStoreSelector((s) => s.closeComposer);
@@ -38,7 +39,7 @@ function App() {
 
   // Native electrobun-webviews composite above DOM — hide them while any
   // overlay (user menu / composer / settings / sign-in) is open
-  useHideNativeViews({ settingsOpen });
+  useHideNativeViews();
 
   // Auto-dismiss the sign-in screen once authenticated
   useEffect(() => {

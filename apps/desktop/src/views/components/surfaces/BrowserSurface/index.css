@@ -36,3 +36,10 @@
   color: var(--ha-text-secondary);
   opacity: 0.5;
 }
+
+/* Placeholder while the native webview is unmounted for overlays */
+.ha-webview-hidden {
+  flex: 1;
+  min-height: 0;
+  background: var(--ha-bg);
+}
