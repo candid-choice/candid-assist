@@ -424,6 +424,12 @@ export function processMcpMessage(parsed: unknown): { response: unknown | null }
     return { response: { jsonrpc: "2.0", result: { tools: TOOL_DEFINITIONS }, id } };
   }
 
+  if (method === "resources/list" || method === "resources/templates/list" || method === "prompts/list") {
+    // We advertise only the tools capability — unsupported capabilities
+    // must answer -32601 so clients mark them unavailable (not broken).
+    return { response: { jsonrpc: "2.0", error: { code: -32601, message: "Method not found: " + String(method) }, id } };
+  }
+
   if (method !== "tools/call" || !params) {
     return { response: { jsonrpc: "2.0", error: { code: -32600, message: "Invalid request" }, id } };
   }

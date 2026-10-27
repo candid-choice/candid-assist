@@ -81,12 +81,17 @@ describe('MCP tools/call router', () => {
     expect(res.error?.code).toBe(-32601);
   });
 
-  it('rejects an unknown method with -32600', async () => {
+  it('marks unsupported capabilities (resources/prompts) as -32601', async () => {
     const res = await fetch(MCP_URL, {
       method: 'POST',
       body: JSON.stringify({ jsonrpc: '2.0', method: 'resources/list', id: 1 }),
     }).then((r) => r.json());
-    expect(res.error?.code).toBe(-32600);
+    expect(res.error?.code).toBe(-32601);
+    const p = await fetch(MCP_URL, {
+      method: 'POST',
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'prompts/list', id: 2 }),
+    }).then((r) => r.json());
+    expect(p.error?.code).toBe(-32601);
   });
 
   it('answers initialize with protocolVersion + serverInfo', async () => {
