@@ -2,20 +2,19 @@
   "name": "candid-assist-monorepo",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"pnpm dev:web\" \"pnpm dev:backend\" \"pnpm dev:desktop\" \"pnpm dev:firebase\"",
+    "dev": "concurrently \"pnpm dev:web\" \"pnpm dev:backend\" \"pnpm dev:renderer\" \"pnpm dev:electron\" \"pnpm dev:firebase\"",
     "dev:web": "pnpm --filter web dev",
     "dev:backend": "pnpm --filter backend start:dev",
-    "dev:desktop": "pnpm --filter harness-desktop dev",
-    "dev:desktop-electron": "pnpm --filter harness-desktop-electron dev",
+    "dev:renderer": "pnpm --filter desktop-renderer dev",
+    "dev:electron": "pnpm --filter harness-desktop-electron dev",
     "dev:firebase": "firebase emulators:start",
     "build": "pnpm -r build",
     "build:web": "pnpm --filter web build",
     "build:backend": "pnpm --filter backend build",
-    "type-check": "pnpm --filter harness-desktop type-check",
-    "harness:dev": "pnpm --filter harness-desktop dev",
+    "type-check": "pnpm --filter desktop-renderer exec tsc --noEmit",
     "lint": "pnpm -r lint",
     "test": "echo 'No tests configured yet'",
-    "postinstall": "pnpm -r --filter '!backend' build 2>/dev/null || true"
+    "postinstall": "pnpm -r --filter '!backend' --filter '!harness-desktop' build 2>/dev/null || true"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

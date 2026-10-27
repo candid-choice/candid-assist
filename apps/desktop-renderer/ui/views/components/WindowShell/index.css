@@ -11,11 +11,11 @@
 .ha-titlebar {
   display: flex;
   align-items: center;
-  height: 32px;
+  height: 40px;
   /* Symmetric inset: left reserves space for macOS traffic lights,
      right keeps the centered label optically centered */
   padding: 0 76px;
-  background: var(--ha-surface);
+  background: var(--ha-titlebar-bg, var(--ha-surface));
   -webkit-user-select: none;
   user-select: none;
   flex-shrink: 0;

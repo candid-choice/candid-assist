@@ -23,13 +23,20 @@ export function SurfaceFrame({
   rounded = true,
 }: SurfaceFrameProps) {
   return (
-    <div className={`ha-surface-frame${rounded ? "" : " ha-surface-frame--no-radius"}`}>
+    <div
+      className={`ha-surface-frame${rounded ? "" : " ha-surface-frame--no-radius"}`}
+    >
       {/* Toolbar top bar */}
-      <div className="ha-surface-frame-toolbar" style={{ background: toolbarBg }}>
+      <div
+        className="ha-surface-frame-toolbar"
+        style={{ background: toolbarBg }}
+      >
         {/* Navigation */}
         {navButtons && <div className="ha-surface-frame-nav">{navButtons}</div>}
         {/* Address bar */}
-        {addressBar && <div className="ha-surface-frame-address">{addressBar}</div>}
+        {addressBar && (
+          <div className="ha-surface-frame-address">{addressBar}</div>
+        )}
       </div>
       {/* Content */}
       <div className="ha-surface-frame-content">{children}</div>

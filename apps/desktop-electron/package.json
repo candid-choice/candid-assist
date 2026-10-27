@@ -1,23 +1,22 @@
 {
   "name": "harness-desktop-electron",
   "version": "0.1.0",
-  "description": "Human Assist desktop — Electron runtime (migration track). Reuses the renderer from apps/desktop.",
+  "description": "Human Assist desktop — Electron runtime. UI is served by apps/desktop-renderer (Next.js).",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
-    "dist": "electron-vite build && electron-builder --mac",
-    "test": "echo 'renderer tests live in apps/desktop (runtime-agnostic)' && exit 0"
+    "dist": "pnpm --filter desktop-renderer build && electron-vite build && electron-builder --mac",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.0.0",
-    "@vitejs/plugin-react": "^5.2.0",
+    "@types/ws": "^8",
     "electron": "^45.0.0",
     "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
-    "tailwindcss": "^4.0.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^3"
   },
   "dependencies": {
     "uuid": "^11.1.0",
@@ -28,6 +27,12 @@
     "productName": "Human Assist",
     "files": [
       "out/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../desktop-renderer/out",
+        "to": "renderer"
+      }
     ],
     "mac": {
       "category": "public.app-category.developer-tools",

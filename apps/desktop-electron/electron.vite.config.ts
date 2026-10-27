@@ -1,17 +1,15 @@
 /** Human Assist — electron-vite config.
 
   main/preload: this package's electron/ sources (CJS output to out/)
-  renderer: REUSES the existing UI from ../desktop/src/views unchanged
-            (same index.html entry; Vite is allowed to read the sibling
-            workspace package)
+
+  NOTE: there is no renderer here anymore. The UI lives in
+  apps/desktop-renderer (Next.js) and is served over HTTP; the main
+  process loads it via DESKTOP_UI_URL (dev default
+  http://localhost:3616). Packaging will point at a `next export`
+  output (Phase P6).
 */
 
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
-import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
-import path from 'node:path';
-
-const RENDERER_ROOT = path.resolve(__dirname, '../desktop/src/views');
 
 export default defineConfig({
   main: {
@@ -26,23 +24,6 @@ export default defineConfig({
     build: {
       outDir: 'out/preload',
       lib: { entry: 'electron/preload/index.ts', formats: ['cjs'] },
-    },
-  },
-  renderer: {
-    root: RENDERER_ROOT,
-    base: './',
-    plugins: [react(), tailwindcss()],
-    server: {
-      port: 5174,
-      strictPort: true,
-      fs: { allow: [RENDERER_ROOT, path.resolve(__dirname)] },
-    },
-    build: {
-      outDir: path.resolve(__dirname, 'out/renderer'),
-      emptyOutDir: true,
-      rollupOptions: {
-        input: path.join(RENDERER_ROOT, 'index.html'),
-      },
     },
   },
 });

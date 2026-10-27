@@ -84,7 +84,7 @@ function getStats(): StorageStats {
 // ── Hook ────────────────────────────────────────────────────────────────────
 
 export function useIndexedDBPersist(key: string = 'app-state') {
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const save = useCallback((state: unknown) => {
     if (saveTimerRef.current) {

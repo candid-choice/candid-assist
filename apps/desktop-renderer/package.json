@@ -1,0 +1,33 @@
+{
+  "name": "desktop-renderer",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "PORT=${DESKTOP_UI_PORT:-3616} next dev",
+    "build": "next build",
+    "start": "PORT=${DESKTOP_UI_PORT:-3616} next start",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@tabler/icons-react": "^3.20.0",
+    "firebase": "^13.1.0",
+    "next": "16.3.6",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "uuid": "^11.1.0",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^5.2.0",
+    "jsdom": "^26.1.0",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^3"
+  }
+}

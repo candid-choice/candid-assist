@@ -48,7 +48,7 @@ function App() {
 
   // Apply theme to <html data-theme> (CSS variables swap)
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
   // ── View state ────────────────────────────────────────────────────────
@@ -71,9 +71,7 @@ function App() {
     <div className="human-assist-app h-full w-full">
       <WindowShell
         title="Human Assist"
-        userStatus={
-          <UserMenu onOpenSettings={() => setSettingsOpen(true)} />
-        }
+        userStatus={<UserMenu onOpenSettings={() => setSettingsOpen(true)} />}
         footer={
           <span className="ha-footer-status">
             <ConnectionIndicator />

@@ -13,7 +13,7 @@ get no preload and a host-allowlist navigation policy.
 import { app, BrowserWindow, WebContentsView, ipcMain, shell } from 'electron';
 import path from 'node:path';
 
-import { startMcpServer } from '../../../desktop/src/mcp-server';
+import { startMcpServer } from '../../src/mcp-server';
 
 interface ViewBounds {
   x: number;
@@ -42,8 +42,8 @@ function createWindow(): void {
     minWidth: 720,
     minHeight: 480,
     titleBarStyle: 'hiddenInset',
-    // Vertically center the ~14px traffic lights within the 32px title bar
-    trafficLightPosition: { x: 16, y: 9 },
+    // Vertically center the ~14px traffic lights within the 40px title bar
+    trafficLightPosition: { x: 16, y: 13 },
     backgroundColor: '#faf7f2',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -54,9 +54,13 @@ function createWindow(): void {
   });
 
   if (isDev) {
-    void win.loadURL('http://localhost:5174');
+    // UI is the desktop-renderer Next.js app (same pattern Electrobun
+    // used for the web app).
+    void win.loadURL(process.env.DESKTOP_UI_URL ?? 'http://localhost:3616');
   } else {
-    void win.loadFile(path.join(__dirname, '../../out/renderer/index.html'));
+    // Packaged: the desktop-renderer Next export, copied into the app
+    // as resources/renderer by electron-builder (configured in P6).
+    void win.loadFile(path.join(process.resourcesPath, 'renderer', 'index.html'));
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {

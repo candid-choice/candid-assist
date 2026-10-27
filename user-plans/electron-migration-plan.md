@@ -1,6 +1,12 @@
 # Electron Migration Plan — Electrobun + Vite → Electron + Vite
 
-**Status:** 🚧 Starting (branch: `electron-migration`, from `phase-8-layout-and-functionality`)
+**Status:** P2–P4 ✅ (branch `electron-migration`; commits: 415a71a docs, b1bbe6e scaffold, then E4). Electron app runs via `pnpm dev:desktop-electron` (renderer :5174, MCP/WS :3625/:3626 via env). 191/191 tests green, `electron-vite build` green.
+
+**Done:** apps/desktop-electron pkg (main/preload/config reusing ../desktop/src/views renderer); WebContentsView embedded pages + IPC (create/bounds/visible/destroy); window.desktop bridge (window controls + views); overlay visibility via setVisible (pages stay loaded); titlebar solid bg + traffic-light alignment; Electrobun toggleHidden path retired (Electron-first per user).
+
+**Remaining:** P5 cleanup (delete devkit-stub/electrobun deps/scripts after Electrobun retirement decision); P6 electron-builder packaging (`pnpm dist`); P7 verification (packaged build, auth flow, MCP push E2E into Electron, network-instrumentation stub); window control buttons UI check (WindowShell maximize via bridge); decide Electrobun fate (apps/desktop stays Electrobun for now — do NOT work on it).
+
+**Rules of engagement:** work only on Electron (`apps/desktop-electron` + shared renderer in `apps/desktop/src/views`); renderer changes must keep 191 tests green; no commits/pushes without explicit instruction.
 **Scope:** `apps/desktop` only. `src/views/` UI, store, sync, tests, MCP/WS protocol, backend, and web app are **unchanged**.
 
 ---
@@ -33,14 +39,14 @@ Package: `electrobun ^2.0.1` dep, `postinstall: electrobun prepare`, `dev: vite 
 5. **Tooling**: `electron-vite` (main/preload/renderer configs) + `electron-builder` (macOS first).
 6. **Website analysis (future)**: `session.webRequest` for metadata; CDP for response bodies; `webContents.executeJavaScript` for DOM extraction. Stub interface reserved in preload.
 
-## Phases
+## Phases (status)
 
-- **P2 — Scaffold** (in progress): `electron-vite` layout inside `apps/desktop`; keep `vite:build` + vitest green (tests are runtime-agnostic).
-- **P3 — Main process**: port `bun/index.ts` → `electron/main/index.ts` (window, 2 `WebContentsView`s, MCP/WS boot); `electron/preload/index.ts` exposing `window.desktop` (window controls, view bounds/visibility, later network events).
-- **P4 — Renderer glue**: BrowserSurface becomes a bounds-reporting host (ResizeObserver + `window.desktop.views`); `use-hide-native-views` → IPC visibility calls; delete `Electroview` path.
-- **P5 — Cleanup**: delete `devkit-stub.ts`, `.hutch` aliases, `electrobun` dep, `postinstall`; scripts → `electron-vite dev/build`.
-- **P6 — Packaging**: `electron-builder` macOS target; icon/identifier; smoke test packaged build.
-- **P7 — Verification**: dev mode, prod build, overlays above embedded content, MCP push E2E (188-test suite green), auth/session flow, no Electrobun residue.
+- **P2 Scaffold** ✅ — electron-vite layout, renderer reused from apps/desktop
+- **P3 Main process** ✅ — window, MCP/WS boot (ports via env), security baseline
+- **P4 Embedded views + bridge** ✅ — WebContentsView host, window controls, overlay visibility, titlebar fix
+- **P5 Cleanup** ⏸ blocked on Electrobun retirement decision
+- **P6 Packaging** ⬜ electron-builder macOS (`pnpm dist`)
+- **P7 Verification** ⬜ full checklist
 
 ## Risk notes
 
