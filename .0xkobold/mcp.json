@@ -8,16 +8,6 @@
       },
       "enabled": true,
       "autoReconnect": true
-    },
-    {
-      "name": "playwright",
-      "transport": {
-        "type": "stdio",
-        "command": "npx",
-        "args": ["-y", "@playwright/mcp"]
-      },
-      "enabled": true,
-      "autoReconnect": true
     }
   ]
 }

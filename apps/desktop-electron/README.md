@@ -14,7 +14,11 @@ and the same 7 `open*Surface` tools.
 
 **pi setup (project-local, reproducible):**
 1. `.pi/settings.json` → `packages` includes `npm:@0xkobold/pi-mcp@0.4.0` (pinned).
-2. `.0xkobold/mcp.json` declares the servers (websocket `human-assist` + stdio `playwright`). The extension replaces pi's built-in MCP, so all servers must live here.
+2. `.0xkobold/mcp.json` declares the servers this project needs from
+   the extension (websocket `human-assist`). Only servers configured
+   HERE run through the extension — pi packages like
+   `@anthropics/playwright` register their own tools independently and
+   must NOT be duplicated here.
 3. Start the Electron app, open pi in this project, approve **project trust**, then `/mcp list` → `human-assist` should connect; tools appear as `mcp__human_assist__*`.
 
 **Disconnect detection:** 15s ping/pong heartbeat; unresponsive clients
