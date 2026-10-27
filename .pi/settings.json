@@ -1,6 +1,6 @@
 {
-  "defaultModel": "qwen/qwen3.6-35b-a3b",
-  "defaultProvider": "qwen",
+  "defaultModel": "nvidia/Qwen3.8-27B-NVFP4",
+  "defaultProvider": "qwen38-next",
   "lastChangelogVersion": "1.2.0",
   "packages": [
     "@anthropics/frontend-design",
@@ -10,26 +10,6 @@
     "@anthropics/typescript-lsp"
   ],
   "permissions": {
-    "deny": [
-      "WebSearch"
-    ]
-  },
-  "_metadata": {
-    "overrides": {
-      "claude-opus-5": "qwen/qwen3.6-35b-a3b",
-      "claude-3-5-sonnet-20241022": "qwen/qwen3.6-35b-a3b",
-      "claude-haiku-4-5-20251001": "qwen/qwen3.6-35b-a3b"
-    },
-    "timeoutOverrides": {
-      "api": 1800000,
-      "streamIdle": 1800000,
-      "maxRetries": 20,
-      "bashDefault": 900000,
-      "bashMax": 1800000
-    },
-    "autoCompact": {
-      "window": 190000,
-      "enabled": true
-    }
+    "deny": ["WebSearch"]
   }
 }
