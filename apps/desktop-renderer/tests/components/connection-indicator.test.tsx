@@ -22,7 +22,7 @@ describe('ConnectionIndicator', () => {
     render(<ConnectionIndicator />);
 
     const el = screen.getByRole('status');
-    expect(el.textContent).toBe('Offline');
+    expect(el.textContent).toBe('MCP offline');
     expect(el.getAttribute('data-state')).toBe('disconnected');
     const dot = el.querySelector('.ha-connection-dot');
     expect(dot?.className).toContain('ha-connection-dot--disconnected');
@@ -33,7 +33,7 @@ describe('ConnectionIndicator', () => {
     render(<ConnectionIndicator />);
 
     const el = screen.getByRole('status');
-    expect(el.textContent).toBe('Connecting…');
+    expect(el.textContent).toBe('Connecting to MCP…');
     expect(el.getAttribute('data-state')).toBe('connecting');
     const dot = el.querySelector('.ha-connection-dot');
     expect(dot?.className).toContain('ha-connection-dot--connecting');
@@ -44,7 +44,7 @@ describe('ConnectionIndicator', () => {
     render(<ConnectionIndicator />);
 
     const el = screen.getByRole('status');
-    expect(el.textContent).toBe('Connected');
+    expect(el.textContent).toBe('MCP connected');
     expect(el.getAttribute('data-state')).toBe('connected');
     const dot = el.querySelector('.ha-connection-dot');
     expect(dot?.className).toContain('ha-connection-dot--connected');
@@ -53,12 +53,12 @@ describe('ConnectionIndicator', () => {
   it('updates reactively when store state changes', () => {
     useStore.setState({ connectionState: 'disconnected' });
     render(<ConnectionIndicator />);
-    expect(screen.getByRole('status').textContent).toBe('Offline');
+    expect(screen.getByRole('status').textContent).toBe('MCP offline');
 
     act(() => {
       useStore.setState({ connectionState: 'connected' });
     });
     // Component subscribes via zustand — DOM updates without rerender
-    expect(screen.getByRole('status').textContent).toBe('Connected');
+    expect(screen.getByRole('status').textContent).toBe('MCP connected');
   });
 });

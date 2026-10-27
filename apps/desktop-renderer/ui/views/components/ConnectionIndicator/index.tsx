@@ -13,13 +13,16 @@ const STATE_META: Record<
   ConnectionState,
   { label: string; dotClass: string }
 > = {
-  connected: { label: "Connected", dotClass: "ha-connection-dot--connected" },
+  connected: {
+    label: "MCP connected",
+    dotClass: "ha-connection-dot--connected",
+  },
   connecting: {
-    label: "Connecting…",
+    label: "Connecting to MCP…",
     dotClass: "ha-connection-dot--connecting",
   },
   disconnected: {
-    label: "Offline",
+    label: "MCP offline",
     dotClass: "ha-connection-dot--disconnected",
   },
 };
