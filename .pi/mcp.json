@@ -1,6 +1,7 @@
 {
   "mcpServers": {
     "human-assist": {
+      "type": "http",
       "url": "http://localhost:3615/mcp",
       "description": "Human Assist surfaces — push browser/canvas/image/diff/terminal/input surfaces to the desktop app for human review (runs inside the Electron app)"
     }
