@@ -10,10 +10,11 @@
   /* Titlebar — neutral charcoal (web: chart-5 / dark secondary) */
   --ha-titlebar-bg: oklch(0.269 0 0);
   --ha-surface: oklch(1 0 0); /* web: --card */
-  /* Primary — shadcn near-black */
-  --ha-primary: oklch(0.205 0 0); /* web: --primary */
-  --ha-primary-hover: oklch(0.269 0 0);
-  --ha-primary-light: oklch(0.97 0 0); /* web: --accent (hover/chip tint) */
+  /* Primary — accent role stays purple (web neutrals used for
+     structure/text; purple for affordance: buttons, selections, links) */
+  --ha-primary: #7c6fa8;
+  --ha-primary-hover: #6b5d94;
+  --ha-primary-light: #f0eef6; /* purple-tinted hover/chip surface */
   /* Secondary */
   --ha-secondary: oklch(0.371 0 0); /* web: chart-4 */
   /* Text */
@@ -40,9 +41,9 @@
   --ha-bg: oklch(0.145 0 0); /* web dark: --background */
   --ha-titlebar-bg: oklch(0.205 0 0); /* web dark: --card — reads as chrome on 0.145 bg */
   --ha-surface: oklch(0.205 0 0); /* web dark: --card */
-  --ha-primary: oklch(0.922 0 0); /* web dark: --primary */
-  --ha-primary-hover: oklch(0.87 0 0);
-  --ha-primary-light: oklch(0.269 0 0); /* web dark: --accent */
+  --ha-primary: #9c8fc4;
+  --ha-primary-hover: #b0a4d4;
+  --ha-primary-light: #353143;
   --ha-secondary: oklch(0.708 0 0);
   --ha-text: oklch(0.985 0 0); /* web dark: --foreground */
   --ha-text-secondary: oklch(0.708 0 0); /* web dark: --muted-foreground */
