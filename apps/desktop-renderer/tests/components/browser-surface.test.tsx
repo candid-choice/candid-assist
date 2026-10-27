@@ -95,53 +95,49 @@ function stubDesktop() {
 }
 
 describe('BrowserSurface (Electron mode)', () => {
-  it('hosts a WebContentsView instead of the electrobun element', () => {
+  it('renders an Electron <webview> in the DOM (not the electrobun element, not a native view)', () => {
     const api = stubDesktop();
     render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
 
     expect(document.querySelector('electrobun-webview')).toBeNull();
-    expect(document.querySelector('.ha-webview-host')).not.toBeNull();
-    expect(api.view.create).toHaveBeenCalledTimes(1);
-    const [id, url] = api.view.create.mock.calls[0]!;
-    expect(String(id)).toMatch(/^ha-view-/);
-    expect(url).toBe('https://claude.ai');
+    const wv = document.querySelector('webview');
+    expect(wv).not.toBeNull();
+    expect(wv!.getAttribute('src')).toBe('https://claude.ai');
+    // No native-view IPC anymore — the page lives in the DOM z-order.
+    expect(api.view.create).not.toHaveBeenCalled();
   });
 
-  it('hides the native view while overlays are open, restores after', () => {
+  it('stays mounted and visible when overlays open (no hiding)', () => {
     const api = stubDesktop();
     render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
 
     act(() => {
-      useStore.setState({ settingsOpen: true });
+      useStore.setState({ userMenuOpen: true });
     });
-    expect(api.view.setVisible).toHaveBeenLastCalledWith(expect.stringMatching(/^ha-view-/), false);
+    expect(document.querySelector('webview')).not.toBeNull();
+    expect(api.view.setVisible).not.toHaveBeenCalled();
 
     act(() => {
-      useStore.setState({ settingsOpen: false });
+      useStore.setState({ userMenuOpen: false });
     });
-    expect(api.view.setVisible).toHaveBeenLastCalledWith(expect.stringMatching(/^ha-view-/), true);
+    expect(document.querySelector('webview')).not.toBeNull();
   });
 
-  it('destroys the view on unmount', () => {
-    const api = stubDesktop();
-    const { unmount } = render(
-      <BrowserSurface url="https://example.com" onUrlChange={() => {}} />,
-    );
-    unmount();
-    expect(api.view.destroy).toHaveBeenCalledTimes(1);
-  });
-
-  it('reloadURL when the url prop changes', () => {
-    const api = stubDesktop();
+  it('updates the webview src when the url prop changes', () => {
+    stubDesktop();
     const { rerender } = render(
       <BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />,
     );
     rerender(<BrowserSurface url="https://example.com" onUrlChange={() => {}} />);
 
-    // destroy (cleanup) then create with the new URL
-    expect(api.view.destroy).toHaveBeenCalled();
-    const urls = api.view.create.mock.calls.map((c) => c[1]);
-    expect(urls).toContain('https://example.com');
+    const wv = document.querySelector('webview');
+    expect(wv!.getAttribute('src')).toBe('https://example.com');
+  });
+
+  it('keeps the address bar interactive in Electron mode', () => {
+    stubDesktop();
+    render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
+    expect(document.querySelector('.ha-browser-url-input')).not.toBeNull();
   });
 });
 

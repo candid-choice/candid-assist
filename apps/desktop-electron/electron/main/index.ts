@@ -71,6 +71,9 @@ function createWindow(): void {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      // Embedded remote pages use the DOM <webview> tag so they live in
+      // the page's z-order (dropdowns/modals float above; no hiding).
+      webviewTag: true,
     },
   });
 
@@ -102,7 +105,7 @@ function createWindow(): void {
 
 // ── Embedded-view navigation policy ────────────────────────────────────
 
-function enforceNavigationPolicy(view: WebContentsView, initialUrl: string): void {
+function enforceNavigationPolicy(wc: Electron.WebContents, initialUrl: string): void {
   let allowedHost: string | null = null;
   try {
     allowedHost = new URL(initialUrl).host;
@@ -110,7 +113,7 @@ function enforceNavigationPolicy(view: WebContentsView, initialUrl: string): voi
     allowedHost = null;
   }
 
-  view.webContents.on('will-navigate', (event, target) => {
+  wc.on('will-navigate', (event, target) => {
     try {
       const host = new URL(target).host;
       if (allowedHost && host !== allowedHost) {
@@ -122,11 +125,19 @@ function enforceNavigationPolicy(view: WebContentsView, initialUrl: string): voi
     }
   });
 
-  view.webContents.setWindowOpenHandler(({ url }) => {
+  wc.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: 'deny' };
   });
 }
+
+// DOM <webview> guests: apply the same navigation lockdown as native
+// views — same-host navigation only, popups open externally.
+app.on('did-attach-webview', (_e, guestContents, params) => {
+  const initialUrl = String((params as { url?: unknown }).url ?? '');
+  console.log('[main] webview attached:', initialUrl || '(no src)');
+  enforceNavigationPolicy(guestContents, initialUrl);
+});
 
 // ── IPC: embedded views ────────────────────────────────────────────────
 
@@ -149,7 +160,7 @@ ipcMain.on('desktop:view:create', (_e, msg: ViewCreateMsg) => {
   views.set(msg.id, view);
   win.contentView.addChildView(view);
   view.setBounds(msg.bounds);
-  enforceNavigationPolicy(view, msg.url);
+  enforceNavigationPolicy(view.webContents, msg.url);
   void view.webContents.loadURL(msg.url);
 });
 

@@ -39,12 +39,14 @@
 
 /* Electron WebContentsView host: the native view is positioned over
    this element by the main process (bounds via IPC). */
-.ha-webview-host {
-  position: absolute;
-  inset: 0;
-}
-
-.ha-surface-frame-content:has(.ha-webview-host) {
-  position: relative;
-  background: var(--ha-bg);
+/* Electron <webview>: fills the surface content area, sits in the DOM
+   z-order so overlays (menus, modals) naturally float above it. */
+.ha-electron-webview {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: none;
+  background: #ffffff;
+  z-index: 0;
 }
