@@ -104,8 +104,13 @@ class WsService {
     };
 
     this.ws.onerror = () => {
-      // onclose fires immediately after and owns cleanup + reconnect.
-      // Keep this silent to avoid double-logging every failed attempt.
+      // Cleanup + state here; reconnect is scheduled by onclose (which
+      // browsers always fire after onerror). Deliberately silent — the
+      // onclose warn is the single log per failed attempt.
+      this.connected = false;
+      this.ws?.close();
+      this.ws = null;
+      this.emitConnectionState("disconnected");
     };
   }
 
