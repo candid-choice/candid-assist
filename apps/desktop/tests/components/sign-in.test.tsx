@@ -36,6 +36,7 @@ beforeEach(() => {
     authUser: null,
     authToken: null,
     signInOpen: false,
+    userMenuOpen: false,
     settings: {
       theme: 'light',
       autoMinimize: true,

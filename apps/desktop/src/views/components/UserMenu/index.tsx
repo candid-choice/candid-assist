@@ -9,7 +9,7 @@ Replaces the old sidebar Settings button — settings live under the
 user menu now.
 */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { IconSettings, IconLogout, IconLogin } from "@tabler/icons-react";
 import "./index.css";
 
@@ -24,7 +24,8 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
   const authUser = useStore((s) => s.authUser);
   const authToken = useStore((s) => s.authToken);
   const openSignIn = useStore((s) => s.openSignIn);
-  const [open, setOpen] = useState(false);
+  const open = useStore((s) => s.userMenuOpen);
+  const setOpen = useStore((s) => s.setUserMenuOpen);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click
@@ -53,7 +54,7 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
     <div className="ha-usermenu" ref={rootRef}>
       <button
         className="ha-usermenu-chip"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(!open)}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Account menu"

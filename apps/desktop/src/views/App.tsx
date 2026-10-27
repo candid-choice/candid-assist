@@ -18,6 +18,7 @@ import {
 } from "./components";
 import { useStoreSelector } from "./store";
 import { deriveTaskTitle, useCreateSession } from "./hooks/use-create-session";
+import { useHideNativeViews } from "./hooks/use-hide-native-views";
 
 function App() {
   // ── Surface state ─────────────────────────────────────────────────────
@@ -34,6 +35,10 @@ function App() {
   const closeSignIn = useStoreSelector((s) => s.closeSignIn);
   const authToken = useStoreSelector((s) => s.authToken);
   const { create } = useCreateSession();
+
+  // Native electrobun-webviews composite above DOM — hide them while any
+  // overlay (user menu / composer / settings / sign-in) is open
+  useHideNativeViews({ settingsOpen });
 
   // Auto-dismiss the sign-in screen once authenticated
   useEffect(() => {

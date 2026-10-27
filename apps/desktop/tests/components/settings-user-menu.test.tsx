@@ -29,6 +29,7 @@ beforeEach(() => {
     connectionState: 'disconnected',
     activeSurface: null,
     completedSurfaces: [],
+    userMenuOpen: false,
     settings: DEFAULT_SETTINGS,
   });
 });
