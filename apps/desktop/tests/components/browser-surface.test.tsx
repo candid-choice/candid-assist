@@ -1,10 +1,30 @@
-/** BrowserSurface native-webview unmount behavior. */
+/** BrowserSurface native-hide behavior.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+The webview element must STAY MOUNTED (page stays loaded) while DOM
+overlays are open; visibility is controlled via Electrobun's
+toggleHidden() on the element.
+*/
+
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, act } from '@testing-library/react';
+
+// Stub the Electrobun custom element so toggleHidden is observable.
+class FakeWebview extends HTMLElement {
+  toggleHiddenCalls: boolean[] = [];
+  toggleHidden(hidden?: boolean) {
+    this.toggleHiddenCalls.push(Boolean(hidden));
+  }
+}
+if (!customElements.get('electrobun-webview')) {
+  customElements.define('electrobun-webview', FakeWebview);
+}
 
 import { BrowserSurface } from '@/views/components/surfaces/BrowserSurface';
 import { useStore } from '@/views/store';
+
+function getWebview(): FakeWebview {
+  return document.querySelector('electrobun-webview') as FakeWebview;
+}
 
 beforeEach(() => {
   cleanup();
@@ -21,51 +41,63 @@ afterEach(() => {
   document.documentElement.classList.remove('ha-native-hidden');
 });
 
-function webviewCount() {
-  return document.querySelectorAll('electrobun-webview').length;
-}
-
 describe('BrowserSurface', () => {
-  it('renders the native webview element by default', () => {
+  it('renders the native webview element', () => {
     render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
-    expect(webviewCount()).toBe(1);
+    expect(getWebview()).not.toBeNull();
   });
 
-  it('unmounts the webview when an overlay opens (native views ignore display:none)', () => {
+  it('never unmounts the webview when overlays open (page stays loaded)', () => {
     render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
-    expect(webviewCount()).toBe(1);
-
-    act(() => {
-      useStore.setState({ settingsOpen: true });
-    });
-
-    expect(webviewCount()).toBe(0);
-    expect(document.querySelector('.ha-webview-hidden')).not.toBeNull();
-  });
-
-  it('restores the webview when overlays close', () => {
-    render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
+    const el = getWebview();
 
     act(() => {
       useStore.setState({ userMenuOpen: true });
     });
-    expect(webviewCount()).toBe(0);
+    expect(getWebview()).toBe(el); // same node, still in the DOM
+
+    act(() => {
+      useStore.setState({ settingsOpen: true });
+    });
+    expect(getWebview()).toBe(el);
+  });
+
+  it('calls toggleHidden(true) when an overlay opens and (false) when it closes', () => {
+    render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
+    const el = getWebview();
+
+    act(() => {
+      useStore.setState({ userMenuOpen: true });
+    });
+    expect(el.toggleHiddenCalls).toContain(true);
 
     act(() => {
       useStore.setState({ userMenuOpen: false });
     });
-    expect(webviewCount()).toBe(1);
+    expect(el.toggleHiddenCalls).toContain(false);
   });
 
-  it('keeps the address bar interactive while hidden', () => {
+  it('stays hidden while any overlay remains open', () => {
     render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
-    act(() => {
-      useStore.setState({ composerOpen: true });
-    });
-    expect(screen_has_url_input()).toBe(true);
+    const el = getWebview();
 
-    function screen_has_url_input() {
-      return !!document.querySelector('.ha-browser-url-input');
-    }
+    act(() => {
+      useStore.setState({ userMenuOpen: true, composerOpen: true });
+    });
+    act(() => {
+      useStore.setState({ userMenuOpen: false });
+    });
+    // Last call must still be hidden=true (composer remains open)
+    expect(el.toggleHiddenCalls.at(-1)).toBe(true);
+
+    act(() => {
+      useStore.setState({ composerOpen: false });
+    });
+    expect(el.toggleHiddenCalls.at(-1)).toBe(false);
+  });
+
+  it('keeps the address bar interactive', () => {
+    render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
+    expect(document.querySelector('.ha-browser-url-input')).not.toBeNull();
   });
 });

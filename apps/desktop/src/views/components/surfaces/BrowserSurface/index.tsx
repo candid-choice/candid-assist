@@ -1,6 +1,6 @@
 /** Browser surface — displays an interactive web view. */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
 import { IconLock } from "@tabler/icons-react";
 
@@ -16,9 +16,15 @@ export interface BrowserSurfaceProps {
 
 export function BrowserSurface({ url, onUrlChange }: BrowserSurfaceProps) {
   const [urlInput, setUrlInput] = useState(url);
-  // Native webview must be UNMOUNTED while DOM overlays are open — the
-  // native layer composites above all DOM and ignores display:none.
+  // The native layer composites webviews above all DOM and ignores CSS
+  // visibility — use Electrobun's toggleHidden() (hides without
+  // destroying, so the page stays loaded) while DOM overlays are open.
   const nativeHidden = useNativeViewsHidden();
+  const webviewRef = useRef<{ toggleHidden?: (hidden?: boolean) => void } | null>(null);
+
+  useEffect(() => {
+    webviewRef.current?.toggleHidden?.(nativeHidden);
+  }, [nativeHidden]);
 
   const handleNavigate = useCallback(() => {
     let newUrl = urlInput.trim();
@@ -58,12 +64,8 @@ export function BrowserSurface({ url, onUrlChange }: BrowserSurfaceProps) {
 
   return (
     <SurfaceFrame addressBar={addressBar}>
-      {nativeHidden ? (
-        <div className="ha-webview-hidden" data-url={url} />
-      ) : (
-        // @ts-expect-error — electrobun custom element
-        <electrobun-webview src={url} />
-      )}
+      {/* @ts-expect-error — electrobun custom element */}
+      <electrobun-webview ref={webviewRef} src={url} />
     </SurfaceFrame>
   );
 }

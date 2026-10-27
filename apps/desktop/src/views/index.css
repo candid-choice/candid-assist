@@ -240,9 +240,3 @@ electrobun-webview {
   flex: 1;
   min-width: 0;
 }
-
-/* Native webviews composite above DOM; hide while overlays are open
-   (user menu, composer, settings, sign-in) — see useHideNativeViews */
-:root.ha-native-hidden electrobun-webview {
-  display: none;
-}

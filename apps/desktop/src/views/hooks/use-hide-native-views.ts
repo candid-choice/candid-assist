@@ -43,6 +43,13 @@ export function useHideNativeViews(): void {
     } else {
       root.classList.remove(ROOT_CLASS);
     }
+
+    // Natively hide (not destroy) any mounted webview elements so their
+    // pages stay loaded behind overlays.
+    document
+      .querySelectorAll("electrobun-webview")
+      .forEach((el) => (el as any).toggleHidden?.(anyOverlay));
+
     return () => root.classList.remove(ROOT_CLASS);
   }, [anyOverlay]);
 }
