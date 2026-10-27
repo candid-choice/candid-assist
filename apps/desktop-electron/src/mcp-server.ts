@@ -345,6 +345,9 @@ function createMcpServer(port: number): { server: ReturnType<typeof createServer
 
           if (jsonrpc === "2.0") {
             lastAgentActivity = Date.now();
+            console.log(
+              `[mcp] \u2190 ${method}${id != null ? ` (id ${id})` : ""} from ${req.socket.remoteAddress}:${req.socket.remotePort}`,
+            );
           }
 
           if (jsonrpc !== "2.0") {
