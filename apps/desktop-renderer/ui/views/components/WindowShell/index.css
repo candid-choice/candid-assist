@@ -16,10 +16,11 @@
      right keeps the centered label optically centered */
   padding: 0 76px;
   background: var(--ha-titlebar-bg, var(--ha-surface));
+  color: #e9e7f0;
   -webkit-user-select: none;
   user-select: none;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--ha-border);
+  border-bottom: 1px solid #35363a;
   -webkit-app-region: drag;
   justify-content: center;
 }
@@ -31,8 +32,15 @@
   gap: 5px;
   font-size: 11px;
   font-weight: 600;
-  color: var(--ha-text-secondary);
+  color: #d9d6e2;
   letter-spacing: 0.02em;
+}
+
+/* Dark titlebar: invert the user chip text (avatar keeps its own
+   background). */
+.ha-titlebar .ha-usermenu-name,
+.ha-titlebar .ha-usermenu-caret {
+  color: #d9d6e2;
 }
 
 .ha-titlebar-label-icon {
