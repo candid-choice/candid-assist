@@ -15,6 +15,12 @@ import path from 'node:path';
 
 import { startMcpServer } from '../../src/mcp-server';
 
+// MCP/WS ports — overridable so the Electrobun desktop can coexist
+// during migration. The WS port is forwarded to the renderer via
+// ?wsPort= so ws-service dials the right server.
+const MCP_PORT = Number(process.env.MCP_PORT ?? 3615);
+const WS_PORT = Number(process.env.WS_PORT ?? 3614);
+
 interface ViewBounds {
   x: number;
   y: number;
@@ -32,6 +38,21 @@ const views = new Map<string, WebContentsView>();
 let win: BrowserWindow | null = null;
 
 const isDev = !app.isPackaged;
+
+// One instance per userData profile — two instances share the same
+// IndexedDB/LevelDB directory and the second one gets LOCK errors.
+if (!app.requestSingleInstanceLock()) {
+  console.error(
+    '[main] Another Human Assist Electron instance is already running — exiting. ' +
+      '(If you started `pnpm dev:electron` elsewhere, close that window first.)',
+  );
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    win?.show();
+    win?.focus();
+  });
+}
 
 // ── Window ─────────────────────────────────────────────────────────────
 
@@ -56,7 +77,9 @@ function createWindow(): void {
   if (isDev) {
     // UI is the desktop-renderer Next.js app (same pattern Electrobun
     // used for the web app).
-    void win.loadURL(process.env.DESKTOP_UI_URL ?? 'http://localhost:3616');
+    const baseUrl = process.env.DESKTOP_UI_URL ?? 'http://localhost:3616';
+    const sep = baseUrl.includes('?') ? '&' : '?';
+    void win.loadURL(`${baseUrl}${sep}wsPort=${WS_PORT}`);
   } else {
     // Packaged: the desktop-renderer Next export, copied into the app
     // as resources/renderer by electron-builder (configured in P6).
@@ -162,10 +185,7 @@ app.whenReady().then(() => {
   createWindow();
   // MCP (HTTP) + surface events (WS). Ports overridable so Electron and
   // the Electrobun desktop can run side by side during migration.
-  startMcpServer(
-    Number(process.env.MCP_PORT ?? 3615),
-    Number(process.env.WS_PORT ?? 3614),
-  );
+  startMcpServer(MCP_PORT, WS_PORT);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

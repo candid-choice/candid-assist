@@ -55,13 +55,19 @@ class WsService {
     if (this.connected) return;
     this.emitConnectionState("connecting");
 
-    // In production (ElectroBun), the WebSocket port is relative.
-    // In dev we hit localhost:3614.
-    const wsUrl = import.meta.env?.VITE_WS_URL
-      ? import.meta.env.VITE_WS_URL
-      : (window.__electrobun
-          ? `ws://${location.hostname}:3614`
-          : `ws://localhost:3614`);
+    // WS endpoint resolution:
+    //  1. ?wsPort= query param — Electron main appends it when the WS
+    //     server runs on a non-default port (migration coexistence)
+    //  2. VITE_WS_URL build-time override
+    //  3. default ws://localhost:3614
+    const wsPort = new URLSearchParams(window.location.search).get("wsPort");
+    const wsUrl = wsPort
+      ? `ws://${location.hostname}:${wsPort}`
+      : import.meta.env?.VITE_WS_URL
+          ? import.meta.env.VITE_WS_URL
+          : window.__electrobun
+              ? `ws://${location.hostname}:3614`
+              : `ws://localhost:3614`;
 
     try {
       this.ws = new WebSocket(wsUrl);
@@ -98,11 +104,8 @@ class WsService {
     };
 
     this.ws.onerror = () => {
-      this.connected = false;
-      this.ws?.close();
-      this.ws = null;
-      this.emitConnectionState("disconnected");
-      console.error("[WsService] WebSocket error");
+      // onclose fires immediately after and owns cleanup + reconnect.
+      // Keep this silent to avoid double-logging every failed attempt.
     };
   }
 
