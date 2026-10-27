@@ -36,3 +36,15 @@
   color: var(--ha-text-secondary);
   opacity: 0.5;
 }
+
+/* Electron WebContentsView host: the native view is positioned over
+   this element by the main process (bounds via IPC). */
+.ha-webview-host {
+  position: absolute;
+  inset: 0;
+}
+
+.ha-surface-frame-content:has(.ha-webview-host) {
+  position: relative;
+  background: var(--ha-bg);
+}

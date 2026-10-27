@@ -42,7 +42,8 @@ function createWindow(): void {
     minWidth: 720,
     minHeight: 480,
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 14, y: 14 },
+    // Vertically center the ~14px traffic lights within the 32px title bar
+    trafficLightPosition: { x: 16, y: 9 },
     backgroundColor: '#faf7f2',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),

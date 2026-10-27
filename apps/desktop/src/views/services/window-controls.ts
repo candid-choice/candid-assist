@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { getDesktopBridge } from "./desktop-bridge";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let rpcRef: any = null;
 
@@ -28,6 +30,13 @@ export function useWindowMaximize() {
   const [maximized, setMaximized] = useState(false);
 
   const toggleMaximize = useCallback(() => {
+    const desktop = getDesktopBridge();
+    if (desktop) {
+      // Electron: main toggles maximize; mirror state locally.
+      desktop.window.maximize();
+      setMaximized((v) => !v);
+      return;
+    }
     if (maximized) {
       rpcRef?.request?.windowControl?.({ method: "unmaximize" });
     } else {
