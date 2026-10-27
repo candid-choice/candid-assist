@@ -15,6 +15,7 @@ import {
   SettingsScreen,
   TaskComposer,
   SignInScreen,
+  ToastContainer,
 } from "./components";
 import { useStoreSelector } from "./store";
 import { deriveTaskTitle, useCreateSession } from "./hooks/use-create-session";
@@ -24,6 +25,8 @@ function App() {
   // ── Surface state ─────────────────────────────────────────────────────
   const helpPaletteOpen = useStoreSelector((s) => s.helpPaletteOpen);
   const closeHelpPalette = useStoreSelector((s) => s.closeHelpPalette);
+  const uiMessages = useStoreSelector((s) => s.uiMessages);
+  const dismissUiMessage = useStoreSelector((s) => s.dismissUiMessage);
   const activeSurface = useStoreSelector((s) => s.activeSurface);
   const activeSessionId = useStoreSelector((s) => s.activeSessionId);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -121,6 +124,8 @@ function App() {
           </div>
         </div>
       </WindowShell>
+
+      <ToastContainer toasts={uiMessages} onDismiss={dismissUiMessage} />
 
       <HelpPalette
         open={helpPaletteOpen}

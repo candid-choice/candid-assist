@@ -54,6 +54,15 @@ if (typeof window !== "undefined") {
 
   // Subscribe surface push events to store
   wsService.subscribe((event) => {
+    if (event.event === "ui:message") {
+      // pi (or any MCP client) -> showMessage tool -> toast proof-of-path
+      const d = event.data as { message?: string; level?: string; title?: string };
+      if (d?.message) {
+        const level = d.level === "success" || d.level === "warning" || d.level === "error" ? d.level : "info";
+        useStore.getState().pushUiMessage({ message: d.message, type: level, title: d.title });
+      }
+      return;
+    }
     if (event.event === "surface:push") {
       const { surfaceId, type, payload } = event.data;
       useStore.getState().openSurface({

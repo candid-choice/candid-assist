@@ -93,6 +93,11 @@ interface AppState {
   mcpAgentCount: number;
   setMcpAgentCount: (count: number) => void;
 
+  // ── UI messages (pi → toast via MCP showMessage) ─────────────────────
+  uiMessages: { id: string; type: 'info' | 'success' | 'warning' | 'error'; message: string }[];
+  pushUiMessage: (msg: { message: string; type?: 'info' | 'success' | 'warning' | 'error'; title?: string; ttlMs?: number }) => void;
+  dismissUiMessage: (id: string) => void;
+
   // ── Session state (synced with backend/Firestore) ─────────────────────
   sessions: SessionDoc[];
   activeSessionId: string | null;
@@ -225,6 +230,21 @@ export const useStore = create<AppState>()(
       mcpAgentCount: 0,
 
       setMcpAgentCount: (count: number) => set({ mcpAgentCount: Math.max(0, count) }),
+
+      uiMessages: [],
+
+      pushUiMessage: ({ message, type = 'info', title, ttlMs }) => {
+        const id = `ui-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const text = title ? `${title}: ${message}` : message;
+        set((s) => ({
+          uiMessages: [...s.uiMessages, { id, type, message: text }].slice(-4),
+        }));
+        const ttl = ttlMs ?? (type === 'error' ? 6000 : type === 'success' ? 3000 : 4000);
+        setTimeout(() => get().dismissUiMessage(id), ttl);
+      },
+
+      dismissUiMessage: (id: string) =>
+        set((s) => ({ uiMessages: s.uiMessages.filter((m) => m.id !== id) })),
 
       settings: DEFAULT_SETTINGS,
 

@@ -135,3 +135,21 @@ describe('Persistence partialize', () => {
     expect(functionKeys).toEqual([]);
   });
 });
+
+describe('ui messages (MCP showMessage toasts)', () => {
+  it('push and dismiss ui messages', () => {
+    useStore.setState({ uiMessages: [] });
+    useStore.getState().pushUiMessage({ message: 'hello from pi', type: 'info', title: 'Demo', ttlMs: 60_000 });
+    let msgs = useStore.getState().uiMessages;
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]!.message).toBe('Demo: hello from pi');
+    useStore.getState().dismissUiMessage(msgs[0]!.id);
+    expect(useStore.getState().uiMessages).toHaveLength(0);
+  });
+
+  it('keeps at most 4 messages', () => {
+    useStore.setState({ uiMessages: [] });
+    for (let i = 0; i < 6; i++) useStore.getState().pushUiMessage({ message: 'm' + i, ttlMs: 60_000 });
+    expect(useStore.getState().uiMessages).toHaveLength(4);
+  });
+});

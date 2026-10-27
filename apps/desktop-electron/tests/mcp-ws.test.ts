@@ -89,7 +89,7 @@ describe('WebSocket MCP (pi transport)', () => {
     const c = openClient();
     await c.waitForOpen();
     const res = await c.request('tools/list');
-    expect(res.result.tools).toHaveLength(7);
+    expect(res.result.tools).toHaveLength(8);
     c.ws.close();
   });
 
@@ -132,6 +132,40 @@ describe('WebSocket MCP (pi transport)', () => {
     const s = await fetch(STATUS_URL).then((r) => r.json());
     expect(s.mcp.agentConnected).toBe(true);
     expect(s.mcp.agentCount).toBeGreaterThanOrEqual(1);
+    c.ws.close();
+  });
+});
+
+describe('showMessage — pi -> Electron toast proof-of-path', () => {
+  it('broadcasts ui:message to surface WS clients', async () => {
+    const surface = new WebSocket(`ws://127.0.0.1:${SURFACE_WS_PORT}`);
+    const got = new Promise<any>((resolve) =>
+      surface.once('message', (d) => resolve(JSON.parse(d.toString()))),
+    );
+    await new Promise((r) => surface.once('open', r));
+
+    const c = openClient();
+    await c.waitForOpen();
+    const res = await c.request('tools/call', {
+      name: 'showMessage',
+      arguments: { message: 'e2e toast', level: 'success', title: 'pi' },
+    });
+    expect(res.result.status).toBe('shown');
+
+    const ev = await got;
+    expect(ev.event).toBe('ui:message');
+    expect(ev.data.message).toBe('e2e toast');
+    expect(ev.data.level).toBe('success');
+    expect(ev.data.title).toBe('pi');
+    surface.close();
+    c.ws.close();
+  });
+
+  it('validates message argument', async () => {
+    const c = openClient();
+    await c.waitForOpen();
+    const res = await c.request('tools/call', { name: 'showMessage', arguments: {} });
+    expect(res.error?.message).toContain('MCP_003');
     c.ws.close();
   });
 });

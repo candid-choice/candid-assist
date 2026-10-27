@@ -355,6 +355,19 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'showMessage',
+    description: 'Show a transient toast message in the Human Assist desktop app (proof-of-path from pi, notifications, status updates).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', description: 'Message text (<=2000 chars)' },
+        level: { type: 'string', enum: ['info', 'success', 'warning', 'error'], description: 'Toast style (default info)' },
+        title: { type: 'string', description: 'Optional title prefix (<=100 chars)' },
+      },
+      required: ['message'],
+    },
+  },
+  {
     name: 'openTerminalOutput',
     description: 'Stream terminal command output into a surface.',
     inputSchema: {
@@ -375,6 +388,7 @@ const TOOL_HANDLERS: Record<string, (args: unknown) => Record<string, unknown>> 
   openCodeDiff: handleOpenCodeDiff,
   openTerminalOutput: handleOpenTerminalOutput,
   openInputSurface: handleOpenInputSurface,
+  showMessage: handleShowMessage,
 };
 
 // ── MCP Server (HTTP + SSE) ───────────────────────────────────────────────
@@ -549,6 +563,33 @@ function notifySurfacePush(payload: Record<string, unknown>): void {
       client.send(event);
     }
   }
+}
+
+// ── UI messages (pi -> renderer toasts) ─────────────────────────────────
+
+function notifyUiMessage(data: { message: string; level: string; title?: string }): void {
+  const event = JSON.stringify({ event: "ui:message", data, timestamp: Date.now() });
+  for (const client of wsClients) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(event);
+    }
+  }
+}
+
+function handleShowMessage(args: unknown): Record<string, unknown> {
+  const obj = (args ?? {}) as Record<string, unknown>;
+  const message = obj["message"];
+  if (typeof message !== "string" || message.length === 0 || message.length > 2000) {
+    throw new Error("MCP_003: message must be a non-empty string (<=2000 chars)");
+  }
+  const level = typeof obj["level"] === "string" ? obj["level"] : "info";
+  if (!["info", "success", "warning", "error"].includes(level)) {
+    throw new Error("MCP_004: level must be info|success|warning|error");
+  }
+  const title = typeof obj["title"] === "string" ? obj["title"].slice(0, 100) : undefined;
+  notifyUiMessage({ message, level, title });
+  console.log("[mcp] ui message (" + level + ")" + (title ? " [" + title + "]" : "") + ": " + message);
+  return { status: "shown", level, deliveredTo: wsClients.size };
 }
 
 // ── Utility: Surface Push (used by surface-manager.ts in Vite app) ───────

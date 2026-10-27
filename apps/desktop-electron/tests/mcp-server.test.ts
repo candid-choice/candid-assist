@@ -114,10 +114,11 @@ describe('MCP tools/call router', () => {
       method: 'POST',
       body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
     }).then((r) => r.json());
-    expect(res.result.tools).toHaveLength(7);
+    expect(res.result.tools).toHaveLength(8);
     const names = res.result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain('openBrowserSurface');
     expect(names).toContain('openInputSurface');
+    expect(names).toContain('showMessage');
     for (const t of res.result.tools) {
       expect(t.inputSchema?.type).toBe('object');
     }
