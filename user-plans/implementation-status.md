@@ -1,8 +1,12 @@
 # Implementation Status — Master
 
-**Last Updated:** 2025-10-22  
-**Current Branch:** `phase-2-4-integration`  
-**Latest Commit:** `f411e94` — Phase 6 & 7: macOS notifications, IndexedDB persistence, component fixes
+**Last Updated:** 2026-10-27
+**Current Branch:** `feature/agent-browser-control`
+**Latest:** Electron migration complete; Feature 1 (agent browser + human handoff) + Feature 2 (harness-session recording) done; all user-plans implemented — completed plan docs moved to `user-plans/pending/`, verification report at `user-plans/launch-verification-report.md`.
+
+> **Architecture (post-migration):** `apps/desktop` = Electron (main/preload + MCP HTTP :3615, surface WS :3614, WS MCP :43179, guest registry, process registry, updater) · `apps/desktop-renderer` = Next.js UI (198 tests) · `apps/desktop/tests` = 44 MCP/registry tests. Legacy Electrobun app deleted. 21 MCP tools. pi connects via `@0xkobold/pi-mcp@0.4.0` (`.0xkobold/mcp.json`) + identity extension (`.pi/extensions/human-assist-identity.ts`).
+
+_Phase-7 corrections since 2025-10-22: `pre-cicd-pipeline` ✅ (workflow restored), `pre-app-updater` ✅ (electron-updater analogue), `pre-launch-checklist(-v2)` ✅ (verification report), `pre-workspace-config` ✅ (settings + picker + pass-through), `pre-mcp-validation` ✅ (MCP_001–019 + localhost warning), `pre-process-manager-interactions`/`14-process-manager` ✅ (ProcessSurface + controls), Phase 4 onboarding/task-composer ✅._
 
 ---
 
