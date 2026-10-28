@@ -99,3 +99,27 @@
   color: var(--ha-text-secondary);
   opacity: 0.5;
 }
+
+.ha-address-tab-label {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ha-address-tab-close {
+  margin-left: 6px;
+  padding: 0 3px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--ha-text-tertiary);
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.ha-address-tab-close:hover {
+  background: var(--ha-primary-light);
+  color: var(--ha-text);
+  opacity: 1;
+}

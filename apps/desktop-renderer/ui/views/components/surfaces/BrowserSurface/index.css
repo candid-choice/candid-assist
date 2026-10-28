@@ -52,11 +52,17 @@
 }
 
 /* ── Agent handoff overlay (human verification) ──────────────────────── */
+/* Absolute fill of the surface content area (block+overflow parent, so
+   percentage-height flex children would collapse). */
 .ha-electron-webview-wrap {
-  position: relative;
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
   display: flex;
+  flex-direction: column;
+}
+
+.ha-surface-frame-content:has(.ha-electron-webview-wrap) {
+  position: relative;
 }
 
 .ha-webview-handoff {

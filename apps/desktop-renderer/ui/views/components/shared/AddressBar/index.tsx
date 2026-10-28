@@ -9,9 +9,16 @@ export interface AddressBarProps {
   activeTabId: string | null;
   /** Called when a tab is clicked. */
   onTabClick: (id: string) => void;
+  /** Called when a tab's close button is clicked (tab fully removed). */
+  onTabClose?: (id: string) => void;
 }
 
-export function AddressBar({ tabs, activeTabId, onTabClick }: AddressBarProps) {
+export function AddressBar({
+  tabs,
+  activeTabId,
+  onTabClick,
+  onTabClose,
+}: AddressBarProps) {
   return (
     <div className="ha-address-bar">
       {/* Tab list */}
@@ -23,7 +30,20 @@ export function AddressBar({ tabs, activeTabId, onTabClick }: AddressBarProps) {
             type="button"
             onClick={() => onTabClick(tab.id)}
           >
-            {tab.label}
+            <span className="ha-address-tab-label">{tab.label}</span>
+            {onTabClose && (
+              <span
+                className="ha-address-tab-close"
+                role="button"
+                aria-label={`Close ${tab.label}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTabClose(tab.id);
+                }}
+              >
+                ×
+              </span>
+            )}
           </button>
         ))}
       </div>

@@ -127,6 +127,8 @@ interface AppState {
   activeViewId: string | null;
   views: SurfaceConfig<BrowserPayload>[];
   setActiveView: (id: string) => void;
+  selectView: (id: string) => void;
+  closeView: (id: string) => void;
   updateViewUrl: (id: string, url: string) => void;
 }
 
@@ -163,8 +165,41 @@ export const useStore = create<AppState>()(
       onSurfaceComplete: null,
 
       openSurface: (config: SurfaceConfig<SurfacePayload>) => {
-        set({ activeSurface: config, helpPaletteOpen: false });
+        set((state) => {
+          const others = state.views.filter((v) => v.id !== config.id);
+          return {
+            activeSurface: config,
+            helpPaletteOpen: false,
+            views: [...others, config] as typeof state.views,
+            activeViewId: config.id,
+          };
+        });
       },
+
+      selectView: (id: string) =>
+        set((state) => {
+          const v = state.views.find((x) => x.id === id);
+          if (!v) return {};
+          return {
+            activeSurface: v as unknown as SurfaceConfig<SurfacePayload>,
+            activeViewId: id,
+          };
+        }),
+
+      closeView: (id: string) =>
+        set((state) => {
+          const remaining = state.views.filter((v) => v.id !== id);
+          const wasActive =
+            state.activeSurface?.id === id || state.activeViewId === id;
+          const next = remaining[remaining.length - 1];
+          return {
+            views: remaining,
+            activeViewId: next ? next.id : null,
+            activeSurface: wasActive
+              ? ((next as unknown as SurfaceConfig<SurfacePayload>) ?? null)
+              : state.activeSurface,
+          };
+        }),
 
       completeSurface: (result: SurfaceResult) => {
         set((state) => ({
@@ -286,7 +321,7 @@ export const useStore = create<AppState>()(
       activeViewId: null,
       views: defaultViews,
 
-      setActiveView: (id: string) => set({ activeViewId: id }),
+      setActiveView: (id: string) => get().selectView(id),
 
       updateViewUrl: (id: string, url: string) =>
         set((s) => ({

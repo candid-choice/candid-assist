@@ -164,3 +164,56 @@ describe('agent sessions (coding-session linkage)', () => {
     expect(Object.keys(useStore.getState().agentSessions)).toHaveLength(2);
   });
 });
+
+describe('view tabs (multi-surface)', () => {
+  const mk = (id: string) => ({
+    id,
+    label: `Tab ${id}`,
+    type: 'browser',
+    title: `T ${id}`,
+    payload: { url: 'https://x.test' },
+    source: 'mcp' as const,
+    createdAt: Date.now(),
+  });
+
+  const reset = () =>
+    useStore.setState({ views: [], activeViewId: null, activeSurface: null } as never);
+
+  it('openSurface upserts the tab list and activates it', () => {
+    reset();
+    useStore.getState().openSurface(mk('a') as never);
+    useStore.getState().openSurface(mk('b') as never);
+    expect(useStore.getState().views.map((v) => v.id)).toEqual(['a', 'b']);
+    expect(useStore.getState().activeViewId).toBe('b');
+    expect(useStore.getState().activeSurface?.id).toBe('b');
+
+    useStore.getState().openSurface({ ...(mk('a') as never), title: 'A2' });
+    expect(useStore.getState().views).toHaveLength(2);
+    expect(useStore.getState().views.find((v) => v.id === 'a')?.title).toBe('A2');
+    expect(useStore.getState().activeViewId).toBe('a');
+  });
+
+  it('selectView toggles the active tab and its content together', () => {
+    reset();
+    useStore.getState().openSurface(mk('a') as never);
+    useStore.getState().openSurface(mk('b') as never);
+    useStore.getState().selectView('a');
+    expect(useStore.getState().activeViewId).toBe('a');
+    expect(useStore.getState().activeSurface?.id).toBe('a');
+  });
+
+  it('closeView removes a tab and re-activates the neighbour', () => {
+    reset();
+    useStore.getState().openSurface(mk('a') as never);
+    useStore.getState().openSurface(mk('b') as never);
+    useStore.getState().closeView('b');
+    expect(useStore.getState().views.map((v) => v.id)).toEqual(['a']);
+    expect(useStore.getState().activeViewId).toBe('a');
+    expect(useStore.getState().activeSurface?.id).toBe('a');
+
+    useStore.getState().closeView('a');
+    expect(useStore.getState().views).toEqual([]);
+    expect(useStore.getState().activeSurface).toBeNull();
+    expect(useStore.getState().activeViewId).toBeNull();
+  });
+});

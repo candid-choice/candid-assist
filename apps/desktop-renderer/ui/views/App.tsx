@@ -59,6 +59,7 @@ function App() {
   const activeViewId = useStoreSelector((s) => s.activeViewId);
   const views = useStoreSelector((s) => s.views);
   const setActiveView = useStoreSelector((s) => s.setActiveView);
+  const closeView = useStoreSelector((s) => s.closeView);
 
   // ── Render ────────────────────────────────────────────────────────────
   const addressBarTabs = views.map((v) => ({
@@ -98,6 +99,7 @@ function App() {
                 tabs={addressBarTabs}
                 activeTabId={activeViewId}
                 onTabClick={setActiveView}
+                onTabClose={closeView}
               />
               <div className="ha-chrome-spacer" />
             </div>

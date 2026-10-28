@@ -9,7 +9,7 @@ Starts on port 3615, retries 3616–3624 if in use.
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 
-import { resolveGuestEntry, listGuestSurfaceIds } from "./guest-registry";
+import { resolveGuestEntry, listGuestSurfaceIds, unregisterGuest } from "./guest-registry";
 import { v4 as uuidv4 } from "uuid";
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -608,18 +608,33 @@ const __toolName = (params as Record<string, unknown>)["name"];
 
   try {
     const result = await handler((params as Record<string, unknown>)["arguments"]);
-    // Broadcast the surface push to renderer WS clients.
-    const surfaceId = (result as Record<string, unknown>)?.["surfaceId"] as string;
-    const entry = openSurfaces.get(surfaceId);
-    notifySurfacePush({
-      surfaceId,
-      type: entry?.type ?? "unknown",
-      payload: ((params as Record<string, unknown>)["arguments"] ?? {}) as Record<string, unknown>,
-      status: "pushed",
-      ...(ctx.agentSessionId || ctx.agentClient
+    const agentTag =
+      ctx.agentSessionId || ctx.agentClient
         ? { agent: { client: ctx.agentClient ?? "agent", agentSessionId: ctx.agentSessionId ?? null } }
-        : {}),
-    });
+        : {};
+    const resultSurfaceId = (result as Record<string, unknown>)?.["surfaceId"] as string | undefined;
+    if (resultSurfaceId && openSurfaces.has(resultSurfaceId)) {
+      // Real surface (open* tools): broadcast the push for rendering.
+      const entry = openSurfaces.get(resultSurfaceId);
+      notifySurfacePush({
+        surfaceId: resultSurfaceId,
+        type: entry?.type ?? "unknown",
+        payload: ((params as Record<string, unknown>)["arguments"] ?? {}) as Record<string, unknown>,
+        status: "pushed",
+        ...agentTag,
+      });
+    } else if (ctx.agentSessionId || ctx.agentClient) {
+      // Non-surface agent action (browser ops, showMessage, …): record
+      // it against the harness session without opening a surface.
+      const event = JSON.stringify({
+        event: "ui:action",
+        data: { tool: toolName, surfaceId: resultSurfaceId ?? null, ...agentTag },
+        timestamp: Date.now(),
+      });
+      for (const client of wsClients) {
+        if (client.readyState === WebSocket.OPEN) client.send(event);
+      }
+    }
     return { response: { jsonrpc: "2.0", result, id } };
   } catch (err) {
     const error = err as Error;
@@ -937,6 +952,7 @@ export function closeSurface(surfaceId: string): void {
     surface.status = "closed";
     notifySurfacePush({ surfaceId, type: surface.type, payload: surface.payload, status: "closed" });
     openSurfaces.delete(surfaceId);
+    unregisterGuest(surfaceId);
   }
 }
 
