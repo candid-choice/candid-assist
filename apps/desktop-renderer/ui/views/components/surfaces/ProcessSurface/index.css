@@ -1,0 +1,54 @@
+.ha-process-surface {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+}
+.ha-process-summary { font-size: 12px; color: var(--ha-text-secondary); }
+.ha-process-empty { font-size: 13px; color: var(--ha-text-tertiary); padding: 12px 0; }
+.ha-process-card {
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-md);
+  background: var(--ha-surface);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ha-process-head { display: flex; align-items: center; gap: 8px; }
+.ha-process-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.ha-process-dot--running { background: #28a745; }
+.ha-process-dot--stopped { background: #e0a800; }
+.ha-process-dot--crashed { background: #dc3545; }
+.ha-process-dot--exited { background: #8a8178; }
+.ha-process-name { font-weight: 600; font-size: 13px; color: var(--ha-text); }
+.ha-process-status { font-size: 11px; color: var(--ha-text-secondary); margin-left: auto; }
+.ha-process-cmd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--ha-text-secondary);
+}
+.ha-process-latest { font-size: 12px; color: var(--ha-text); }
+.ha-process-actions { display: flex; gap: 8px; margin-top: 4px; }
+.ha-process-btn {
+  padding: 3px 10px;
+  font-size: 12px;
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-sm);
+  background: transparent;
+  color: var(--ha-text);
+  cursor: pointer;
+}
+.ha-process-btn:hover { background: var(--ha-primary-light); }
+.ha-process-log {
+  margin: 6px 0 0;
+  padding: 8px;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border-radius: var(--ha-radius-sm);
+  font-size: 11px;
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+}

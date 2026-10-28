@@ -114,7 +114,7 @@ describe('MCP tools/call router', () => {
       method: 'POST',
       body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
     }).then((r) => r.json());
-    expect(res.result.tools).toHaveLength(15);
+    expect(res.result.tools).toHaveLength(20);
     const names = res.result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain('openBrowserSurface');
     expect(names).toContain('openInputSurface');
@@ -233,5 +233,32 @@ describe('validation rules (pre-mcp-validation)', () => {
   it('rejects invalid image src with MCP_016', async () => {
     const res = await call({ name: 'openImageSurface', arguments: { src: 'not a url' } });
     expect(res.error?.message).toContain('MCP_016');
+  });
+});
+
+describe('process manager tools', () => {
+  it('startProcess launches, getProcessLog tails, stopProcess kills', async () => {
+    const start = await call({ name: 'startProcess', arguments: { name: 'ticker', command: 'echo proc-mcp-ok' } });
+    expect(start.result?.processId).toMatch(/^proc_/);
+    const id = start.result.processId as string;
+
+    await new Promise((r) => setTimeout(r, 700));
+    const log = await call({ name: 'getProcessLog', arguments: { id } });
+    expect(log.result?.output.join('\n')).toContain('proc-mcp-ok');
+
+    const stop = await call({ name: 'stopProcess', arguments: { id } });
+    expect(stop.result?.status).toBe('killing');
+  });
+
+  it('openProcessManager creates a processManager surface', async () => {
+    const res = await call({ name: 'openProcessManager', arguments: {} });
+    expect(['opened', 'updated']).toContain(res.result?.status);
+  });
+
+  it('validates startProcess args', async () => {
+    const noName = await call({ name: 'startProcess', arguments: { command: 'true' } });
+    expect(noName.error?.message).toContain('MCP_017');
+    const noCmd = await call({ name: 'startProcess', arguments: { name: 'x' } });
+    expect(noCmd.error?.message).toContain('MCP_018');
   });
 });

@@ -4,6 +4,7 @@
 // and a type-specific payload.
 
 export type SurfaceType =
+  | 'processManager'
   | 'browser'
   | 'image'
   | 'canvas'
@@ -37,6 +38,20 @@ export interface SurfaceConfig<T = unknown> {
 }
 
 // ── Surface Payload Shapes ─────────────────────────────────────────────────
+
+export interface ProcessManagerPayload {
+  processes?: Array<{
+    id: string;
+    name: string;
+    command: string;
+    cwd: string;
+    startedAt: number;
+    stoppedAt?: number;
+    status: 'running' | 'stopped' | 'crashed' | 'exited';
+    exitCode: number | null;
+    output: string[];
+  }>;
+}
 
 export interface BrowserPayload {
   url: string;

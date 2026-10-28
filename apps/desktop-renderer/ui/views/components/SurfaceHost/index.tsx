@@ -19,6 +19,7 @@ import { queueAction } from "../../errors/offline-queue";
 import type { EmbeddedSurface, SurfaceUserResponse } from "../../services/sync/types";
 
 import { BrowserSurface } from "../surfaces/BrowserSurface";
+import { ProcessSurface } from "../surfaces/ProcessSurface";
 import { CanvasSurface } from "../surfaces/CanvasSurface";
 import { ImageSurface } from "../surfaces/ImageSurface";
 import { InputSurface } from "../surfaces/InputSurface";
@@ -109,6 +110,15 @@ export function SurfaceHost({
 
   const renderSurface = () => {
     switch (config.type) {
+      case "processManager":
+        return (
+          <ProcessSurface
+            processes={
+              (config as SurfaceConfig<{ processes?: never }>).payload
+                ?.processes ?? []
+            }
+          />
+        );
       case "browser":
         return (
           <BrowserSurface

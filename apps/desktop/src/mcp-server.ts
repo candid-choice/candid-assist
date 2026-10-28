@@ -10,6 +10,15 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { WebSocketServer, WebSocket } from "ws";
 
 import { resolveGuestEntry, listGuestSurfaceIds, unregisterGuest } from "./guest-registry";
+import {
+  startProcess as registryStart,
+  stopProcess as registryStop,
+  restartProcess as registryRestart,
+  getProcess as registryGet,
+  snapshotProcesses,
+  onProcessEvent,
+  type ManagedProcess,
+} from "./process-registry";
 import { v4 as uuidv4 } from "uuid";
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -187,6 +196,101 @@ function isValidUrl(value: unknown): boolean {
 
 function generateSurfaceId(): string {
   return `surf_${uuidv4().replace(/-/g, "").slice(0, 8)}`;
+}
+
+// ── Process manager (agent-launched background processes) ────────────────
+
+let processSurfaceId: string | undefined;
+let procBroadcastTimer: ReturnType<typeof setTimeout> | undefined;
+
+function broadcastProcessSnapshot(): void {
+  if (!processSurfaceId || !openSurfaces.has(processSurfaceId)) return;
+  if (procBroadcastTimer) return; // 500 ms throttle
+  procBroadcastTimer = setTimeout(() => {
+    procBroadcastTimer = undefined;
+    notifySurfacePush({
+      surfaceId: processSurfaceId!,
+      type: "processManager",
+      payload: { processes: snapshotProcesses() },
+      status: "pushed",
+    });
+  }, 500);
+}
+
+onProcessEvent(() => broadcastProcessSnapshot());
+
+function handleOpenProcessManager(): Record<string, unknown> {
+  if (processSurfaceId && openSurfaces.has(processSurfaceId)) {
+    notifySurfacePush({
+      surfaceId: processSurfaceId,
+      type: "processManager",
+      payload: { processes: snapshotProcesses() },
+      status: "pushed",
+    });
+    return { surfaceId: processSurfaceId, status: "updated" };
+  }
+  if (openSurfaces.size >= MAX_SURFACES) {
+    throw new Error("MCP_002: Maximum surfaces reached");
+  }
+  const id = generateSurfaceId();
+  openSurfaces.set(id, {
+    surfaceId: id,
+    type: "processManager",
+    payload: { processes: snapshotProcesses() },
+    createdAt: Date.now(),
+    lastActive: Date.now(),
+    status: "open",
+  });
+  processSurfaceId = id;
+  return { surfaceId: id, status: "opened" };
+}
+
+function handleStartProcessTool(args: unknown): Record<string, unknown> {
+  const obj = (args ?? {}) as Record<string, unknown>;
+  const name = typeof obj["name"] === "string" ? obj["name"].trim().slice(0, 80) : "";
+  const command = typeof obj["command"] === "string" ? obj["command"] : "";
+  if (!name) throw new Error("MCP_017: name required");
+  if (!command) throw new Error("MCP_018: command required");
+  if (command.length > MAX_COMMAND_LEN) {
+    throw new Error("MCP_014: Command exceeds " + MAX_COMMAND_LEN + " characters");
+  }
+  const cwd = typeof obj["cwd"] === "string" ? obj["cwd"] : undefined;
+  const proc = registryStart({ name, command, cwd });
+  handleOpenProcessManager();
+  return { processId: proc.id, status: proc.status, name: proc.name };
+}
+
+function handleStopProcessTool(args: unknown): Record<string, unknown> {
+  const obj = (args ?? {}) as Record<string, unknown>;
+  const id = typeof obj["id"] === "string" ? obj["id"] : "";
+  if (!id) throw new Error("MCP_019: id required");
+  const proc = registryStop(id);
+  broadcastProcessSnapshot();
+  return { processId: proc.id, status: "killing" };
+}
+
+function handleRestartProcessTool(args: unknown): Record<string, unknown> {
+  const obj = (args ?? {}) as Record<string, unknown>;
+  const id = typeof obj["id"] === "string" ? obj["id"] : "";
+  if (!id) throw new Error("MCP_019: id required");
+  const proc = registryRestart(id);
+  broadcastProcessSnapshot();
+  return { processId: proc.id, status: proc.status, name: proc.name };
+}
+
+function handleGetProcessLog(args: unknown): Record<string, unknown> {
+  const obj = (args ?? {}) as Record<string, unknown>;
+  const id = typeof obj["id"] === "string" ? obj["id"] : "";
+  if (!id) throw new Error("MCP_019: id required");
+  const proc = registryGet(id);
+  if (!proc) throw new Error("PROC_002: unknown process \"" + id + "\"");
+  return {
+    processId: proc.id,
+    name: proc.name,
+    status: proc.status,
+    exitCode: proc.exitCode,
+    output: proc.output.slice(-100),
+  };
 }
 
 // ── MCP Handlers ──────────────────────────────────────────────────────────
@@ -492,6 +596,39 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'openProcessManager',
+    description: 'Open (or refresh) the Processes dashboard surface: live list of agent-launched background processes with status, output tail, and user kill/restart controls.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'startProcess',
+    description: 'Start a background process (dev server, test runner, watcher) supervised by the desktop app. Appears in the Processes surface; user can stop/restart it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Human label, e.g. "Dev Server"' },
+        command: { type: 'string', description: 'Shell command (<=512 chars)' },
+        cwd: { type: 'string', description: 'Working directory (defaults to app cwd)' },
+      },
+      required: ['name', 'command'],
+    },
+  },
+  {
+    name: 'stopProcess',
+    description: 'Stop a managed background process by id (SIGTERM).',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+  },
+  {
+    name: 'restartProcess',
+    description: 'Restart a managed background process (kill + start with same command/cwd).',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+  },
+  {
+    name: 'getProcessLog',
+    description: 'Fetch the recent output tail (last 100 lines) of a managed process.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+  },
+  {
     name: 'showMessage',
     description: 'Show a transient toast message in the Human Assist desktop app (proof-of-path from pi, notifications, status updates).',
     inputSchema: {
@@ -535,6 +672,11 @@ const TOOL_HANDLERS: Record<
   browserType: handleBrowserType,
   browserScreenshot: handleBrowserScreenshot,
   browserHandoff: handleBrowserHandoff,
+  openProcessManager: () => handleOpenProcessManager(),
+  startProcess: handleStartProcessTool,
+  stopProcess: handleStopProcessTool,
+  restartProcess: handleRestartProcessTool,
+  getProcessLog: handleGetProcessLog,
 };
 
 // ── MCP Server (HTTP + SSE) ───────────────────────────────────────────────
@@ -777,7 +919,16 @@ function startWebSocketServer(port: number): WebSocketServer {
     client.on("error", () => wsClients.delete(client));
     client.on("message", (data) => {
       try {
-        const msg = JSON.parse(data.toString()) as { type?: unknown; surfaceId?: unknown };
+        const msg = JSON.parse(data.toString()) as { type?: unknown; surfaceId?: unknown; id?: unknown; action?: unknown };
+        if (msg && msg.type === "process:control" && typeof msg.id === "string") {
+          try {
+            if (msg.action === "kill") registryStop(msg.id);
+            else if (msg.action === "restart") registryRestart(msg.id);
+            broadcastProcessSnapshot();
+          } catch (e) {
+            console.warn("[proc] control failed:", (e as Error).message);
+          }
+        }
         if (msg && msg.type === "handoff:complete" && typeof msg.surfaceId === "string") {
           if (browserHandoffs.delete(msg.surfaceId)) {
             notifyHandoff(msg.surfaceId, false, "human-completed");
