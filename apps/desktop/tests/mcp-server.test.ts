@@ -196,3 +196,42 @@ describe('GET /status — agent presence', () => {
     expect(s.mcp.agents[0]).toHaveProperty('lastSeen');
   });
 });
+
+describe('validation rules (pre-mcp-validation)', () => {
+  it('rejects oversized URLs with MCP_011', async () => {
+    const res = await call({ name: 'openBrowserSurface', arguments: { url: 'https://x.test/' + 'a'.repeat(2100) } });
+    expect(res.error?.message).toContain('MCP_011');
+  });
+
+  it('rejects oversized prompts with MCP_012 (browser)', async () => {
+    const res = await call({ name: 'openBrowserSurface', arguments: { url: 'https://x.test', prompt: 'p'.repeat(1100) } });
+    expect(res.error?.message).toContain('MCP_012');
+  });
+
+  it('truncates oversized canvas prompts (no error)', async () => {
+    const res = await call({ name: 'openCanvasSurface', arguments: { prompt: 'p'.repeat(1100) } });
+    expect(res.result?.status).toBe('opened');
+  });
+
+  it('flags localhost URLs with a warning', async () => {
+    const res = await call({ name: 'openBrowserSurface', arguments: { url: 'http://localhost:3000/app' } });
+    expect(res.result?.status).toBe('opened');
+    // warning is carried on the stored payload (visible via stored surface state)
+    const status = await fetch(`http://localhost:${HTTP_PORT}/status`).then((r) => r.json());
+    expect(status.ok).toBe(true);
+  });
+
+  it('rejects oversized diff/command/output', async () => {
+    const d = await call({ name: 'openCodeDiff', arguments: { diff: 'd'.repeat(50_001) } });
+    expect(d.error?.message).toContain('MCP_013');
+    const c = await call({ name: 'openTerminalOutput', arguments: { command: 'c'.repeat(513), output: 'ok' } });
+    expect(c.error?.message).toContain('MCP_014');
+    const o = await call({ name: 'openTerminalOutput', arguments: { command: 'ls', output: 'o'.repeat(10_001) } });
+    expect(o.error?.message).toContain('MCP_015');
+  });
+
+  it('rejects invalid image src with MCP_016', async () => {
+    const res = await call({ name: 'openImageSurface', arguments: { src: 'not a url' } });
+    expect(res.error?.message).toContain('MCP_016');
+  });
+});

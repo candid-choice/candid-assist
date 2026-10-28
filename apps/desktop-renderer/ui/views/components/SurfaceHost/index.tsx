@@ -115,6 +115,7 @@ export function SurfaceHost({
             url={(config as SurfaceConfig<BrowserPayload>).payload?.url ?? ""}
             onUrlChange={handleNavigate}
             surfaceId={config.id}
+            warning={(config as SurfaceConfig<BrowserPayload>).payload?.warning}
           />
         );
       case "image":

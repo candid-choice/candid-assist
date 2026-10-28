@@ -42,6 +42,10 @@ export interface BrowserPayload {
   url: string;
   /** Optional initial URL the browser should navigate to */
   initialUrl?: string;
+  /** Optional prompt/caption from the agent */
+  prompt?: string;
+  /** Agent-set confirmation banner (e.g. localhost warning) */
+  warning?: string;
 }
 
 export interface ImagePayload {

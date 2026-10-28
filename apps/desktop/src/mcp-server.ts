@@ -120,6 +120,55 @@ export function getMcpStatus(): McpStatus {
   };
 }
 
+// ── Validation rules (per user-plans/pre-mcp-validation.md) ──────────────
+
+const MAX_URL_LEN = 2048;
+const MAX_PROMPT_LEN = 1024;
+const MAX_DIFF_LEN = 50_000;
+const MAX_COMMAND_LEN = 512;
+const MAX_OUTPUT_LEN = 10_000;
+
+function requireUrl(value: unknown, code = "MCP_001"): string {
+  if (typeof value !== "string") {
+    throw new Error(`${code}: Invalid URL`);
+  }
+  if (value.length > MAX_URL_LEN) {
+    throw new Error("MCP_011: URL exceeds " + MAX_URL_LEN + " characters");
+  }
+  if (!isValidUrl(value)) {
+    throw new Error(`${code}: Invalid URL`);
+  }
+  return value;
+}
+
+function optPrompt(value: unknown, truncate = false): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const p = value.trim();
+  if (p.length === 0) return undefined;
+  if (p.length > MAX_PROMPT_LEN) {
+    if (truncate) return p.slice(0, MAX_PROMPT_LEN - 3) + "...";
+    throw new Error("MCP_012: Prompt exceeds " + MAX_PROMPT_LEN + " characters");
+  }
+  return p;
+}
+
+function isLocalhostUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "[::1]" ||
+      host.endsWith(".local") ||
+      /^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    );
+  } catch {
+    return false;
+  }
+}
+
+const LOCALHOST_WARNING = "This URL is on localhost. Proceed?";
+
 // ── URL Validation ────────────────────────────────────────────────────────
 
 function isValidUrl(value: unknown): boolean {
@@ -144,10 +193,8 @@ function generateSurfaceId(): string {
 
 function handleOpenBrowserSurface(args: unknown): Record<string, unknown> {
   const obj = args as Record<string, unknown>;
-  const url = obj["url"] as string | undefined;
-  if (!url || !isValidUrl(url)) {
-    throw new Error("MCP_001: Invalid or missing URL");
-  }
+  const url = requireUrl(obj["url"]);
+  const prompt = optPrompt(obj["prompt"]);
   if (openSurfaces.size >= MAX_SURFACES) {
     throw new Error("MCP_002: Maximum surfaces reached");
   }
@@ -155,7 +202,11 @@ function handleOpenBrowserSurface(args: unknown): Record<string, unknown> {
   openSurfaces.set(id, {
     surfaceId: id,
     type: "browser",
-    payload: { url },
+    payload: {
+      url,
+      ...(prompt ? { prompt } : {}),
+      ...(isLocalhostUrl(url) ? { warning: LOCALHOST_WARNING } : {}),
+    },
     createdAt: Date.now(),
     lastActive: Date.now(),
     status: "open",
@@ -172,7 +223,7 @@ function handleOpenCanvasSurface(args: unknown): Record<string, unknown> {
   openSurfaces.set(id, {
     surfaceId: id,
     type: "canvas",
-    payload: { prompt: obj["prompt"] as string | undefined },
+    payload: { prompt: optPrompt(obj["prompt"], true) },
     createdAt: Date.now(),
     lastActive: Date.now(),
     status: "open",
@@ -207,10 +258,8 @@ function handleOpenInputSurface(args: unknown): Record<string, unknown> {
 
 function handleOpenImageSurface(args: unknown): Record<string, unknown> {
   const obj = args as Record<string, unknown>;
-  const src = obj["src"] as string | undefined;
-  if (!src || !isValidUrl(src)) {
-    throw new Error("MCP_001: Invalid or missing image URL");
-  }
+  const src = requireUrl(obj["src"], "MCP_016");
+  const imgPrompt = optPrompt(obj["prompt"]);
   if (openSurfaces.size >= MAX_SURFACES) {
     throw new Error("MCP_002: Maximum surfaces reached");
   }
@@ -218,7 +267,7 @@ function handleOpenImageSurface(args: unknown): Record<string, unknown> {
   openSurfaces.set(id, {
     surfaceId: id,
     type: "image",
-    payload: { src, prompt: obj["prompt"] as string | undefined },
+    payload: { src, ...(imgPrompt ? { prompt: imgPrompt } : {}) },
     createdAt: Date.now(),
     lastActive: Date.now(),
     status: "open",
@@ -250,6 +299,9 @@ function handleOpenScreenCapture(args: unknown): Record<string, unknown> {
 function handleOpenCodeDiff(args: unknown): Record<string, unknown> {
   const obj = args as Record<string, unknown>;
   const diff = obj["diff"] as string | undefined;
+  if (typeof diff === "string" && diff.length > MAX_DIFF_LEN) {
+    throw new Error("MCP_013: Diff exceeds " + MAX_DIFF_LEN + " characters");
+  }
   const files = obj["files"] as unknown[] | undefined;
   if (!diff || !files || !Array.isArray(files) || files.length === 0) {
     throw new Error("MCP_001: Invalid or missing diff data");
@@ -272,7 +324,13 @@ function handleOpenCodeDiff(args: unknown): Record<string, unknown> {
 function handleOpenTerminalOutput(args: unknown): Record<string, unknown> {
   const obj = args as Record<string, unknown>;
   const command = obj["command"] as string | undefined;
+  if (typeof command === "string" && command.length > MAX_COMMAND_LEN) {
+    throw new Error("MCP_014: Command exceeds " + MAX_COMMAND_LEN + " characters");
+  }
   const output = obj["output"] as string | undefined;
+  if (typeof output === "string" && output.length > MAX_OUTPUT_LEN) {
+    throw new Error("MCP_015: Output exceeds " + MAX_OUTPUT_LEN + " characters");
+  }
   if (!command || !output) {
     throw new Error("MCP_001: Invalid or missing terminal data");
   }

@@ -24,9 +24,11 @@ export interface BrowserSurfaceProps {
   onUrlChange: (url: string) => void;
   /** Surface id — required for agent browser tools + handoff. */
   surfaceId?: string;
+  /** Agent-supplied warning (e.g. localhost confirmation). */
+  warning?: string;
 }
 
-export function BrowserSurface({ url, onUrlChange, surfaceId }: BrowserSurfaceProps) {
+export function BrowserSurface({ url, onUrlChange, surfaceId, warning }: BrowserSurfaceProps) {
   const [urlInput, setUrlInput] = useState(url);
   const desktop = getDesktopBridge();
   const handoff = useStore((s) =>
@@ -122,6 +124,11 @@ export function BrowserSurface({ url, onUrlChange, surfaceId }: BrowserSurfacePr
 
   return (
     <SurfaceFrame addressBar={addressBar}>
+      {warning && (
+        <div className="ha-browser-warning" role="alert">
+          ⚠ {warning}
+        </div>
+      )}
       {desktop ? (
         <div className="ha-electron-webview-wrap">
           <webview
