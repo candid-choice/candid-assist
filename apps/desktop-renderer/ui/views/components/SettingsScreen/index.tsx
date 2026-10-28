@@ -119,6 +119,37 @@ function GeneralSettings() {
 
       <div className="ha-settings-row">
         <label className="ha-settings-label">
+          <span>Workspace folder</span>
+          <span className="ha-settings-workspace">
+            <input
+              type="text"
+              className="ha-settings-workspace-input"
+              value={settings.workspacePath}
+              placeholder="/path/to/project"
+              spellCheck={false}
+              onChange={(e) => set({ workspacePath: e.target.value })}
+            />
+            <button
+              type="button"
+              className="ha-settings-workspace-browse"
+              onClick={async () => {
+                const pick = (window as unknown as {
+                  desktop?: { system?: { pickFolder?: () => Promise<string | null> } };
+                }).desktop?.system?.pickFolder;
+                if (typeof pick === "function") {
+                  const dir = await pick();
+                  if (dir) set({ workspacePath: dir });
+                }
+              }}
+            >
+              Browse…
+            </button>
+          </span>
+        </label>
+      </div>
+
+      <div className="ha-settings-row">
+        <label className="ha-settings-label">
           <span>Auto-close surfaces after 30 min</span>
           <input
             type="checkbox"

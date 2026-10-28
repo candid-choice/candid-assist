@@ -28,6 +28,10 @@ export interface DesktopAPI {
     registerGuest: (surfaceId: string, webContentsId: number) => void;
     unregisterGuest: (surfaceId: string) => void;
   };
+  /** OS integrations (workspace folder picker etc.). */
+  system: {
+    pickFolder: () => Promise<string | null>;
+  };
   /** Runtime discriminator used by the renderer. */
   readonly runtime: 'electron';
 }
@@ -50,6 +54,9 @@ const api: DesktopAPI = {
       ipcRenderer.send('desktop:guest:register', { surfaceId, webContentsId }),
     unregisterGuest: (surfaceId) =>
       ipcRenderer.send('desktop:guest:unregister', { surfaceId }),
+  },
+  system: {
+    pickFolder: () => ipcRenderer.invoke('desktop:workspace:pick'),
   },
   runtime: 'electron',
 };

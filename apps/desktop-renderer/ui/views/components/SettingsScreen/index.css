@@ -189,3 +189,34 @@
 .ha-settings-btn--danger:hover {
   background: #fff5f5;
 }
+
+.ha-settings-workspace {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ha-settings-workspace-input {
+  width: 220px;
+  padding: 4px 8px;
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-sm);
+  background: var(--ha-surface);
+  color: var(--ha-text);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.ha-settings-workspace-browse {
+  padding: 4px 10px;
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-sm);
+  background: var(--ha-surface);
+  color: var(--ha-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ha-settings-workspace-browse:hover {
+  background: var(--ha-primary-light);
+}

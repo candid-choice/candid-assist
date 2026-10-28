@@ -10,7 +10,7 @@ Security: contextIsolation + sandbox, no nodeIntegration; remote views
 get no preload and a host-allowlist navigation policy.
 */
 
-import { app, BrowserWindow, WebContentsView, ipcMain, shell, webContents as webContentsNS } from 'electron';
+import { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, webContents as webContentsNS } from 'electron';
 
 import {
   registerGuest,
@@ -170,6 +170,14 @@ ipcMain.on('desktop:guest:register', (_e, msg: { surfaceId: string; webContentsI
   if (typeof msg?.surfaceId === 'string' && typeof msg?.webContentsId === 'number') {
     registerGuest(msg.surfaceId, msg.webContentsId);
   }
+});
+
+ipcMain.handle('desktop:workspace:pick', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
 });
 
 ipcMain.on('desktop:guest:unregister', (_e, msg: { surfaceId: string }) => {

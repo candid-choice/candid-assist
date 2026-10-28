@@ -90,7 +90,7 @@ export function fetchSession(sessionId: string): Promise<SessionDoc> {
 
 export function createSession(
   title: string,
-  workspacePath = '',
+  workspacePath = useStore.getState().settings.workspacePath ?? '',
   meta?: { agentSessionId?: string; agentClient?: string },
 ): Promise<SessionDoc> {
   return apiFetch<SessionDoc>('/sessions', {

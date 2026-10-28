@@ -40,12 +40,15 @@ export interface AppSettings {
   autoMinimize: boolean;
   desktopNotifications: boolean;
   autoCloseSurfaces: boolean;
+  /** Active workspace directory (used for session creation). */
+  workspacePath: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'light',
   autoMinimize: true,
   desktopNotifications: true,
+  workspacePath: '',
   autoCloseSurfaces: true,
 };
 
