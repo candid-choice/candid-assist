@@ -91,10 +91,11 @@ export function fetchSession(sessionId: string): Promise<SessionDoc> {
 export function createSession(
   title: string,
   workspacePath = '',
+  meta?: { agentSessionId?: string; agentClient?: string },
 ): Promise<SessionDoc> {
   return apiFetch<SessionDoc>('/sessions', {
     method: 'POST',
-    body: JSON.stringify({ title, workspacePath }),
+    body: JSON.stringify({ title, workspacePath, ...(meta ?? {}) }),
   });
 }
 
@@ -204,6 +205,10 @@ export async function executeSyncAction(action: {
       await createSession(
         String(action.data['title'] ?? 'Untitled'),
         String(action.data['workspacePath'] ?? ''),
+        {
+          agentSessionId: action.data['agentSessionId'] as string | undefined,
+          agentClient: action.data['agentClient'] as string | undefined,
+        },
       );
       break;
     }

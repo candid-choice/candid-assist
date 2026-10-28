@@ -138,6 +138,17 @@ class WsService {
     return () => this.listeners.delete(listener);
   }
 
+  /** Send a JSON message to the desktop MCP server (renderer → main),
+   *  e.g. { type: 'handoff:complete', surfaceId } to release browser
+   *  automation lock after the human finished a verification. */
+  send(message: Record<string, unknown>): boolean {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(message));
+      return true;
+    }
+    return false;
+  }
+
   // ── Internal ───────────────────────────────────────────────────────────
 
   private emitConnectionState(state: ConnectionState): void {

@@ -7,7 +7,9 @@ Starts on port 3615, retries 3616–3624 if in use.
 */
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { WebSocketServer, type WebSocket } from "ws";
+import { WebSocketServer, WebSocket } from "ws";
+
+import { resolveGuestEntry, listGuestSurfaceIds } from "./guest-registry";
 import { v4 as uuidv4 } from "uuid";
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -355,6 +357,83 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'bindAgentSession',
+    description: 'Bind your coding-agent session id (e.g. pi PI_SESSION_ID or Claude Code session id) to this MCP connection. Call once at session start; subsequent actions are recorded against it and appear as a user session in the Human Assist sidebar.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentSessionId: { type: 'string', description: 'Your coding-session id (PI_SESSION_ID etc)' },
+        client: { type: 'string', description: 'Client name override (pi | claude-code | ...)' },
+        title: { type: 'string', description: 'Optional session title' },
+      },
+      required: ['agentSessionId'],
+    },
+  },
+  {
+    name: 'browserNavigate',
+    description: 'Navigate an embedded Human Assist browser surface to an absolute http(s) URL.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Absolute http(s) URL' },
+        surfaceId: { type: 'string', description: 'Surface id (omit if only one browser surface is open)' },
+      },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'browserSnapshot',
+    description: 'Read an embedded browser surface: title, url, visible text, interactive elements, and captchaDetected (true when a CAPTCHA/human check is present — call browserHandoff so the human can solve it).',
+    inputSchema: {
+      type: 'object',
+      properties: { surfaceId: { type: 'string' } },
+    },
+  },
+  {
+    name: 'browserClick',
+    description: 'Click an element in an embedded browser surface by CSS selector or visible text.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        selector: { type: 'string', description: 'CSS selector' },
+        text: { type: 'string', description: 'Visible text of a link/button/label to match' },
+        surfaceId: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'browserType',
+    description: 'Type text into an input/textarea/contenteditable in an embedded browser surface (React-friendly native value set + input/change events).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        selector: { type: 'string', description: 'CSS selector of the input' },
+        text: { type: 'string', description: 'Text to enter' },
+        surfaceId: { type: 'string' },
+      },
+      required: ['selector', 'text'],
+    },
+  },
+  {
+    name: 'browserScreenshot',
+    description: 'Capture the embedded browser surface as a PNG data URL.',
+    inputSchema: {
+      type: 'object',
+      properties: { surfaceId: { type: 'string' } },
+    },
+  },
+  {
+    name: 'browserHandoff',
+    description: 'Pause agent control of a browser surface and hand it to the human (CAPTCHAs, logins, 2FA, any human verification). The pane shows the reason and a Done button; automation tools stay blocked on that surface until the human clicks Done.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        reason: { type: 'string', description: 'What the human should do (e.g. "solve the CAPTCHA")' },
+        surfaceId: { type: 'string' },
+      },
+    },
+  },
+  {
     name: 'showMessage',
     description: 'Show a transient toast message in the Human Assist desktop app (proof-of-path from pi, notifications, status updates).',
     inputSchema: {
@@ -380,7 +459,10 @@ const TOOL_DEFINITIONS = [
   },
 ];
 
-const TOOL_HANDLERS: Record<string, (args: unknown) => Record<string, unknown>> = {
+const TOOL_HANDLERS: Record<
+  string,
+  (args: unknown) => Record<string, unknown> | Promise<Record<string, unknown>>
+> = {
   openBrowserSurface: handleOpenBrowserSurface,
   openCanvasSurface: handleOpenCanvasSurface,
   openImageSurface: handleOpenImageSurface,
@@ -389,17 +471,51 @@ const TOOL_HANDLERS: Record<string, (args: unknown) => Record<string, unknown>> 
   openTerminalOutput: handleOpenTerminalOutput,
   openInputSurface: handleOpenInputSurface,
   showMessage: handleShowMessage,
+  browserNavigate: handleBrowserNavigate,
+  browserSnapshot: handleBrowserSnapshot,
+  browserClick: handleBrowserClick,
+  browserType: handleBrowserType,
+  browserScreenshot: handleBrowserScreenshot,
+  browserHandoff: handleBrowserHandoff,
 };
 
 // ── MCP Server (HTTP + SSE) ───────────────────────────────────────────────
 
+
+// ── Agent session binding (coding-session linkage for recording) ────────
+
+export interface McpAgentCtx {
+  /** Stable id of the transport connection (ws) or 'http'. */
+  connectionId: string;
+  clientInfo?: { name?: string; version?: string };
+  agentClient?: string;
+  agentSessionId?: string;
+}
+
+function handleBindAgentSession(args: unknown, ctx: McpAgentCtx): Record<string, unknown> {
+  const obj = (args ?? {}) as Record<string, unknown>;
+  const sid = obj["agentSessionId"];
+  if (typeof sid !== "string" || sid.length === 0 || sid.length > 200) {
+    throw new Error("MCP_005: agentSessionId must be a non-empty string (<=200 chars)");
+  }
+  const client = typeof obj["client"] === "string" ? (obj["client"] as string).slice(0, 60) : undefined;
+  const title = typeof obj["title"] === "string" ? (obj["title"] as string).slice(0, 100) : undefined;
+  ctx.agentSessionId = sid;
+  if (client) ctx.agentClient = client;
+  else if (!ctx.agentClient) ctx.agentClient = ctx.clientInfo?.name ?? "agent";
+  console.log("[mcp] bound connection " + ctx.connectionId + " -> client=" + (ctx.agentClient ?? "?") + " session=" + sid);
+  return { status: "bound", agentSessionId: sid, client: ctx.agentClient ?? null, title: title ?? null };
+}
 
 // ── Shared MCP JSON-RPC dispatch (HTTP POST /mcp + WebSocket transport) ──
 
 /** Process one MCP JSON-RPC message. Returns response === null for
  *  notifications (nothing to reply). Used by both transports so tool
  *  behavior and surface broadcasts stay identical. */
-export function processMcpMessage(parsed: unknown): { response: unknown | null } {
+export async function processMcpMessage(
+  parsed: unknown,
+  ctx: McpAgentCtx = { connectionId: "http" },
+): Promise<{ response: unknown | null }> {
   const p = (parsed ?? {}) as Record<string, unknown>;
   const jsonrpc = p["jsonrpc"];
   const method = p["method"];
@@ -412,6 +528,14 @@ export function processMcpMessage(parsed: unknown): { response: unknown | null }
 
   if (method === "initialize") {
     const init = (params ?? {}) as Record<string, unknown>;
+    const ci = init["clientInfo"] as Record<string, unknown> | undefined;
+    if (ci) {
+      ctx.clientInfo = {
+        name: typeof ci["name"] === "string" ? (ci["name"] as string) : undefined,
+        version: typeof ci["version"] === "string" ? (ci["version"] as string) : undefined,
+      };
+      if (!ctx.agentClient && ctx.clientInfo.name) ctx.agentClient = ctx.clientInfo.name;
+    }
     return {
       response: {
         jsonrpc: "2.0",
@@ -448,6 +572,34 @@ export function processMcpMessage(parsed: unknown): { response: unknown | null }
     return { response: { jsonrpc: "2.0", error: { code: -32600, message: "Invalid request" }, id } };
   }
 
+  // Auto-bind agent identity from tool arguments (injected by the
+  // human-assist-identity pi extension): per-call identity == per-
+  // connection identity because each harness process owns one WS conn.
+  {
+    const args = (params as Record<string, unknown>)["arguments"];
+    if (args && typeof args === "object") {
+      const a = args as Record<string, unknown>;
+      if (typeof a["agentSessionId"] === "string" && (a["agentSessionId"] as string).length > 0 && (a["agentSessionId"] as string).length <= 200) {
+        if (ctx.agentSessionId !== a["agentSessionId"]) {
+          console.log("[mcp] auto-bind conn=" + ctx.connectionId + " client=" + (ctx.agentClient ?? "agent") + " harness=" + a["agentSessionId"]);
+        }
+        ctx.agentSessionId = a["agentSessionId"] as string;
+      }
+      if (typeof a["agentClient"] === "string" && (a["agentClient"] as string).length > 0 && (a["agentClient"] as string).length <= 60) {
+        ctx.agentClient = a["agentClient"] as string;
+      }
+    }
+  }
+
+const __toolName = (params as Record<string, unknown>)["name"];
+  if (__toolName === "bindAgentSession") {
+    try {
+      return { response: { jsonrpc: "2.0", result: handleBindAgentSession((params as Record<string, unknown>)["arguments"], ctx), id } };
+    } catch (err) {
+      return { response: { jsonrpc: "2.0", error: { code: -32603, message: (err as Error).message }, id } };
+    }
+  }
+
   const toolName = (params as Record<string, unknown>)["name"] as string;
   const handler = TOOL_HANDLERS[toolName];
   if (!handler) {
@@ -455,7 +607,7 @@ export function processMcpMessage(parsed: unknown): { response: unknown | null }
   }
 
   try {
-    const result = handler((params as Record<string, unknown>)["arguments"]);
+    const result = await handler((params as Record<string, unknown>)["arguments"]);
     // Broadcast the surface push to renderer WS clients.
     const surfaceId = (result as Record<string, unknown>)?.["surfaceId"] as string;
     const entry = openSurfaces.get(surfaceId);
@@ -464,6 +616,9 @@ export function processMcpMessage(parsed: unknown): { response: unknown | null }
       type: entry?.type ?? "unknown",
       payload: ((params as Record<string, unknown>)["arguments"] ?? {}) as Record<string, unknown>,
       status: "pushed",
+      ...(ctx.agentSessionId || ctx.agentClient
+        ? { agent: { client: ctx.agentClient ?? "agent", agentSessionId: ctx.agentSessionId ?? null } }
+        : {}),
     });
     return { response: { jsonrpc: "2.0", result, id } };
   } catch (err) {
@@ -492,7 +647,7 @@ function createMcpServer(port: number): { server: ReturnType<typeof createServer
     if (req.url === "/mcp" && req.method === "POST") {
       let body = "";
       req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
-      req.on("end", () => {
+      req.on("end", async () => {
         let parsed: unknown;
         try {
           parsed = JSON.parse(body);
@@ -511,7 +666,7 @@ function createMcpServer(port: number): { server: ReturnType<typeof createServer
           touchAgent(p["params"], ip);
           logMcpRequest(String(p["method"]), p["id"], ip, req.socket.remotePort ?? 0);
         }
-        const { response } = processMcpMessage(parsed);
+        const { response } = await processMcpMessage(parsed);
         if (response === null) {
           res.writeHead(202);
           res.end();
@@ -547,6 +702,19 @@ function startWebSocketServer(port: number): WebSocketServer {
     wsClients.add(client);
     client.on("close", () => wsClients.delete(client));
     client.on("error", () => wsClients.delete(client));
+    client.on("message", (data) => {
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: unknown; surfaceId?: unknown };
+        if (msg && msg.type === "handoff:complete" && typeof msg.surfaceId === "string") {
+          if (browserHandoffs.delete(msg.surfaceId)) {
+            notifyHandoff(msg.surfaceId, false, "human-completed");
+            console.log("[browser] handoff CLOSE on " + msg.surfaceId + " (human done)");
+          }
+        }
+      } catch {
+        /* ignore malformed renderer messages */
+      }
+    });
   });
   console.log(`WebSocket server listening on port ${port}`);
   return ws;
@@ -563,6 +731,160 @@ function notifySurfacePush(payload: Record<string, unknown>): void {
       client.send(event);
     }
   }
+}
+
+// ── Browser automation (agent-driven embedded views + human handoff) ─────
+
+interface HandoffState { reason?: string; ts: number }
+const browserHandoffs = new Map<string, HandoffState>();
+const HANDOFF_TTL_MS = 10 * 60_000;
+
+function activeHandoff(surfaceId: string): HandoffState | undefined {
+  const h = browserHandoffs.get(surfaceId);
+  if (!h) return undefined;
+  if (Date.now() - h.ts > HANDOFF_TTL_MS) {
+    browserHandoffs.delete(surfaceId);
+    notifyHandoff(surfaceId, false, "expired");
+    return undefined;
+  }
+  return h;
+}
+
+function assertHumanControlFree(surfaceId?: string): void {
+  if (!surfaceId) {
+    if (browserHandoffs.size > 0) {
+      throw new Error("BROWSER_005: awaiting human input on " + [...browserHandoffs.keys()].join(", ") + " — resolve handoff first");
+    }
+    return;
+  }
+  if (activeHandoff(surfaceId)) {
+    throw new Error(`BROWSER_005: awaiting human input on "${surfaceId}" — the human must click Done (or call browserHandoff is still open)`);
+  }
+}
+
+function notifyHandoff(surfaceId: string, active: boolean, reason?: string): void {
+  const event = JSON.stringify({
+    event: "surface:handoff",
+    data: { surfaceId, active, reason: reason ?? null },
+    timestamp: Date.now(),
+  });
+  for (const client of wsClients) {
+    if (client.readyState === WebSocket.OPEN) client.send(event);
+  }
+}
+
+const SNAPSHOT_JS = `(() => {
+  const captcha = !!document.querySelector('[class*="recaptcha" i],[id*="recaptcha" i],iframe[src*="recaptcha"],[class*="cf-turnstile" i],[class*="hcaptcha" i],[name*="captcha" i]');
+  const inter = [...document.querySelectorAll('a,button,input,select,textarea,[role=button],[onclick]')].slice(0, 40).map(e => ({
+    tag: e.tagName.toLowerCase(),
+    text: ((e.innerText) || (e.value) || e.getAttribute('aria-label') || '').trim().slice(0, 60),
+    id: e.id || undefined,
+    type: e.type || undefined,
+  }));
+  return {
+    title: document.title,
+    url: location.href,
+    text: (document.body ? document.body.innerText : '').slice(0, 8000),
+    captchaDetected: captcha,
+    interactive: inter,
+  };
+})()`;
+
+function clickJs(selector: string | null, text: string | null): string {
+  return `(() => {
+    const sel = ${JSON.stringify(selector)};
+    const txt = ${JSON.stringify(text)};
+    let el = null;
+    if (sel) el = document.querySelector(sel);
+    if (!el && txt) {
+      const norm = (s) => (s || '').trim().toLowerCase();
+      const all = [...document.querySelectorAll('a,button,input,[role=button],[onclick],label,summary')];
+      el = all.find((e) => norm(e.innerText) === norm(txt) || norm(e.value) === norm(txt))
+        || all.find((e) => norm(e.innerText).includes(norm(txt)));
+    }
+    if (!el) return { ok: false };
+    el.scrollIntoView({ block: 'center' });
+    el.click();
+    return { ok: true, desc: el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') };
+  })()`;
+}
+
+function typeJs(selector: string, value: string): string {
+  return `(() => {
+    const el = document.querySelector(${JSON.stringify(selector)});
+    if (!el) return { ok: false };
+    if (el.isContentEditable) {
+      el.focus();
+      el.innerText = ${JSON.stringify(value)};
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return { ok: true };
+    }
+    const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const set = Object.getOwnPropertyDescriptor(proto, 'value').set;
+    set.call(el, ${JSON.stringify(value)});
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return { ok: true };
+  })()`;
+}
+
+async function handleBrowserNavigate(args: unknown): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const url = typeof o["url"] === "string" ? o["url"] : "";
+  if (!/^https?:\/\/.+/i.test(url)) throw new Error("BROWSER_006: url must be an absolute http(s) URL");
+  const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
+  assertHumanControlFree(id);
+  await handle.loadURL(url);
+  return { status: "navigated", surfaceId: id, url };
+}
+
+async function handleBrowserSnapshot(args: unknown): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
+  const snap = (await handle.executeJavaScript(SNAPSHOT_JS)) as Record<string, unknown>;
+  return { surfaceId: id, handoffActive: !!activeHandoff(id), ...snap };
+}
+
+async function handleBrowserClick(args: unknown): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const selector = typeof o["selector"] === "string" ? o["selector"] : null;
+  const text = typeof o["text"] === "string" ? o["text"] : null;
+  if (!selector && !text) throw new Error("BROWSER_007: provide selector or text");
+  const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
+  assertHumanControlFree(id);
+  const res = (await handle.executeJavaScript(clickJs(selector, text))) as { ok: boolean; desc?: string };
+  if (!res.ok) throw new Error("BROWSER_008: element not found");
+  return { status: "clicked", surfaceId: id, element: res.desc ?? null };
+}
+
+async function handleBrowserType(args: unknown): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const selector = typeof o["selector"] === "string" ? o["selector"] : "";
+  const text = typeof o["text"] === "string" ? o["text"] : "";
+  if (!selector) throw new Error("BROWSER_009: selector required");
+  const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
+  assertHumanControlFree(id);
+  const res = (await handle.executeJavaScript(typeJs(selector, text))) as { ok: boolean };
+  if (!res.ok) throw new Error("BROWSER_010: input element not found");
+  return { status: "typed", surfaceId: id, selector };
+}
+
+async function handleBrowserScreenshot(args: unknown): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
+  const img = await handle.capturePage();
+  return { status: "captured", surfaceId: id, url: handle.getURL(), dataUrl: img.toDataURL() };
+}
+
+function handleBrowserHandoff(args: unknown): Record<string, unknown> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const reason = typeof o["reason"] === "string" ? o["reason"].slice(0, 300) : "agent needs a human";
+  // Requires a concrete surface (or sole guest).
+  const { id } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
+  browserHandoffs.set(id, { reason, ts: Date.now() });
+  notifyHandoff(id, true, reason);
+  console.log(`[browser] handoff OPEN on ${id}: ${reason}`);
+  return { status: "awaiting_human", surfaceId: id, reason, registeredSurfaces: listGuestSurfaceIds() };
 }
 
 // ── UI messages (pi -> renderer toasts) ─────────────────────────────────

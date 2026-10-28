@@ -16,7 +16,7 @@ connection state: socket open + initialized + heartbeat-alive.
 import { randomUUID } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 
-import { processMcpMessage, setWsPresenceProvider } from "./mcp-server";
+import { processMcpMessage, setWsPresenceProvider, type McpAgentCtx } from "./mcp-server";
 
 const HEARTBEAT_MS = 15_000;
 const MAX_PAYLOAD = 1024 * 1024;
@@ -50,10 +50,11 @@ export function startMcpWebSocketServer(opts: WsMcpStartOptions = {}): void {
     const id = randomUUID().slice(0, 8);
     const peer = `${req.socket.remoteAddress}:${req.socket.remotePort ?? "?"}`;
     const conn: McpWsConnection = { id, socket, isAlive: true, initialized: false, peer };
+    const ctx: McpAgentCtx = { connectionId: id };
     connections.set(id, conn);
     console.log(`[mcp-ws] + connected ${id} from ${peer}`);
 
-    socket.on("message", (data: Buffer | string, isBinary: boolean) => {
+    socket.on("message", async (data: Buffer | string, isBinary: boolean) => {
       if (isBinary) {
         console.warn(`[mcp-ws] ${id}: binary frames not supported`);
         socket.close(1003, "Text frames required");
@@ -77,7 +78,7 @@ export function startMcpWebSocketServer(opts: WsMcpStartOptions = {}): void {
           `[mcp-ws] ${id}: initialize from client=${String(ci["name"] ?? "?")}@${String(ci["version"] ?? "?")}`,
         );
       }
-      const { response } = processMcpMessage(parsed);
+      const { response } = await processMcpMessage(parsed, ctx);
       if (response !== null && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify(response));
       }

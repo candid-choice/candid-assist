@@ -10,7 +10,14 @@ Security: contextIsolation + sandbox, no nodeIntegration; remote views
 get no preload and a host-allowlist navigation policy.
 */
 
-import { app, BrowserWindow, WebContentsView, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, WebContentsView, ipcMain, shell, webContents as webContentsNS } from 'electron';
+
+import {
+  registerGuest,
+  unregisterGuest,
+  setGuestResolver,
+  type GuestHandle,
+} from '../../src/guest-registry';
 import path from 'node:path';
 
 import { startMcpServer } from '../../src/mcp-server';
@@ -137,10 +144,36 @@ function enforceNavigationPolicy(wc: Electron.WebContents, initialUrl: string): 
 
 // DOM <webview> guests: apply the same navigation lockdown as native
 // views — same-host navigation only, popups open externally.
-app.on('did-attach-webview', (_e, guestContents, params) => {
-  const initialUrl = String((params as { url?: unknown }).url ?? '');
+// Runtime emits did-attach-webview on app (verified), but Electron 45
+// typings only declare it on WebContents — hence the cast.
+(app as unknown as {
+  on(
+    event: 'did-attach-webview',
+    listener: (event: unknown, guestContents: Electron.WebContents) => void,
+  ): void;
+}).on('did-attach-webview', (_event: unknown, guestContents: Electron.WebContents) => {
+  // The guest has already navigated to its src; getURL() gives us the
+  // host to pin (same-host navigation only, popups open externally).
+  const initialUrl = guestContents.getURL();
   console.log('[main] webview attached:', initialUrl || '(no src)');
   enforceNavigationPolicy(guestContents, initialUrl);
+});
+
+// ── Guest <webview> registry (agent browser tools) ───────────────────────
+setGuestResolver((_surfaceId, wcId) => {
+  const wc = webContentsNS.fromId(wcId);
+  if (!wc || wc.isDestroyed()) return undefined;
+  return wc as unknown as GuestHandle;
+});
+
+ipcMain.on('desktop:guest:register', (_e, msg: { surfaceId: string; webContentsId: number }) => {
+  if (typeof msg?.surfaceId === 'string' && typeof msg?.webContentsId === 'number') {
+    registerGuest(msg.surfaceId, msg.webContentsId);
+  }
+});
+
+ipcMain.on('desktop:guest:unregister', (_e, msg: { surfaceId: string }) => {
+  if (typeof msg?.surfaceId === 'string') unregisterGuest(msg.surfaceId);
 });
 
 // ── IPC: embedded views ────────────────────────────────────────────────

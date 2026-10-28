@@ -131,6 +131,10 @@ export interface SessionDoc {
   updatedAt: TimestampString;
   /** When the session was archived (soft-delete). */
   archivedAt: Nullable<TimestampString>;
+  /** Coding-agent linkage (set when the session was created by an
+   *  MCP agent action, e.g. a pi or Claude Code session). */
+  agentSessionId?: string;
+  agentClient?: string;
 }
 
 // ──────────────────────────────────────────────

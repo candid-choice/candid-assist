@@ -43,3 +43,4 @@ export { type SurfaceConfig, type SurfacePayload, type SurfaceResult } from "../
 export { useStoreSelector } from "../store";
 export { ToastContainer } from "./ToastContainer";
 export type { Toast, ToastType } from "./ToastContainer";
+export { SessionHarnessBadge } from "./SessionHarnessBadge";

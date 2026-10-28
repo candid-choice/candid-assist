@@ -26,6 +26,10 @@ export interface DesktopAPI {
     setBounds: (id: string, bounds: DesktopViewBounds) => void;
     setVisible: (id: string, visible: boolean) => void;
     destroy: (id: string) => void;
+    /** Register the embedded <webview> guest so MCP browser tools can
+     *  drive it (main resolves webContentsId → Electron WebContents). */
+    registerGuest: (surfaceId: string, webContentsId: number) => void;
+    unregisterGuest: (surfaceId: string) => void;
   };
   readonly runtime: 'electron';
 }

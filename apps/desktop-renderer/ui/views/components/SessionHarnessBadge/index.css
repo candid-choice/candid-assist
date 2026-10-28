@@ -1,0 +1,23 @@
+.ha-harness-badge {
+  /* Pushed to the right edge of the footer */
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--ha-text-secondary);
+  cursor: default;
+}
+
+.ha-harness-badge-icon {
+  color: var(--ha-primary);
+}
+
+.ha-harness-badge-client {
+  font-weight: 600;
+}
+
+.ha-harness-badge-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}

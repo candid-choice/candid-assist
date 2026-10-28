@@ -93,6 +93,11 @@ interface AppState {
   mcpAgentCount: number;
   setMcpAgentCount: (count: number) => void;
 
+  /** Browser automation handoffs: surfaceId -> reason while the human
+   *  has control (agent tools blocked). Volatile. */
+  browserHandoffs: Record<string, { reason: string | null }>;
+  setBrowserHandoff: (surfaceId: string, reason: string | null) => void;
+
   // ── UI messages (pi → toast via MCP showMessage) ─────────────────────
   uiMessages: { id: string; type: 'info' | 'success' | 'warning' | 'error'; message: string }[];
   pushUiMessage: (msg: { message: string; type?: 'info' | 'success' | 'warning' | 'error'; title?: string; ttlMs?: number }) => void;
@@ -109,6 +114,11 @@ interface AppState {
   ) => void;
   removeSession: (id: string) => void;
   setActiveSession: (id: string | null) => void;
+
+  /** Coding-agent session map: "client::agentSessionId" → local session id.
+   *  Lets MCP agent actions record into a dedicated sidebar session. */
+  agentSessions: Record<string, string>;
+  setAgentSession: (agentKey: string, sessionId: string) => void;
 
   // ── View manager ───────────────────────────────────────────────────────
   settings: AppSettings;
@@ -138,6 +148,7 @@ function persistableSlice(state: AppState) {
     authUser: state.authUser,
     sessions: state.sessions,
     activeSessionId: state.activeSessionId,
+    agentSessions: state.agentSessions,
     settings: state.settings,
   };
 }
@@ -210,6 +221,16 @@ export const useStore = create<AppState>()(
 
       mcpAgentCount: 0,
 
+      browserHandoffs: {},
+
+      setBrowserHandoff: (surfaceId: string, reason: string | null) =>
+        set((s) => {
+          const next = { ...s.browserHandoffs };
+          if (reason === null) delete next[surfaceId];
+          else next[surfaceId] = { reason };
+          return { browserHandoffs: next };
+        }),
+
       setMcpAgentCount: (count: number) => set({ mcpAgentCount: Math.max(0, count) }),
 
       uiMessages: [],
@@ -255,6 +276,11 @@ export const useStore = create<AppState>()(
         })),
 
       setActiveSession: (id: string | null) => set({ activeSessionId: id }),
+
+      agentSessions: {},
+
+      setAgentSession: (agentKey: string, sessionId: string) =>
+        set((s) => ({ agentSessions: { ...s.agentSessions, [agentKey]: sessionId } })),
 
       // ── View manager ───────────────────────────────────────────────────
       activeViewId: null,

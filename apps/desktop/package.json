@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/node": "^20.19.43",
     "@types/ws": "^8",
     "electron": "^45.0.0",
     "electron-builder": "^26.18.0",

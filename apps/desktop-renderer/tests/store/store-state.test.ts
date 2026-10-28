@@ -153,3 +153,14 @@ describe('ui messages (MCP showMessage toasts)', () => {
     expect(useStore.getState().uiMessages).toHaveLength(4);
   });
 });
+
+describe('agent sessions (coding-session linkage)', () => {
+  it('maps agent keys to local session ids', () => {
+    useStore.setState({ agentSessions: {} });
+    useStore.getState().setAgentSession('pi::abc123', 'sess-1');
+    expect(useStore.getState().agentSessions['pi::abc123']).toBe('sess-1');
+    useStore.getState().setAgentSession('claude-code::xyz', 'sess-2');
+    expect(useStore.getState().agentSessions['claude-code::xyz']).toBe('sess-2');
+    expect(Object.keys(useStore.getState().agentSessions)).toHaveLength(2);
+  });
+});

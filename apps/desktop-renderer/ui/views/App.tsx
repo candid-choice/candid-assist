@@ -16,6 +16,7 @@ import {
   TaskComposer,
   SignInScreen,
   ToastContainer,
+  SessionHarnessBadge,
 } from "./components";
 import { useStoreSelector } from "./store";
 import { deriveTaskTitle, useCreateSession } from "./hooks/use-create-session";
@@ -78,6 +79,7 @@ function App() {
         footer={
           <span className="ha-footer-status">
             <ConnectionIndicator />
+            <SessionHarnessBadge />
           </span>
         }
       >

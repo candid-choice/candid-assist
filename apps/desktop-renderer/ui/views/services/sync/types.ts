@@ -39,4 +39,7 @@ export interface SessionDoc {
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+  /** Coding-agent linkage (pi / Claude Code session that created it). */
+  agentSessionId?: string;
+  agentClient?: string;
 }

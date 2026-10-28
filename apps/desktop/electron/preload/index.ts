@@ -24,6 +24,9 @@ export interface DesktopAPI {
     setBounds: (id: string, bounds: ViewBounds) => void;
     setVisible: (id: string, visible: boolean) => void;
     destroy: (id: string) => void;
+    /** Register an embedded <webview> guest for agent browser tools. */
+    registerGuest: (surfaceId: string, webContentsId: number) => void;
+    unregisterGuest: (surfaceId: string) => void;
   };
   /** Runtime discriminator used by the renderer. */
   readonly runtime: 'electron';
@@ -43,6 +46,10 @@ const api: DesktopAPI = {
     setVisible: (id, visible) =>
       ipcRenderer.send('desktop:view:visible', { id, visible }),
     destroy: (id) => ipcRenderer.send('desktop:view:destroy', { id }),
+    registerGuest: (surfaceId, webContentsId) =>
+      ipcRenderer.send('desktop:guest:register', { surfaceId, webContentsId }),
+    unregisterGuest: (surfaceId) =>
+      ipcRenderer.send('desktop:guest:unregister', { surfaceId }),
   },
   runtime: 'electron',
 };
