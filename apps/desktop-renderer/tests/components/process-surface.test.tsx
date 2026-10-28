@@ -34,7 +34,7 @@ describe('ProcessSurface', () => {
   it('expands the log and sends control messages', () => {
     render(<ProcessSurface processes={[running]} />);
     fireEvent.click(screen.getByText('View Log'));
-    expect(screen.getByText('ready on :3000')).toBeTruthy();
+    expect(screen.getByText(/ready on :3000/)).toBeTruthy();
 
     fireEvent.click(screen.getByText('⏹ Stop'));
     expect(wsService.send).toHaveBeenCalledWith({
