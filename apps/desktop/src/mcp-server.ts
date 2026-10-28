@@ -10,6 +10,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { WebSocketServer, WebSocket } from "ws";
 
 import { resolveGuestEntry, listGuestSurfaceIds, unregisterGuest } from "./guest-registry";
+import { checkForUpdates, onUpdaterState } from "./updater";
 import {
   startProcess as registryStart,
   stopProcess as registryStop,
@@ -196,6 +197,25 @@ function isValidUrl(value: unknown): boolean {
 
 function generateSurfaceId(): string {
   return `surf_${uuidv4().replace(/-/g, "").slice(0, 8)}`;
+}
+
+// ── App updater (plan: pre-app-updater.md) ───────────────────────────────
+
+onUpdaterState((st) => {
+  if (st.phase === "available") {
+    notifyUiMessage({ message: `Version ${st.version ?? "?"} is available — downloading in background…`, level: "info", title: "Updater" });
+  } else if (st.phase === "ready") {
+    notifyUiMessage({ message: `Version ${st.version ?? "?"} downloaded — restart to install (Settings ▸ About ▸ Restart Now).`, level: "success", title: "Updater" });
+  } else if (st.phase === "error") {
+    notifyUiMessage({ message: st.error ?? "update check failed", level: "error", title: "Updater" });
+  }
+});
+
+function handleCheckForUpdates(): Record<string, unknown> {
+  const st = require("./updater") as { getUpdaterState: () => unknown };
+  // Kick off async check; return current snapshot immediately.
+  void checkForUpdates();
+  return { status: "initiated", state: st.getUpdaterState() };
 }
 
 // ── Process manager (agent-launched background processes) ────────────────
@@ -596,6 +616,11 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'checkForUpdates',
+    description: 'Trigger the desktop app update check (packaged builds; no-op in dev). Progress reported via toast messages.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
     name: 'openProcessManager',
     description: 'Open (or refresh) the Processes dashboard surface: live list of agent-launched background processes with status, output tail, and user kill/restart controls.',
     inputSchema: { type: 'object', properties: {} },
@@ -672,6 +697,7 @@ const TOOL_HANDLERS: Record<
   browserType: handleBrowserType,
   browserScreenshot: handleBrowserScreenshot,
   browserHandoff: handleBrowserHandoff,
+  checkForUpdates: handleCheckForUpdates,
   openProcessManager: () => handleOpenProcessManager(),
   startProcess: handleStartProcessTool,
   stopProcess: handleStopProcessTool,

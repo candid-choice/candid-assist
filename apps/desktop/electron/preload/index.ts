@@ -31,6 +31,7 @@ export interface DesktopAPI {
   /** OS integrations (workspace folder picker etc.). */
   system: {
     pickFolder: () => Promise<string | null>;
+    checkForUpdates: () => Promise<{ phase: string; version?: string; error?: string }>;
   };
   /** Runtime discriminator used by the renderer. */
   readonly runtime: 'electron';
@@ -57,6 +58,7 @@ const api: DesktopAPI = {
   },
   system: {
     pickFolder: () => ipcRenderer.invoke('desktop:workspace:pick'),
+    checkForUpdates: () => ipcRenderer.invoke('desktop:updater:check'),
   },
   runtime: 'electron',
 };

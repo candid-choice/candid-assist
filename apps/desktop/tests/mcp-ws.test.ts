@@ -89,7 +89,7 @@ describe('WebSocket MCP (pi transport)', () => {
     const c = openClient();
     await c.waitForOpen();
     const res = await c.request('tools/list');
-    expect(res.result.tools).toHaveLength(20);
+    expect(res.result.tools).toHaveLength(21);
     c.ws.close();
   });
 

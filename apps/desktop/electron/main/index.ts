@@ -12,6 +12,7 @@ get no preload and a host-allowlist navigation policy.
 
 import { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, webContents as webContentsNS } from 'electron';
 
+import { checkForUpdates as checkAppUpdate, onUpdaterState } from '../../src/updater';
 import {
   registerGuest,
   unregisterGuest,
@@ -170,6 +171,10 @@ ipcMain.on('desktop:guest:register', (_e, msg: { surfaceId: string; webContentsI
   if (typeof msg?.surfaceId === 'string' && typeof msg?.webContentsId === 'number') {
     registerGuest(msg.surfaceId, msg.webContentsId);
   }
+});
+
+ipcMain.handle('desktop:updater:check', async () => {
+  return checkAppUpdate();
 });
 
 ipcMain.handle('desktop:workspace:pick', async () => {

@@ -285,12 +285,63 @@ function McpSettings() {
 // ── About ────────────────────────────────────────────────────────────────
 
 function AboutSettings() {
+  const [updater, setUpdater] = useState<{
+    phase: string;
+    version?: string;
+    error?: string;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const check = async () => {
+    const api = (window as unknown as {
+      desktop?: {
+        system?: {
+          checkForUpdates?: () => Promise<{ phase: string; version?: string; error?: string }>;
+        };
+      };
+    }).desktop?.system;
+    if (!api?.checkForUpdates) {
+      setUpdater({ phase: "unavailable" });
+      return;
+    }
+    setBusy(true);
+    try {
+      setUpdater(await api.checkForUpdates());
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const label: Record<string, string> = {
+    unavailable: "Updates unavailable (dev mode)",
+    checking: "Checking…",
+    available: "Update available — downloading…",
+    ready: "Update ready — restart to install",
+    error: "Update check failed",
+    idle: "Up to date",
+  };
+
   return (
     <div className="ha-settings-panel">
       <h3 className="ha-settings-panel-title">About</h3>
       <p className="ha-settings-desc">Human Assist v1.0.0</p>
-      <p className="ha-settings-desc">Built with Electrobun, React, and Bun.</p>
+      <p className="ha-settings-desc">Built with Electron, React, and Node.js.</p>
       <p className="ha-settings-desc">© 2026 Candid Choice</p>
+      <div className="ha-settings-row">
+        <label className="ha-settings-label">
+          <span>Updates</span>
+          <span className="ha-settings-updater">
+            <span className="ha-settings-updater-status">
+              {updater
+                ? `${label[updater.phase] ?? updater.phase}${updater.version ? ` (v${updater.version})` : ""}`
+                : "Not checked yet"}
+            </span>
+            <button type="button" className="ha-process-btn" onClick={check} disabled={busy}>
+              Check for updates
+            </button>
+          </span>
+        </label>
+      </div>
     </div>
   );
 }
