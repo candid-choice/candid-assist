@@ -126,6 +126,8 @@ interface AppState {
    *  Lets MCP agent actions record into a dedicated sidebar session. */
   agentSessions: Record<string, string>;
   setAgentSession: (agentKey: string, sessionId: string) => void;
+  /** Remove every session (and their bound views/agent maps). */
+  deleteAllSessions: () => void;
 
   // ── View manager ───────────────────────────────────────────────────────
   settings: AppSettings;
@@ -311,6 +313,20 @@ export const useStore = create<AppState>()(
             sess.id === id ? { ...sess, ...patch } : sess,
           ),
         })),
+
+      deleteAllSessions: () =>
+        set((state) => {
+          const ids = new Set(state.sessions.map((x) => x.id));
+          return {
+            sessions: [],
+            agentSessions: {},
+            activeSessionId: null,
+            views: state.views.filter((v) => {
+              const sid = (v as unknown as { sessionId?: string }).sessionId;
+              return !sid || !ids.has(sid);
+            }),
+          };
+        }),
 
       removeSession: (id: string) =>
         set((s) => ({

@@ -222,6 +222,10 @@ export async function executeSyncAction(action: {
       if (status) await updateSessionStatus(sessionId, status);
       break;
     }
+    case 'deleteSession': {
+      await deleteSession(String(action.data['sessionId'] ?? ''));
+      break;
+    }
     case 'archiveSession': {
       await archiveSession(String(action.data['sessionId']));
       break;

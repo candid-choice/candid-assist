@@ -13,7 +13,7 @@ import "./index.css";
 export interface SidebarSession {
   id: string;
   title: string;
-  status: "active" | "archived" | "waiting";
+  status: "active" | "archived" | "waiting" | "dead";
   updatedAt: string;
   surfaceCount: number;
 }
@@ -24,6 +24,8 @@ export interface SidebarProps {
   onToggle: () => void;
   sessions: SidebarSession[];
   onSessionClick: (id: string) => void;
+  onItemContextMenu?: (session: SidebarSession, x: number, y: number) => void;
+  onClearAll?: () => void;
   activeSessionId: string | null;
 }
 
@@ -40,6 +42,8 @@ function formatTimeAgo(dateStr: string): string {
 
 function statusColor(status: string): string {
   switch (status) {
+    case "dead":
+      return "#9e9e9e";
     case "active":
       return "var(--ha-primary)";
     case "waiting":
@@ -57,6 +61,8 @@ function Sidebar({
   onToggle,
   sessions,
   onSessionClick,
+  onItemContextMenu,
+  onClearAll,
   activeSessionId,
 }: SidebarProps) {
   const [search, setSearch] = useState("");
@@ -105,8 +111,12 @@ function Sidebar({
         {filtered.map((session) => (
           <div
             key={session.id}
-            className={`ha-sidebar-item ${session.status === "active" ? "active" : ""} ${activeSessionId === session.id ? "selected" : ""}`}
+            className={`ha-sidebar-item ${session.status === "active" ? "active" : ""} ${activeSessionId === session.id ? "selected" : ""} ${session.status === "dead" ? "ha-sidebar-item--dead" : ""}`}
             onClick={() => onSessionClick(session.id)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              onItemContextMenu?.(session, e.clientX, e.clientY);
+            }}
           >
             <span className="ha-sidebar-dot" style={{ backgroundColor: statusColor(session.status) }} />
             <div className="ha-sidebar-item-content">
@@ -117,6 +127,17 @@ function Sidebar({
             </div>
           </div>
         ))}
+        {onClearAll && sessions.length > 0 && (
+          <button
+            type="button"
+            className="ha-sidebar-clear-all"
+            onClick={() => {
+              if (window.confirm("Delete ALL sessions? This cannot be undone.")) onClearAll();
+            }}
+          >
+            Clear all sessions
+          </button>
+        )}
       </div>
 
     </div>

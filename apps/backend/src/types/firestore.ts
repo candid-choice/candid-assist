@@ -84,7 +84,7 @@ export interface UserProfile {
 // ──────────────────────────────────────────────
 
 /** Session status values. */
-export type SessionStatus = 'active' | 'waiting' | 'done' | 'error';
+export type SessionStatus = 'active' | 'waiting' | 'done' | 'error' | 'dead';
 
 /** User's response on a surface. */
 export interface SurfaceUserResponse {

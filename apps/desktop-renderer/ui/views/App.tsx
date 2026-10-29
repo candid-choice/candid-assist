@@ -20,6 +20,7 @@ import {
   SessionHarnessBadge,
 } from "./components";
 import { useStoreSelector, useStore } from "./store";
+import { deriveSessionTabs, reopenRecordedSurface } from "./lib/session-tabs";
 import { deriveTaskTitle, useCreateSession } from "./hooks/use-create-session";
 import { useHideNativeViews } from "./hooks/use-hide-native-views";
 
@@ -64,10 +65,34 @@ function App() {
   const closeView = useStoreSelector((s) => s.closeView);
 
   // ── Render ────────────────────────────────────────────────────────────
-  const addressBarTabs = views.map((v) => ({
-    id: v.id,
-    label: v.label,
-  }));
+  const activeSession = useStoreSelector((s) =>
+    s.activeSessionId
+      ? (s.sessions.find((x) => x.id === s.activeSessionId) ?? null)
+      : null,
+  );
+
+  // Chrome tabs: surfaces belonging to the ACTIVE session — open views
+  // plus recorded surfaces the session opened (click to re-open).
+  const addressBarTabs = deriveSessionTabs(activeSession, views as never).map(
+    (t) => ({ id: t.id, label: t.label }),
+  );
+
+  const handleTabClick = useCallback(
+    (id: string) => {
+      if (id.startsWith("saved:")) {
+        const surfaceId = id.slice("saved:".length);
+        const rec = activeSession?.surfaces?.find(
+          (r) => r.surfaceId === surfaceId,
+        );
+        if (rec && activeSession) {
+          useStore.getState().openSurface(reopenRecordedSurface(rec, activeSession.id) as never);
+        }
+        return;
+      }
+      useStore.getState().selectView(id);
+    },
+    [activeSession],
+  );
 
   const handleHelpAction = useCallback(
     () => closeHelpPalette(),
@@ -102,7 +127,7 @@ function App() {
               <AddressBar
                 tabs={addressBarTabs}
                 activeTabId={activeViewId}
-                onTabClick={setActiveView}
+                onTabClick={handleTabClick}
                 onTabClose={closeView}
               />
               <div className="ha-chrome-spacer" />
