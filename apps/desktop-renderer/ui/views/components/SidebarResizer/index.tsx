@@ -1,7 +1,10 @@
 /** SidebarResizer — draggable divider between the sidebar and main
- * content. Drag to resize (180–520 px, persisted in the store); while
- * dragging, the divider highlights and the body cursor changes so the
- * resize is clearly indicated.
+ * content.
+ *
+ * While dragging, a full-window overlay captures all pointer events
+ * (critical: embedded <webview> guests would otherwise swallow mouse
+ * moves) and paints a clear drag guide at the proposed width — no
+ * z-index fighting with native/embedded content.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -12,6 +15,7 @@ import "./index.css";
 
 export function SidebarResizer() {
   const setSidebarWidth = useStore((s) => s.setSidebarWidth);
+  const sidebarWidth = useStore((s) => s.sidebarWidth);
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -19,13 +23,14 @@ export function SidebarResizer() {
     (e: React.MouseEvent) => {
       if (e.button !== 0) return;
       e.preventDefault();
-      const width = useStore.getState().sidebarWidth;
-      dragRef.current = { startX: e.clientX, startWidth: width };
+      dragRef.current = { startX: e.clientX, startWidth: useStore.getState().sidebarWidth };
       setDragging(true);
     },
     [],
   );
 
+  // While the overlay is up, it receives all mouse events; keep
+  // window-level listeners as a belt-and-braces for releases outside.
   useEffect(() => {
     if (!dragging) return;
     const onMove = (e: MouseEvent) => {
@@ -39,7 +44,6 @@ export function SidebarResizer() {
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
-    // Indicate resizing app-wide
     document.body.classList.add("ha-resizing-sidebar");
     return () => {
       document.removeEventListener("mousemove", onMove);
@@ -49,17 +53,31 @@ export function SidebarResizer() {
   }, [dragging, setSidebarWidth]);
 
   return (
-    <div
-      className={`ha-sidebar-resizer${dragging ? " ha-sidebar-resizer--active" : ""}`}
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Resize sidebar"
-      title="Drag to resize"
-      onMouseDown={onMouseDown}
-      onDoubleClick={() => setSidebarWidth(240)}
-    >
-      <span className="ha-sidebar-resizer-grip" aria-hidden />
-    </div>
+    <>
+      <div
+        className={`ha-sidebar-resizer${dragging ? " ha-sidebar-resizer--active" : ""}`}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        title="Drag to resize · double-click to reset"
+        onMouseDown={onMouseDown}
+        onDoubleClick={() => setSidebarWidth(240)}
+      >
+        <span className="ha-sidebar-resizer-grip" aria-hidden />
+      </div>
+
+      {dragging && (
+        <div className="ha-sidebar-resize-overlay" data-testid="resize-overlay">
+          {/* Drag guide: always visible, painted above everything */}
+          <div
+            className="ha-sidebar-resize-guide"
+            style={{ left: sidebarWidth - 2 }}
+          >
+            <span className="ha-sidebar-resize-badge">{sidebarWidth}px</span>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

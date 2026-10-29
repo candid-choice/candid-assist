@@ -17,9 +17,14 @@ const drag = (dx: number) => {
   fireEvent.mouseDown(el, { button: 0, clientX: 100 });
   expect(el.className).toContain('ha-sidebar-resizer--active');
   expect(document.body.className).toContain('ha-resizing-sidebar');
-  fireEvent.mouseMove(document, { clientX: 100 + dx });
-  fireEvent.mouseUp(document);
-  expect(el.className).not.toContain('ha-sidebar-resizer--active');
+  // Full-window capture overlay must be present while dragging
+  const overlay = document.querySelector('[data-testid="resize-overlay"]')!;
+  expect(overlay).toBeTruthy();
+  // Drag events flow through the overlay (webviews can't steal them)
+  fireEvent.mouseMove(overlay, { clientX: 100 + dx });
+  fireEvent.mouseUp(overlay);
+  expect(document.querySelector('[data-testid="resize-overlay"]')).toBeNull();
+  expect(document.querySelector('.ha-sidebar-resizer')!.className).not.toContain('ha-sidebar-resizer--active');
   expect(document.body.className).not.toContain('ha-resizing-sidebar');
 };
 
