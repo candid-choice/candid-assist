@@ -1,0 +1,66 @@
+/** SidebarResizer — draggable divider between the sidebar and main
+ * content. Drag to resize (180–520 px, persisted in the store); while
+ * dragging, the divider highlights and the body cursor changes so the
+ * resize is clearly indicated.
+ */
+
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { useStore } from "../../store";
+
+import "./index.css";
+
+export function SidebarResizer() {
+  const setSidebarWidth = useStore((s) => s.setSidebarWidth);
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const width = useStore.getState().sidebarWidth;
+      dragRef.current = { startX: e.clientX, startWidth: width };
+      setDragging(true);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (e: MouseEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      setSidebarWidth(d.startWidth + (e.clientX - d.startX));
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      setDragging(false);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    // Indicate resizing app-wide
+    document.body.classList.add("ha-resizing-sidebar");
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.classList.remove("ha-resizing-sidebar");
+    };
+  }, [dragging, setSidebarWidth]);
+
+  return (
+    <div
+      className={`ha-sidebar-resizer${dragging ? " ha-sidebar-resizer--active" : ""}`}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize sidebar"
+      title="Drag to resize"
+      onMouseDown={onMouseDown}
+      onDoubleClick={() => setSidebarWidth(240)}
+    >
+      <span className="ha-sidebar-resizer-grip" aria-hidden />
+    </div>
+  );
+}
+
+export default SidebarResizer;

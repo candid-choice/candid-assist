@@ -9,6 +9,7 @@ import {
   SurfaceHost,
   ConnectionIndicator,
   AppSidebar,
+  SidebarResizer,
   AppDashboard,
   AppSessionDetail,
   UserMenu,
@@ -18,7 +19,7 @@ import {
   ToastContainer,
   SessionHarnessBadge,
 } from "./components";
-import { useStoreSelector } from "./store";
+import { useStoreSelector, useStore } from "./store";
 import { deriveTaskTitle, useCreateSession } from "./hooks/use-create-session";
 import { useHideNativeViews } from "./hooks/use-hide-native-views";
 
@@ -31,6 +32,7 @@ function App() {
   const activeSurface = useStoreSelector((s) => s.activeSurface);
   const activeSessionId = useStoreSelector((s) => s.activeSessionId);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useStore((s) => s.sidebarWidth);
   const settingsOpen = useStoreSelector((s) => s.settingsOpen);
   const setSettingsOpen = useStoreSelector((s) => s.setSettingsOpen);
   const theme = useStoreSelector((s) => s.settings.theme);
@@ -88,9 +90,11 @@ function App() {
         <div className="ha-app-row">
           <AppSidebar
             open={sidebarOpen}
-            width={240}
+            width={sidebarWidth}
             onToggle={() => setSidebarOpen((v) => !v)}
           />
+
+          <SidebarResizer />
 
           <div className="ha-app-main">
             {/* ── Chrome bar: address bar ── */}

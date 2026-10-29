@@ -1,0 +1,43 @@
+.ha-sidebar-resizer {
+  flex: 0 0 5px;
+  cursor: col-resize;
+  position: relative;
+  background: transparent;
+  border-right: 1px solid var(--ha-border);
+  transition: background 0.12s;
+  margin-right: -1px;
+}
+
+.ha-sidebar-resizer:hover {
+  background: var(--ha-primary-light);
+}
+
+/* Active-drag indicator: strong accent + wider visual hit */
+.ha-sidebar-resizer--active {
+  background: var(--ha-primary);
+  box-shadow: 0 0 0 1px var(--ha-primary-hover);
+}
+
+.ha-sidebar-resizer-grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 26px;
+  border-radius: 1px;
+  background: var(--ha-border);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.ha-sidebar-resizer:hover .ha-sidebar-resizer-grip,
+.ha-sidebar-resizer--active .ha-sidebar-resizer-grip {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+body.ha-resizing-sidebar {
+  cursor: col-resize;
+  user-select: none;
+}

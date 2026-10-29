@@ -13,6 +13,7 @@ get no preload and a host-allowlist navigation policy.
 import { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, webContents as webContentsNS } from 'electron';
 
 import { checkForUpdates as checkAppUpdate, onUpdaterState } from '../../src/updater';
+import { setUiControlHandlers } from '../../src/mcp-server';
 import {
   registerGuest,
   unregisterGuest,
@@ -253,6 +254,21 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+setUiControlHandlers({
+  reloadUI: () => {
+    if (!win || win.isDestroyed()) return { reloaded: false };
+    win.webContents.reloadIgnoringCache();
+    console.log('[main] renderer reload requested via MCP');
+    return { reloaded: true };
+  },
+  restartApp: () => {
+    console.log('[main] app restart requested via MCP');
+    app.relaunch();
+    setTimeout(() => app.exit(0), 150);
+    return { relaunched: true };
+  },
 });
 
 app.on('before-quit', () => {

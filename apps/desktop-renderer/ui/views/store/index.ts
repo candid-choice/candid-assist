@@ -67,6 +67,10 @@ interface AppState {
   closeHelpPalette: () => void;
   registerOnComplete: (fn: (result: SurfaceResult) => void) => void;
 
+  /** Sidebar width (px, user-resizable; persisted). */
+  sidebarWidth: number;
+  setSidebarWidth: (width: number) => void;
+
   // ── UI overlays (transient, not persisted) ────────────────────────────
   composerOpen: boolean;
   signInOpen: boolean;
@@ -155,6 +159,7 @@ function persistableSlice(state: AppState) {
     activeSessionId: state.activeSessionId,
     agentSessions: state.agentSessions,
     settings: state.settings,
+    sidebarWidth: state.sidebarWidth,
   };
 }
 
@@ -314,6 +319,11 @@ export const useStore = create<AppState>()(
         })),
 
       setActiveSession: (id: string | null) => set({ activeSessionId: id }),
+
+      sidebarWidth: 240,
+
+      setSidebarWidth: (width: number) =>
+        set({ sidebarWidth: Math.min(520, Math.max(180, Math.round(width))) }),
 
       agentSessions: {},
 

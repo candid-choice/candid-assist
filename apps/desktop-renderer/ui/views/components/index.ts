@@ -44,3 +44,4 @@ export { useStoreSelector } from "../store";
 export { ToastContainer } from "./ToastContainer";
 export type { Toast, ToastType } from "./ToastContainer";
 export { SessionHarnessBadge } from "./SessionHarnessBadge";
+export { SidebarResizer } from "./SidebarResizer";

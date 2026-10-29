@@ -199,6 +199,28 @@ function generateSurfaceId(): string {
   return `surf_${uuidv4().replace(/-/g, "").slice(0, 8)}`;
 }
 
+// ── UI controls (reload window / restart app) ────────────────────────────
+
+export interface UiControlHandlers {
+  reloadUI?: () => Record<string, unknown>;
+  restartApp?: () => Record<string, unknown>;
+}
+let uiControls: UiControlHandlers = {};
+
+export function setUiControlHandlers(handlers: UiControlHandlers): void {
+  uiControls = handlers;
+}
+
+function handleReloadUI(): Record<string, unknown> {
+  if (!uiControls.reloadUI) throw new Error("UI_001: reload not available on this runtime");
+  return { status: "reloading", ...uiControls.reloadUI() };
+}
+
+function handleRestartApp(): Record<string, unknown> {
+  if (!uiControls.restartApp) throw new Error("UI_002: restart not available on this runtime");
+  return { status: "restarting", ...uiControls.restartApp() };
+}
+
 // ── App updater (plan: pre-app-updater.md) ───────────────────────────────
 
 onUpdaterState((st) => {
@@ -616,6 +638,16 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'reloadUI',
+    description: 'Reload the Human Assist window (renderer + layout) from the current UI server — no need to close/restart the app after UI changes.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'restartApp',
+    description: 'Restart the Human Assist desktop app (relaunch + exit). Use when main-process code changed and a full restart is required.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
     name: 'checkForUpdates',
     description: 'Trigger the desktop app update check (packaged builds; no-op in dev). Progress reported via toast messages.',
     inputSchema: { type: 'object', properties: {} },
@@ -697,6 +729,8 @@ const TOOL_HANDLERS: Record<
   browserType: handleBrowserType,
   browserScreenshot: handleBrowserScreenshot,
   browserHandoff: handleBrowserHandoff,
+  reloadUI: handleReloadUI,
+  restartApp: handleRestartApp,
   checkForUpdates: handleCheckForUpdates,
   openProcessManager: () => handleOpenProcessManager(),
   startProcess: handleStartProcessTool,

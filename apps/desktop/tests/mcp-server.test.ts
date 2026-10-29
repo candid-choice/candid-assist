@@ -114,7 +114,7 @@ describe('MCP tools/call router', () => {
       method: 'POST',
       body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
     }).then((r) => r.json());
-    expect(res.result.tools).toHaveLength(21);
+    expect(res.result.tools).toHaveLength(23);
     const names = res.result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain('openBrowserSurface');
     expect(names).toContain('openInputSurface');
@@ -260,5 +260,33 @@ describe('process manager tools', () => {
     expect(noName.error?.message).toContain('MCP_017');
     const noCmd = await call({ name: 'startProcess', arguments: { name: 'x' } });
     expect(noCmd.error?.message).toContain('MCP_018');
+  });
+});
+
+describe('UI control tools', () => {
+  it('reloadUI/restartApp invoke injected handlers (and error without them)', async () => {
+    const { setUiControlHandlers } = await import('@/mcp-server');
+    const before = await call({ name: 'reloadUI', arguments: {} });
+    expect(before.error?.message).toContain('UI_001');
+
+    let reloads = 0;
+    let restarts = 0;
+    setUiControlHandlers({
+      reloadUI: () => {
+        reloads++;
+        return { reloaded: true };
+      },
+      restartApp: () => {
+        restarts++;
+        return { relaunched: true };
+      },
+    });
+    const r = await call({ name: 'reloadUI', arguments: {} });
+    expect(r.result.status).toBe('reloading');
+    expect(reloads).toBe(1);
+    const a = await call({ name: 'restartApp', arguments: {} });
+    expect(a.result.status).toBe('restarting');
+    expect(restarts).toBe(1);
+    setUiControlHandlers({}); // restore
   });
 });
