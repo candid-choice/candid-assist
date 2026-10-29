@@ -15,7 +15,6 @@ import "./index.css";
 
 export function SidebarResizer() {
   const setSidebarWidth = useStore((s) => s.setSidebarWidth);
-  const sidebarWidth = useStore((s) => s.sidebarWidth);
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -67,15 +66,9 @@ export function SidebarResizer() {
       </div>
 
       {dragging && (
-        <div className="ha-sidebar-resize-overlay" data-testid="resize-overlay">
-          {/* Drag guide: always visible, painted above everything */}
-          <div
-            className="ha-sidebar-resize-guide"
-            style={{ left: sidebarWidth - 2 }}
-          >
-            <span className="ha-sidebar-resize-badge">{sidebarWidth}px</span>
-          </div>
-        </div>
+        // Pure frame lock: captures pointer events for the duration of
+        // the drag (nothing to draw — removed on release).
+        <div className="ha-sidebar-resize-overlay" data-testid="resize-overlay" />
       )}
     </>
   );
