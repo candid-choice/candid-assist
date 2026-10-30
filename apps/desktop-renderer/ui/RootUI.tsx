@@ -26,6 +26,7 @@ import {
 import { setReplayExecutor, onReconnect, queueAction } from "./views/errors/offline-queue";
 import { surfaceLabel } from "./views/lib/session-tabs";
 import { startMcpStatusPolling } from "./views/services/mcp-status";
+import { PermissionGate } from "./views/components/PermissionGate";
 
 // ── Live services (module scope — run once, not per StrictMode render) ──
 if (typeof window !== "undefined") {
@@ -38,6 +39,11 @@ if (typeof window !== "undefined") {
     if (state === "connected") {
       // WS back up → flush queued writes immediately
       onReconnect();
+      // Re-share the human's "always allow" domain grants with the server
+      wsService.send({
+        type: "permission:sync",
+        domains: useStore.getState().browserGrants,
+      });
     }
   });
 
@@ -62,6 +68,25 @@ if (typeof window !== "undefined") {
       if (d?.message) {
         const level = d.level === "success" || d.level === "warning" || d.level === "error" ? d.level : "info";
         useStore.getState().pushUiMessage({ message: d.message, type: level, title: d.title });
+      }
+      return;
+    }
+    if (event.event === "permission:resolved") {
+      // Answered elsewhere (another window / automation) → dismiss our prompt.
+      const d = event.data as { id?: string };
+      const cur = useStore.getState().pendingPermission;
+      if (d?.id && cur?.id === d.id) useStore.getState().setPendingPermission(null);
+      return;
+    }
+    if (event.event === "permission:request") {
+      const d = event.data as { id?: string; host?: string; url?: string; tool?: string };
+      if (d?.id && d.host) {
+        useStore.getState().setPendingPermission({
+          id: d.id,
+          host: d.host,
+          url: d.url ?? "",
+          tool: d.tool ?? "browser",
+        });
       }
       return;
     }
@@ -177,6 +202,7 @@ export default function RootUI() {
     <StrictMode>
       <AuthProvider>
         <App />
+        <PermissionGate />
       </AuthProvider>
     </StrictMode>
   );

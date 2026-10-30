@@ -102,6 +102,19 @@ interface AppState {
    * desktop MCP server belongs to this window at all. */
   mcpStandalone: boolean;
   setMcpAgentCount: (count: number) => void;
+  /** Domains the human granted "always" for agent web access. */
+  browserGrants: string[];
+  addBrowserGrant: (domain: string) => void;
+  clearBrowserGrants: () => void;
+  pendingPermission: {
+    id: string;
+    host: string;
+    url: string;
+    tool: string;
+  } | null;
+  setPendingPermission: (
+    p: { id: string; host: string; url: string; tool: string } | null,
+  ) => void;
   setMcpStandalone: (v: boolean) => void;
 
   /** Browser automation handoffs: surfaceId -> reason while the human
@@ -166,6 +179,7 @@ function persistableSlice(state: AppState) {
     agentSessions: state.agentSessions,
     settings: state.settings,
     sidebarWidth: state.sidebarWidth,
+    browserGrants: state.browserGrants,
   };
 }
 
@@ -269,6 +283,17 @@ export const useStore = create<AppState>()(
         set({ connectionState: state }),
 
       mcpAgentCount: 0,
+      browserGrants: [],
+      addBrowserGrant: (domain: string) =>
+        set((state) => {
+          const d = domain.toLowerCase().replace(/^www\./, "");
+          return state.browserGrants.includes(d)
+            ? {}
+            : { browserGrants: [...state.browserGrants, d] };
+        }),
+      clearBrowserGrants: () => set({ browserGrants: [] }),
+      pendingPermission: null,
+      setPendingPermission: (p) => set({ pendingPermission: p }),
       mcpStandalone: false,
 
       browserHandoffs: {},

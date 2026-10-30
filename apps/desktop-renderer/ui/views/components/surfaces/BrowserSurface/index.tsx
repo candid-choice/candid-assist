@@ -134,8 +134,12 @@ export function BrowserSurface({ url, onUrlChange, surfaceId, warning }: Browser
           <webview
             ref={webviewElRef as never}
             src={url}
+            partition="persist:harness-web"
             className="ha-electron-webview"
-            // Popups are denied in main and opened in the default browser.
+            // Persisted partition: logins (Google, ChatGPT, GitHub, …)
+            // survive restarts, so the agent can revisit authenticated
+            // sites later without asking the human again. Popups are
+            // denied in main and opened in the default browser.
           />
           {handoff && (
             <div className="ha-webview-handoff" role="alert">

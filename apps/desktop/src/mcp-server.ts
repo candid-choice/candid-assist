@@ -337,10 +337,12 @@ function handleGetProcessLog(args: unknown): Record<string, unknown> {
 
 // ── MCP Handlers ──────────────────────────────────────────────────────────
 
-function handleOpenBrowserSurface(args: unknown): Record<string, unknown> {
+async function handleOpenBrowserSurface(args: unknown): Promise<Record<string, unknown>> {
   const obj = args as Record<string, unknown>;
   const url = requireUrl(obj["url"]);
   const prompt = optPrompt(obj["prompt"]);
+  const perm = await permissionBroker.ensure(url, "openBrowserSurface");
+  if (!perm.allowed) return { status: "denied", reason: perm.decision, url };
   if (openSurfaces.size >= MAX_SURFACES) {
     throw new Error("MCP_002: Maximum surfaces reached");
   }
@@ -995,6 +997,17 @@ function startWebSocketServer(port: number): WebSocketServer {
             console.warn("[proc] control failed:", (e as Error).message);
           }
         }
+        if (msg && msg.type === "permission:sync" && Array.isArray(msg.domains)) {
+          permissionBroker.syncGrants(msg.domains.filter((d: unknown) => typeof d === "string"));
+        }
+        if (
+          msg &&
+          msg.type === "permission:respond" &&
+          typeof msg.id === "string" &&
+          ["once", "always", "deny"].includes(String(msg.decision))
+        ) {
+          permissionBroker.respond(msg.id, msg.decision as PermissionDecision);
+        }
         if (msg && msg.type === "handoff:complete" && typeof msg.surfaceId === "string") {
           if (browserHandoffs.delete(msg.surfaceId)) {
             notifyHandoff(msg.surfaceId, false, "human-completed");
@@ -1021,6 +1034,24 @@ function notifySurfacePush(payload: Record<string, unknown>): void {
       client.send(event);
     }
   }
+}
+
+// ── Domain permission gate (human consent before real-web access) ─────────
+import { PermissionBroker, pendingPermissionIds, type PermissionDecision } from "./permission-broker";
+
+function sendToWsClients(eventObj: Record<string, unknown>): void {
+  const payload = JSON.stringify(eventObj);
+  for (const client of wsClients) {
+    if (client.readyState === WebSocket.OPEN) client.send(payload);
+  }
+}
+
+/** Exported for tests + potential UI-side introspection. */
+export const permissionBroker = new PermissionBroker(sendToWsClients);
+
+/** Ids currently awaiting a human answer (tests/diagnostics). */
+export function pendingForTest(): string[] {
+  return pendingPermissionIds(permissionBroker);
 }
 
 // ── Browser automation (agent-driven embedded views + human handoff) ─────
@@ -1122,10 +1153,12 @@ async function handleBrowserNavigate(args: unknown): Promise<Record<string, unkn
   const o = (args ?? {}) as Record<string, unknown>;
   const url = typeof o["url"] === "string" ? o["url"] : "";
   if (!/^https?:\/\/.+/i.test(url)) throw new Error("BROWSER_006: url must be an absolute http(s) URL");
+  const perm = await permissionBroker.ensure(url, "browserNavigate");
+  if (!perm.allowed) return { status: "denied", reason: perm.decision, url };
   const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
   assertHumanControlFree(id);
   await handle.loadURL(url);
-  return { status: "navigated", surfaceId: id, url };
+  return { status: "navigated", surfaceId: id, url, permission: perm.decision };
 }
 
 async function handleBrowserSnapshot(args: unknown): Promise<Record<string, unknown>> {

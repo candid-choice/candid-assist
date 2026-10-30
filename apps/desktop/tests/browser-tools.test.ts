@@ -5,11 +5,16 @@ plain node (no Electron) while exercising the real dispatch, handoff
 locks, and surface-WS handoff release.
 */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { WebSocket } from 'ws';
 
-import { startMcpServer } from '@/mcp-server';
+import { startMcpServer, permissionBroker } from '@/mcp-server';
 import { setGuestResolver, registerGuest, type GuestHandle } from '@/guest-registry';
+
+// Consent gate: pre-grant the fixture hosts (nobody answers prompts in tests).
+beforeEach(() => {
+  permissionBroker.syncGrants(['react.dev', 'x.test', 'example.com', 'localhost', '127.0.0.1']);
+});
 
 const HTTP_PORT = 3745;
 const SURFACE_WS_PORT = 3746;

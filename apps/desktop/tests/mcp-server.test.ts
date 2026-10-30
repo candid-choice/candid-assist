@@ -5,9 +5,16 @@ WebSocket surface:push broadcast type mapping (renderer routing
 depends on the correct type).
 */
 
-import { describe, it, expect, beforeAll } from 'vitest';
-import { startMcpServer } from '@/mcp-server';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { startMcpServer, permissionBroker } from '@/mcp-server';
 import { WebSocket } from 'ws';
+
+// The permission gate prompts a human; in tests nobody answers, so
+// pre-grant the fixture domains (gate semantics themselves are covered
+// in permission-broker.test.ts + the gate tests at the bottom).
+beforeEach(() => {
+  permissionBroker.syncGrants(['example.com', 'localhost', '127.0.0.1', 'candid.ai']);
+});
 
 const HTTP_PORT = 3715;
 const WS_PORT = 3716;
@@ -288,5 +295,39 @@ describe('UI control tools', () => {
     expect(a.result.status).toBe('restarting');
     expect(restarts).toBe(1);
     setUiControlHandlers({}); // restore
+  });
+});
+
+describe('domain permission gate (tool integration)', () => {
+  it('openBrowserSurface auto-allows after permission:sync grants', async () => {
+    const { permissionBroker, processMcpMessage } = await import('../src/mcp-server');
+    permissionBroker.syncGrants(['granted.example']);
+    const res = await processMcpMessage({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name: 'openBrowserSurface', arguments: { url: 'https://granted.example/page' } },
+      id: 901,
+    } as never);
+    expect(res.response.result.status).toBe('opened');
+    permissionBroker.syncGrants([]);
+  });
+
+  it('openBrowserSurface returns denied when the human denies', async () => {
+    const { permissionBroker, pendingForTest, processMcpMessage } = await import('../src/mcp-server');
+    permissionBroker.syncGrants([]);
+    const call = processMcpMessage({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name: 'openBrowserSurface', arguments: { url: 'https://ask-me.example/x' } },
+      id: 902,
+    } as never);
+    await new Promise((r) => setTimeout(r, 20));
+    const ids = pendingForTest();
+    const mine = ids[ids.length - 1]!; // newest = our request
+    expect(mine).toBeTruthy();
+    permissionBroker.respond(mine, 'deny');
+    const res = await call;
+    expect(res.response.result.status).toBe('denied');
+    expect(res.response.result.reason).toBe('deny');
   });
 });

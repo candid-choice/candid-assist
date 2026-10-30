@@ -15,6 +15,8 @@ Usage:
 
 type SurfaceEventType =
   | "surface:push"
+  | "permission:request"
+  | "permission:resolved"
   | "surface:response"
   | "surface:close"
   | "surface:error"
