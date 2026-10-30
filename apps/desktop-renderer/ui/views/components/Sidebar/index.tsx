@@ -75,17 +75,6 @@ function Sidebar({
     <div className={`ha-sidebar ${open ? "open" : ""}`} style={{ width: open ? `${width}px` : "0px" }}>
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="ha-sidebar-header">
-        <button className="ha-sidebar-toggle" onClick={onToggle} title={open ? "Collapse" : "Expand"}>
-          {open ? (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-          )}
-        </button>
       </div>
 
       {/* ── Search ─────────────────────────────────────────────── */}

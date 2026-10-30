@@ -47,7 +47,13 @@ function resolve(
 export function ConnectionIndicator() {
   const connectionState = useStore((s) => s.connectionState);
   const agentCount = useStore((s) => s.mcpAgentCount);
-  const meta = resolve(connectionState, agentCount);
+  const standalone = useStore((s) => s.mcpStandalone);
+  const meta = standalone
+    ? {
+        label: "Standalone renderer",
+        dotClass: "ha-connection-dot--disconnected",
+      }
+    : resolve(connectionState, agentCount);
 
   return (
     <span

@@ -98,7 +98,11 @@ interface AppState {
   /** Number of MCP agents (pi sessions, Claude Code, scripts) the
    *  server has seen within its online window. Volatile — never persisted. */
   mcpAgentCount: number;
+  /** True when running outside Electron (plain browser tab): no
+   * desktop MCP server belongs to this window at all. */
+  mcpStandalone: boolean;
   setMcpAgentCount: (count: number) => void;
+  setMcpStandalone: (v: boolean) => void;
 
   /** Browser automation handoffs: surfaceId -> reason while the human
    *  has control (agent tools blocked). Volatile. */
@@ -265,6 +269,7 @@ export const useStore = create<AppState>()(
         set({ connectionState: state }),
 
       mcpAgentCount: 0,
+      mcpStandalone: false,
 
       browserHandoffs: {},
 
@@ -277,6 +282,7 @@ export const useStore = create<AppState>()(
         }),
 
       setMcpAgentCount: (count: number) => set({ mcpAgentCount: Math.max(0, count) }),
+      setMcpStandalone: (v: boolean) => set({ mcpStandalone: v }),
 
       uiMessages: [],
 
@@ -329,10 +335,37 @@ export const useStore = create<AppState>()(
         }),
 
       removeSession: (id: string) =>
-        set((s) => ({
-          sessions: s.sessions.filter((sess) => sess.id !== id),
-          activeSessionId: s.activeSessionId === id ? null : s.activeSessionId,
-        })),
+        set((s) => {
+          // Deleting a session closes every surface it owns.
+          const agentSessions = { ...s.agentSessions };
+          for (const [key, sid] of Object.entries(agentSessions)) {
+            if (sid === id) delete agentSessions[key];
+          }
+          const removed = new Set(
+            s.views
+              .filter((v) => (v as unknown as { sessionId?: string }).sessionId === id)
+              .map((v) => v.id),
+          );
+          const views = s.views.filter(
+            (v) => (v as unknown as { sessionId?: string }).sessionId !== id,
+          );
+          let activeViewId = s.activeViewId;
+          if (activeViewId && removed.has(activeViewId)) {
+            activeViewId = views.length > 0 ? views[views.length - 1].id : null;
+          }
+          const activeSurface =
+            s.activeSurface && removed.has(s.activeSurface.id)
+              ? null
+              : s.activeSurface;
+          return {
+            sessions: s.sessions.filter((sess) => sess.id !== id),
+            agentSessions,
+            activeSessionId: s.activeSessionId === id ? null : s.activeSessionId,
+            views,
+            activeViewId,
+            activeSurface,
+          };
+        }),
 
       setActiveSession: (id: string | null) => set({ activeSessionId: id }),
 
@@ -365,6 +398,10 @@ export const useStore = create<AppState>()(
       // to discard stale persisted state when the durable shape changes.
       version: 1,
       storage: createJSONStorage(() => idbStorage),
+      // v0 → v1 was a pure shape-cleanup (dropped legacy seeds); pass the
+      // old state through so zustand doesn't log a migrate error.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      migrate: (persistedState: any) => persistedState as AppState,
       partialize: persistableSlice,
     },
   ),

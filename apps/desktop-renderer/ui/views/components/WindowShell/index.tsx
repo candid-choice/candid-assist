@@ -5,6 +5,7 @@ import "./index.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useWindowMaximize } from "../../services/window-controls";
+import { ClaudeMark } from "./claude-mark";
 
 export interface WindowShellProps {
   /** Application title. */
@@ -75,7 +76,7 @@ export function WindowShell({
         onDoubleClick={toggleMaximize}
       >
         <div className="ha-titlebar-label">
-          <span className="ha-titlebar-label-icon">✦</span>
+          <span className="ha-titlebar-label-icon"><ClaudeMark /></span>
           {title}
         </div>
         {userStatus && (

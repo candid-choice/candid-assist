@@ -31,7 +31,28 @@ export interface DesktopAPI {
     registerGuest: (surfaceId: string, webContentsId: number) => void;
     unregisterGuest: (surfaceId: string) => void;
   };
+  /** Optional in tests/mocks; present in the real Electron preload. */
+  mcp?: {
+    getStatus: () => Promise<McpStatusPayload>;
+    onStatus: (callback: (status: McpStatusPayload) => void) => () => void;
+  };
+  system?: {
+    pickFolder: () => Promise<string | null>;
+    checkForUpdates: () => Promise<{ phase: string; version?: string; error?: string }>;
+  };
   readonly runtime: 'electron';
+}
+
+/** Plain structured-clone mirror of main's McpStatus. */
+export interface McpStatusPayload {
+  ok: boolean;
+  mcp: {
+    agentLastSeen: number;
+    agentConnected: boolean;
+    agentCount: number;
+    agents: Array<{ name: string; ip: string; lastSeen: number }>;
+  };
+  ws: { clients: number };
 }
 
 /** Returns the Electron bridge when running under Electron, else undefined. */

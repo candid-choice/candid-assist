@@ -13,7 +13,7 @@ get no preload and a host-allowlist navigation policy.
 import { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, webContents as webContentsNS } from 'electron';
 
 import { checkForUpdates as checkAppUpdate, onUpdaterState } from '../../src/updater';
-import { setUiControlHandlers } from '../../src/mcp-server';
+import { setUiControlHandlers, getMcpStatus } from '../../src/mcp-server';
 import {
   registerGuest,
   unregisterGuest,
@@ -177,6 +177,34 @@ ipcMain.on('desktop:guest:register', (_e, msg: { surfaceId: string; webContentsI
 ipcMain.handle('desktop:updater:check', async () => {
   return checkAppUpdate();
 });
+
+// ── MCP presence over IPC ───────────────────────────────────────────
+// The MCP server lives in THIS (main/Node) process, so the renderer asks
+// us directly instead of probing http://localhost:<mcpPort>/status. That
+// HTTP endpoint stays only for external/dev clients (e.g. plain-browser
+// renderer tabs), never for the Electron window.
+ipcMain.handle('desktop:mcp:status', (event) => {
+  // Baseline sender check: only the window's main frame may ask.
+  if (event.senderFrame && event.senderFrame !== event.sender.mainFrame) {
+    throw new Error('Unauthorized IPC caller');
+  }
+  return getMcpStatus();
+});
+
+let lastMcpAgentCount = -1;
+setInterval(() => {
+  let status;
+  try {
+    status = getMcpStatus();
+  } catch {
+    return;
+  }
+  if (status.mcp.agentCount === lastMcpAgentCount) return;
+  lastMcpAgentCount = status.mcp.agentCount;
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send('desktop:mcp:status', status);
+  }
+}, 2000);
 
 ipcMain.handle('desktop:workspace:pick', async () => {
   const result = await dialog.showOpenDialog({

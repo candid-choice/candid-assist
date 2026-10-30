@@ -6,6 +6,18 @@ Node, no fs. Remote WebContentsViews get no preload at all.
 
 import { contextBridge, ipcRenderer } from 'electron';
 
+/** Mirror of McpStatus (src/mcp-server.ts) — plain structured-clone data. */
+export interface McpStatusPayload {
+  ok: boolean;
+  mcp: {
+    agentLastSeen: number;
+    agentConnected: boolean;
+    agentCount: number;
+    agents: Array<{ name: string; ip: string; lastSeen: number }>;
+  };
+  ws: { clients: number };
+}
+
 export interface ViewBounds {
   x: number;
   y: number;
@@ -33,6 +45,11 @@ export interface DesktopAPI {
     pickFolder: () => Promise<string | null>;
     checkForUpdates: () => Promise<{ phase: string; version?: string; error?: string }>;
   };
+  /** MCP agent presence — served by the main process (no HTTP probe). */
+  mcp: {
+    getStatus: () => Promise<McpStatusPayload>;
+    onStatus: (callback: (status: McpStatusPayload) => void) => () => void;
+  };
   /** Runtime discriminator used by the renderer. */
   readonly runtime: 'electron';
 }
@@ -55,6 +72,17 @@ const api: DesktopAPI = {
       ipcRenderer.send('desktop:guest:register', { surfaceId, webContentsId }),
     unregisterGuest: (surfaceId) =>
       ipcRenderer.send('desktop:guest:unregister', { surfaceId }),
+  },
+  mcp: {
+    getStatus: () => ipcRenderer.invoke('desktop:mcp:status'),
+    onStatus: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: McpStatusPayload) =>
+        callback(status);
+      ipcRenderer.on('desktop:mcp:status', listener);
+      return () => {
+        ipcRenderer.removeListener('desktop:mcp:status', listener);
+      };
+    },
   },
   system: {
     pickFolder: () => ipcRenderer.invoke('desktop:workspace:pick'),
