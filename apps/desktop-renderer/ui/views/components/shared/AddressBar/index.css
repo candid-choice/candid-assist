@@ -123,3 +123,6 @@
   color: var(--ha-text);
   opacity: 1;
 }
+
+.ha-address-tab-icon { margin-right: 5px; font-size: 11px; }
+.ha-address-tab-label--saved { opacity: 0.7; font-style: italic; }

@@ -20,7 +20,8 @@ import {
   SessionHarnessBadge,
 } from "./components";
 import { useStoreSelector, useStore } from "./store";
-import { deriveSessionTabs, reopenRecordedSurface } from "./lib/session-tabs";
+import { deriveSessionTabs, reopenRecordedSurface, pickVisibleSurface } from "./lib/session-tabs";
+import { SessionEmptyGuide } from "./components/SessionEmptyGuide";
 import { deriveTaskTitle, useCreateSession } from "./hooks/use-create-session";
 import { useHideNativeViews } from "./hooks/use-hide-native-views";
 
@@ -73,9 +74,21 @@ function App() {
 
   // Chrome tabs: surfaces belonging to the ACTIVE session — open views
   // plus recorded surfaces the session opened (click to re-open).
-  const addressBarTabs = deriveSessionTabs(activeSession, views as never).map(
-    (t) => ({ id: t.id, label: t.label }),
-  );
+  const sessionTabs = deriveSessionTabs(activeSession, views as never);
+  const addressBarTabs = sessionTabs.map((t) => ({
+    id: t.id,
+    label: t.label,
+    icon: t.icon,
+  }));
+
+  // Strict session scoping: never show a surface from another session,
+  // and none at all when no session is selected.
+  const sessionOpenViews = (views as never[]).filter((v) =>
+    activeSession
+      ? (v as { sessionId?: string }).sessionId === activeSession.id
+      : false,
+  ) as typeof views;
+  const visibleSurface = pickVisibleSurface(activeSession, activeSurface, sessionOpenViews as never[]) as typeof activeSurface;
 
   const handleTabClick = useCallback(
     (id: string) => {
@@ -126,7 +139,7 @@ function App() {
             <div className="ha-chrome-bar">
               <AddressBar
                 tabs={addressBarTabs}
-                activeTabId={activeViewId}
+                activeTabId={visibleSurface?.id ?? null}
                 onTabClick={handleTabClick}
                 onTabClose={closeView}
               />
@@ -139,8 +152,10 @@ function App() {
                 <SettingsScreen onBack={() => setSettingsOpen(false)} />
               ) : signInOpen ? (
                 <SignInScreen onDismiss={closeSignIn} />
-              ) : activeSurface ? (
-                <SurfaceHost config={activeSurface} isViewActive />
+              ) : activeSession && sessionTabs.length === 0 ? (
+                <SessionEmptyGuide session={activeSession} />
+              ) : visibleSurface ? (
+                <SurfaceHost config={visibleSurface} isViewActive />
               ) : activeSessionId ? (
                 <AppSessionDetail />
               ) : (

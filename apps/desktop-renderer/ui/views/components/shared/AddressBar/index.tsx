@@ -4,7 +4,7 @@ import "./index.css";
 
 export interface AddressBarProps {
   /** Tab definitions. */
-  tabs: { id: string; label: string }[];
+  tabs: { id: string; label: string; icon?: string }[];
   /** Currently active tab ID. */
   activeTabId: string | null;
   /** Called when a tab is clicked. */
@@ -30,7 +30,16 @@ export function AddressBar({
             type="button"
             onClick={() => onTabClick(tab.id)}
           >
-            <span className="ha-address-tab-label">{tab.label}</span>
+            {tab.icon && (
+              <span className="ha-address-tab-icon" aria-hidden>
+                {tab.icon}
+              </span>
+            )}
+            <span
+              className={`ha-address-tab-label${tab.id.startsWith("saved:") ? " ha-address-tab-label--saved" : ""}`}
+            >
+              {tab.label}
+            </span>
             {onTabClose && (
               <span
                 className="ha-address-tab-close"

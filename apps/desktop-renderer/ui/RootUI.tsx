@@ -24,6 +24,7 @@ import {
   createSession,
 } from "./views/services/sync/sync-service";
 import { setReplayExecutor, onReconnect, queueAction } from "./views/errors/offline-queue";
+import { surfaceLabel } from "./views/lib/session-tabs";
 import { startMcpStatusPolling } from "./views/services/mcp-status";
 
 // ── Live services (module scope — run once, not per StrictMode render) ──
@@ -101,7 +102,7 @@ if (typeof window !== "undefined") {
 
       useStore.getState().openSurface({
         id: surfaceId,
-        label: type.charAt(0).toUpperCase() + type.slice(1).replace(/-/g, " "),
+        label: surfaceLabel(type, payload),
         type: type as never,
         title: type.charAt(0).toUpperCase() + type.slice(1) + " Surface",
         payload,
