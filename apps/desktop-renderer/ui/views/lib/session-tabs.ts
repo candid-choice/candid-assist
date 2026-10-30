@@ -109,7 +109,10 @@ export function pickVisibleSurface<T extends { id: string }>(
 
 /** Human tab label: 'Browser · react.dev', 'Input · Ship it?', … */
 export function surfaceLabel(type: string, payload: unknown): string {
-  const base = type.charAt(0).toUpperCase() + type.slice(1).replace(/-/g, " ");
+  const base = type
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
   const p = (payload ?? {}) as Record<string, unknown>;
   let hint = "";
   if (typeof p.url === "string" && p.url) {
