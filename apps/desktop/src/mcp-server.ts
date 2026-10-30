@@ -895,7 +895,13 @@ const __toolName = (params as Record<string, unknown>)["name"];
         if (client.readyState === WebSocket.OPEN) client.send(event);
       }
     }
-    return { response: { jsonrpc: "2.0", result, id } };
+    // MCP-spec shape: tools/call results carry content[] text; the raw
+    // fields are kept alongside for our own tests/legacy clients.
+    const shaped = {
+      content: [{ type: "text", text: JSON.stringify(result) }],
+      ...result,
+    };
+    return { response: { jsonrpc: "2.0", result: shaped, id } };
   } catch (err) {
     const error = err as Error;
     return { response: { jsonrpc: "2.0", error: { code: -32603, message: error.message }, id } };
