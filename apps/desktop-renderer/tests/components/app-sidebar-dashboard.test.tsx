@@ -55,6 +55,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('AppSidebar per-row delete', () => {
+  it('renders a delete button that removes the session after confirm', async () => {
+    useStore.getState().setSessions([makeSession('a'), makeSession('b')]);
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const fetchFn = mockFetch(async () => ({ ok: true, json: async () => ({}) }));
+    render(<AppSidebar />);
+
+    const buttons = await screen.findAllByRole('button', { name: /delete session a/i });
+    fireEvent.click(buttons[0]!);
+    expect(confirmSpy).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(useStore.getState().sessions.map((s) => s.id)).toEqual(['b']),
+    );
+    expect(fetchFn.mock.calls.some((call) => String(call[0]).includes('sessions/a'))).toBe(true);
+    confirmSpy.mockRestore();
+  });
+});
+
 // ── Mapping ────────────────────────────────────────────────────────────────
 
 describe('toSidebarSession', () => {

@@ -116,6 +116,7 @@ export function AppSidebar({
         onToggle={onToggle ?? (() => {})}
         sessions={sessions.map(toSidebarSession)}
         onSessionClick={handleSessionClick}
+        onItemDelete={(id) => handleDelete(id)}
         onItemContextMenu={(session, x, y) => setMenu({ session, x, y })}
         onClearAll={handleClearAll}
         activeSessionId={activeSessionId}

@@ -24,6 +24,7 @@ export interface SidebarProps {
   onToggle: () => void;
   sessions: SidebarSession[];
   onSessionClick: (id: string) => void;
+  onItemDelete?: (id: string) => void;
   onItemContextMenu?: (session: SidebarSession, x: number, y: number) => void;
   onClearAll?: () => void;
   activeSessionId: string | null;
@@ -61,6 +62,7 @@ function Sidebar({
   onToggle,
   sessions,
   onSessionClick,
+  onItemDelete,
   onItemContextMenu,
   onClearAll,
   activeSessionId,
@@ -114,6 +116,22 @@ function Sidebar({
                 {formatTimeAgo(session.updatedAt)} · {session.surfaceCount} surface{session.surfaceCount !== 1 ? "s" : ""}
               </div>
             </div>
+            {onItemDelete && (
+              <button
+                type="button"
+                className="ha-sidebar-item-delete"
+                title="Delete session"
+                aria-label={`Delete ${session.title}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (window.confirm(`Delete “${session.title}”? This cannot be undone.`)) {
+                    onItemDelete(session.id);
+                  }
+                }}
+              >
+                ✕
+              </button>
+            )}
           </div>
         ))}
         {onClearAll && sessions.length > 0 && (

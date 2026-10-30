@@ -321,18 +321,19 @@ export const useStore = create<AppState>()(
         })),
 
       deleteAllSessions: () =>
-        set((state) => {
-          const ids = new Set(state.sessions.map((x) => x.id));
-          return {
-            sessions: [],
-            agentSessions: {},
-            activeSessionId: null,
-            views: state.views.filter((v) => {
-              const sid = (v as unknown as { sessionId?: string }).sessionId;
-              return !sid || !ids.has(sid);
-            }),
-          };
-        }),
+        set(() => ({
+          // A true reset: every view is session-owned (all surfaces come
+          // from MCP pushes bound to a session), so clear-all empties the
+          // whole workspace — including any orphaned surface whose session
+          // was already removed — otherwise it persists in IndexedDB and
+          // reappears on the next reload.
+          sessions: [],
+          agentSessions: {},
+          activeSessionId: null,
+          views: [],
+          activeViewId: null,
+          activeSurface: null,
+        })),
 
       removeSession: (id: string) =>
         set((s) => {
