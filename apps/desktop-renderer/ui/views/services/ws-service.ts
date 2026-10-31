@@ -17,6 +17,7 @@ type SurfaceEventType =
   | "surface:push"
   | "permission:request"
   | "permission:resolved"
+  | "permission:grants-cleared"
   | "surface:response"
   | "surface:close"
   | "surface:error"

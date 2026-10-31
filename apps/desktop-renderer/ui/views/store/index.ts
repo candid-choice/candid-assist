@@ -106,6 +106,7 @@ interface AppState {
   browserGrants: string[];
   addBrowserGrant: (domain: string) => void;
   clearBrowserGrants: () => void;
+  removeBrowserGrant: (domain: string) => void;
   pendingPermission: {
     id: string;
     host: string;
@@ -292,6 +293,12 @@ export const useStore = create<AppState>()(
             : { browserGrants: [...state.browserGrants, d] };
         }),
       clearBrowserGrants: () => set({ browserGrants: [] }),
+      removeBrowserGrant: (domain: string) =>
+        set((state) => ({
+          browserGrants: state.browserGrants.filter(
+            (d) => d !== domain.toLowerCase().replace(/^www\./, ""),
+          ),
+        })),
       pendingPermission: null,
       setPendingPermission: (p) => set({ pendingPermission: p }),
       mcpStandalone: false,

@@ -44,6 +44,8 @@ export interface DesktopAPI {
   system: {
     pickFolder: () => Promise<string | null>;
     checkForUpdates: () => Promise<{ phase: string; version?: string; error?: string }>;
+    /** Wipe saved sign-ins (persist:harness-web) + domain grants. */
+    clearWebProfile: () => Promise<{ status: string }>;
   };
   /** MCP agent presence — served by the main process (no HTTP probe). */
   mcp: {
@@ -87,6 +89,7 @@ const api: DesktopAPI = {
   system: {
     pickFolder: () => ipcRenderer.invoke('desktop:workspace:pick'),
     checkForUpdates: () => ipcRenderer.invoke('desktop:updater:check'),
+    clearWebProfile: () => ipcRenderer.invoke('desktop:web:clear-profile'),
   },
   runtime: 'electron',
 };

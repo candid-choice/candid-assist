@@ -71,6 +71,11 @@ if (typeof window !== "undefined") {
       }
       return;
     }
+    if (event.event === "permission:grants-cleared") {
+      // Saved sign-ins wiped server-side → forget grants locally too.
+      useStore.getState().clearBrowserGrants();
+      return;
+    }
     if (event.event === "permission:resolved") {
       // Answered elsewhere (another window / automation) → dismiss our prompt.
       const d = event.data as { id?: string };

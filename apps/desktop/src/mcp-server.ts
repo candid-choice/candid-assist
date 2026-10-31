@@ -1049,6 +1049,17 @@ function sendToWsClients(eventObj: Record<string, unknown>): void {
 /** Exported for tests + potential UI-side introspection. */
 export const permissionBroker = new PermissionBroker(sendToWsClients);
 
+/** Broadcast an app-level event to all renderer windows (ws surface bus). */
+export function broadcastAppEvent(event: string, data?: unknown): void {
+  sendToWsClients({ event, data, timestamp: Date.now() });
+}
+
+/** Forget all domain grants (used when the saved sign-in profile is wiped). */
+export function clearDomainGrants(): void {
+  permissionBroker.syncGrants([]);
+  broadcastAppEvent("permission:grants-cleared");
+}
+
 /** Ids currently awaiting a human answer (tests/diagnostics). */
 export function pendingForTest(): string[] {
   return pendingPermissionIds(permissionBroker);

@@ -220,3 +220,29 @@
 .ha-settings-workspace-browse:hover {
   background: var(--ha-primary-light);
 }
+
+/* Web Access grants chips */
+.ha-web-grants { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ha-web-grant-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 9px;
+  border: 1px solid var(--ha-border, #ddd);
+  border-radius: 999px;
+  background: var(--ha-surface, #fff);
+  font-size: 11px;
+}
+.ha-web-grant-chip code { color: var(--ha-text); }
+.ha-web-grant-revoke {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ha-text-secondary, #888);
+  cursor: pointer;
+  font-size: 10px;
+}
+.ha-web-grant-revoke:hover { background: #dc2626; color: #fff; }

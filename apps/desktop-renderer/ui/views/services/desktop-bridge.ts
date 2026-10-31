@@ -39,6 +39,7 @@ export interface DesktopAPI {
   system?: {
     pickFolder: () => Promise<string | null>;
     checkForUpdates: () => Promise<{ phase: string; version?: string; error?: string }>;
+    clearWebProfile: () => Promise<{ status: string }>;
   };
   readonly runtime: 'electron';
 }

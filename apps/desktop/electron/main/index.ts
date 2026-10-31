@@ -13,7 +13,7 @@ get no preload and a host-allowlist navigation policy.
 import { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, webContents as webContentsNS } from 'electron';
 
 import { checkForUpdates as checkAppUpdate, onUpdaterState } from '../../src/updater';
-import { setUiControlHandlers, getMcpStatus } from '../../src/mcp-server';
+import { setUiControlHandlers, getMcpStatus, clearDomainGrants } from '../../src/mcp-server';
 import {
   registerGuest,
   unregisterGuest,
@@ -205,6 +205,17 @@ setInterval(() => {
     if (!win.isDestroyed()) win.webContents.send('desktop:mcp:status', status);
   }
 }, 2000);
+
+// Wipe the persistent web partition (saved sign-ins) + domain grants.
+ipcMain.handle('desktop:web:clear-profile', async (event) => {
+  if (event.senderFrame && event.senderFrame !== event.sender.mainFrame) {
+    throw new Error('Unauthorized IPC caller');
+  }
+  const { session } = await import('electron');
+  await session.fromPartition('persist:harness-web').clearStorage();
+  clearDomainGrants();
+  return { status: 'cleared' };
+});
 
 ipcMain.handle('desktop:workspace:pick', async () => {
   const result = await dialog.showOpenDialog({
