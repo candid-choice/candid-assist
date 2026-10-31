@@ -1209,6 +1209,7 @@ async function handleGoogleSearch(args: unknown): Promise<Record<string, unknown
       pageTitle: document.title,
       url: location.href,
       loginRequired: location.href.includes('accounts.google.com') || /before you continue/i.test(document.body?.innerText || ''),
+      botCheck: /sorry\/index|unusual traffic|recaptcha|are you a robot/i.test(location.href + ' ' + (document.body?.innerText || '')),
       results,
       pageText: (document.body?.innerText || '').slice(0, 4000),
     });
@@ -1220,6 +1221,21 @@ async function handleGoogleSearch(args: unknown): Promise<Record<string, unknown
     parsed = typeof r.value === "string" ? JSON.parse(r.value) : {};
   } catch {
     /* malformed eval result */
+  }
+  if (parsed["botCheck"]) {
+    notifyHandoff(r.surfaceId, true, "Google human check — solve it, then click Done");
+    browserHandoffs.set(r.surfaceId, {
+      reason: "Google human check (unusual traffic)",
+      ts: Date.now(),
+    });
+    return {
+      tool: "googleSearch",
+      query,
+      status: "human-check-required",
+      handoff: true,
+      surfaceId: r.surfaceId,
+      note: "Human: solve the check in the pane and click Done; then ask the agent to search again (the persistent profile remembers you).",
+    };
   }
   return { tool: "googleSearch", query, surfaceId: r.surfaceId, ...parsed };
 }

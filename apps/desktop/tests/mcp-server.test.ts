@@ -417,3 +417,36 @@ describe('domain recipes (googleSearch / readGoogleDriveDoc / scrapeSelective)',
     expect(res.result.text).toContain('Pro $30');
   });
 });
+
+describe('googleSearch bot-check handoff', () => {
+  it('auto-hands-off when Google shows an unusual-traffic page', async () => {
+    const { permissionBroker } = await import('../src/mcp-server');
+    const { setGuestResolver, registerGuest } = await import('../src/guest-registry');
+    permissionBroker.syncGrants(['google.com']);
+    setGuestResolver(() => ({
+      executeJavaScript: async () => JSON.stringify({
+        pageTitle: 'https://www.google.com/sorry/index',
+        url: 'https://www.google.com/sorry/index',
+        loginRequired: false,
+        botCheck: true,
+        results: [],
+        pageText: 'Our systems have detected unusual traffic from your computer network.',
+      }),
+      loadURL: async () => {},
+      capturePage: async () => ({ toDataURL: () => 'data:,' }),
+      isDestroyed: () => false,
+      getURL: () => 'https://google.com/sorry',
+    }));
+    registerGuest('surf_bot', 78);
+    const { processMcpMessage } = await import('../src/mcp-server');
+    const out = await processMcpMessage({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name: 'googleSearch', arguments: { query: 'mount sinai' } },
+      id: 960,
+    } as never);
+    const res = (out as { response: Record<string, any> }).response;
+    expect(res.result.status).toBe('human-check-required');
+    expect(res.result.handoff).toBe(true);
+  });
+});
