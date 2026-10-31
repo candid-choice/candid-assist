@@ -7,6 +7,7 @@ depends on the correct type).
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { startMcpServer, permissionBroker } from '@/mcp-server';
+import { setGuestResolver, registerGuest } from '@/guest-registry';
 import { WebSocket } from 'ws';
 
 // The permission gate prompts a human; in tests nobody answers, so
@@ -116,12 +117,12 @@ describe('MCP tools/call router', () => {
     expect(res.result.capabilities.tools).toBeDefined();
   });
 
-  it('lists all 7 tools with input schemas (tools/list)', async () => {
+  it('lists all tools with input schemas (tools/list)', async () => {
     const res = await fetch(MCP_URL, {
       method: 'POST',
       body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
     }).then((r) => r.json());
-    expect(res.result.tools).toHaveLength(23);
+    expect(res.result.tools).toHaveLength(26);
     const names = res.result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain('openBrowserSurface');
     expect(names).toContain('openInputSurface');
@@ -329,5 +330,90 @@ describe('domain permission gate (tool integration)', () => {
     const res = await call;
     expect(res.response.result.status).toBe('denied');
     expect(res.response.result.reason).toBe('deny');
+  });
+});
+
+describe('domain recipes (googleSearch / readGoogleDriveDoc / scrapeSelective)', () => {
+  async function callTool(name: string, args: Record<string, unknown>, id: number) {
+    const { processMcpMessage } = await import('../src/mcp-server');
+    const out = await processMcpMessage({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name, arguments: args },
+      id,
+    } as never);
+    return (out as { response: Record<string, never> }).response as { result?: Record<string, any>; error?: { message: string } };
+  }
+
+  function installFakeGuest(payloadFactory: (js: string) => string) {
+    const calls: string[] = [];
+    const fake = {
+      executeJavaScript: async (code: string) => { calls.push(code); return payloadFactory(code); },
+      loadURL: async () => {},
+      capturePage: async () => ({ toDataURL: () => 'data:,' }),
+      isDestroyed: () => false,
+      getURL: () => 'https://page',
+    };
+    setGuestResolver(() => fake);
+    registerGuest('surf_recipe', 77);
+    return calls;
+  }
+
+  it('googleSearch returns parsed results through the consent-gated pipeline', async () => {
+    const { permissionBroker } = await import('../src/mcp-server');
+    permissionBroker.syncGrants(['google.com']);
+    installFakeGuest(() => JSON.stringify({
+      pageTitle: 'mount sinai - Google Search',
+      url: 'https://www.google.com/search?q=mount+sinai',
+      loginRequired: false,
+      results: [{ title: 'Mount Sinai', link: 'https://www.mountsinai.org' }],
+      pageText: 'Mount Sinai is a hospital system…',
+    }));
+    const res = await callTool('googleSearch', { query: 'mount sinai' }, 950);
+    expect(res.result.tool).toBe('googleSearch');
+    expect(res.result.query).toBe('mount sinai');
+    expect(res.result.results).toHaveLength(1);
+    expect(res.result.results[0].link).toBe('https://www.mountsinai.org');
+  });
+
+  it('googleSearch rejects empty and oversized queries', async () => {
+    const res = await callTool('googleSearch', { query: '   ' }, 951);
+    expect(res.error.message).toMatch(/MCP_001/);
+    const big = await callTool('googleSearch', { query: 'x'.repeat(513) }, 952);
+    expect(big.error.message).toMatch(/MCP_012/);
+  });
+
+  it('readGoogleDriveDoc triggers handoff when sign-in is required', async () => {
+    const { permissionBroker } = await import('../src/mcp-server');
+    permissionBroker.syncGrants(['docs.google.com']);
+    installFakeGuest(() => JSON.stringify({
+      pageTitle: 'Sign in',
+      url: 'https://accounts.google.com/v3/signin',
+      loginRequired: true,
+      text: 'Sign in to continue',
+    }));
+    const res = await callTool('readGoogleDriveDoc', { url: 'https://docs.google.com/document/d/abc' }, 953);
+    expect(res.result.status).toBe('login-required');
+    expect(res.result.handoff).toBe(true);
+  });
+
+  it('readGoogleDriveDoc rejects non-drive URLs', async () => {
+    const res = await callTool('readGoogleDriveDoc', { url: 'https://evil.example/doc' }, 954);
+    expect(res.error.message).toMatch(/BROWSER_006/);
+  });
+
+  it('scrapeSelective extracts selector matches', async () => {
+    const { permissionBroker } = await import('../src/mcp-server');
+    permissionBroker.syncGrants(['acme.dev']);
+    installFakeGuest(() => JSON.stringify({
+      pageTitle: 'Pricing',
+      url: 'https://acme.dev/pricing',
+      matched: 2,
+      text: 'Starter $10\n---\nPro $30',
+    }));
+    const res = await callTool('scrapeSelective', { url: 'https://acme.dev/pricing', selector: '.price-card' }, 955);
+    expect(res.result.tool).toBe('scrapeSelective');
+    expect(res.result.selector).toBe('.price-card');
+    expect(res.result.text).toContain('Pro $30');
   });
 });

@@ -212,7 +212,7 @@ ipcMain.handle('desktop:web:clear-profile', async (event) => {
     throw new Error('Unauthorized IPC caller');
   }
   const { session } = await import('electron');
-  await session.fromPartition('persist:harness-web').clearStorage();
+  await session.fromPartition('persist:harness-web').clearStorageData();
   clearDomainGrants();
   return { status: 'cleared' };
 });

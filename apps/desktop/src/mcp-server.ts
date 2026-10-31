@@ -9,7 +9,7 @@ Starts on port 3615, retries 3616–3624 if in use.
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 
-import { resolveGuestEntry, listGuestSurfaceIds, unregisterGuest } from "./guest-registry";
+import { resolveGuestEntry, resolveGuest, listGuestSurfaceIds, unregisterGuest, type GuestHandle } from "./guest-registry";
 import { checkForUpdates, onUpdaterState } from "./updater";
 import {
   startProcess as registryStart,
@@ -639,6 +639,40 @@ const TOOL_DEFINITIONS = [
       },
     },
   },
+    {
+      name: 'googleSearch',
+      description: 'Google web search via the embedded browser (consent-gated). Returns result titles/links + page text to summarize.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query (<=512 chars)' },
+        },
+        required: ['query'],
+      },
+    },
+    {
+      name: 'readGoogleDriveDoc',
+      description: 'Read a Google Drive/Docs page the human has access to (persistent login). If signed out, triggers handoff so the human logs in once.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'https://drive|docs|sites.google.com/... URL' },
+        },
+        required: ['url'],
+      },
+    },
+    {
+      name: 'scrapeSelective',
+      description: 'Open a page (consent-gated) and extract either a CSS-selector match list or the main text content.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'Absolute http(s) URL' },
+          selector: { type: 'string', description: 'Optional CSS selector; omit for full body text' },
+        },
+        required: ['url'],
+      },
+    },
   {
     name: 'reloadUI',
     description: 'Reload the Human Assist window (renderer + layout) from the current UI server — no need to close/restart the app after UI changes.',
@@ -726,6 +760,9 @@ const TOOL_HANDLERS: Record<
   openInputSurface: handleOpenInputSurface,
   showMessage: handleShowMessage,
   browserNavigate: handleBrowserNavigate,
+  googleSearch: handleGoogleSearch,
+  readGoogleDriveDoc: handleReadGoogleDriveDoc,
+  scrapeSelective: handleScrapeSelective,
   browserSnapshot: handleBrowserSnapshot,
   browserClick: handleBrowserClick,
   browserType: handleBrowserType,
@@ -987,7 +1024,7 @@ function startWebSocketServer(port: number): WebSocketServer {
     client.on("error", () => wsClients.delete(client));
     client.on("message", (data) => {
       try {
-        const msg = JSON.parse(data.toString()) as { type?: unknown; surfaceId?: unknown; id?: unknown; action?: unknown };
+        const msg = JSON.parse(data.toString()) as { type?: unknown; surfaceId?: unknown; id?: unknown; action?: unknown; domains?: unknown; decision?: unknown };
         if (msg && msg.type === "process:control" && typeof msg.id === "string") {
           try {
             if (msg.action === "kill") registryStop(msg.id);
@@ -1064,6 +1101,195 @@ export function clearDomainGrants(): void {
 export function pendingForTest(): string[] {
   return pendingPermissionIds(permissionBroker);
 }
+
+
+// ── Domain recipes (plan: specialized-surfaces.md item 2) ────────────────
+// High-level, consent-gated web workflows the agent invokes in one call.
+
+const RECIPE_TEXT_LIMIT = 8_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Navigate (reusing or opening an agent browser surface) and evaluate
+ * JS in the page after a settle delay. Consent-gated. */
+async function agentNavigateAndEval(
+  url: string,
+  tool: string,
+  evalJs: string,
+  agentArgs: Record<string, unknown>,
+): Promise<
+  | { ok: true; surfaceId: string; value: unknown }
+  | { ok: false; status: "denied"; reason: string; url: string }
+  | { ok: false; status: "no-guest"; url: string }
+> {
+  const perm = await permissionBroker.ensure(url, tool);
+  if (!perm.allowed) return { ok: false, status: "denied", reason: perm.decision, url };
+
+  // Reuse an already-mounted guest (live tab) when we have one.
+  let surfaceId = listGuestSurfaceIds()[0];
+  let handle: GuestHandle | undefined;
+  if (surfaceId) {
+    try {
+      handle = resolveGuest(surfaceId);
+    } catch {
+      handle = undefined;
+    }
+  }
+  if (!handle) {
+    // Open a fresh surface for this URL and wait for the renderer to
+    // mount its <webview> guest.
+    if (openSurfaces.size >= MAX_SURFACES) throw new Error("MCP_002: Maximum surfaces reached");
+    surfaceId = generateSurfaceId();
+    openSurfaces.set(surfaceId, {
+      surfaceId,
+      type: "browser",
+      payload: {
+        url,
+        ...(isLocalhostUrl(url) ? { warning: LOCALHOST_WARNING } : {}),
+      },
+      createdAt: Date.now(),
+      lastActive: Date.now(),
+      status: "open",
+    });
+    const agentTag =
+      agentArgs["agentSessionId"] || agentArgs["agentClient"]
+        ? {
+            agent: {
+              client: (agentArgs["agentClient"] as string) ?? "agent",
+              agentSessionId: (agentArgs["agentSessionId"] as string) ?? null,
+            },
+          }
+        : {};
+    notifySurfacePush({
+      surfaceId,
+      type: "browser",
+      payload: { url },
+      status: "pushed",
+      ...agentTag,
+    });
+    // Wait for guest registration (webview attach is async).
+    for (let waited = 0; waited < 10_000; waited += 250) {
+      try {
+        handle = resolveGuest(surfaceId);
+        break;
+      } catch {
+        await sleep(250);
+      }
+    }
+    if (!handle) return { ok: false, status: "no-guest", url };
+  }
+
+  try {
+    await handle.loadURL(url);
+  } catch (e) {
+    throw new Error("BROWSER_008: load failed: " + (e as Error).message);
+  }
+  await sleep(1_500); // settle
+  const value = await handle.executeJavaScript(evalJs);
+  return { ok: true, surfaceId, value };
+}
+
+async function handleGoogleSearch(args: unknown): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const query = typeof o["query"] === "string" ? o["query"].trim() : "";
+  if (!query) throw new Error("MCP_001: query required");
+  if (query.length > 512) throw new Error("MCP_012: query too long (max 512)");
+  const url = "https://www.google.com/search?q=" + encodeURIComponent(query);
+  const evalJs = `(() => {
+    const results = [...document.querySelectorAll('a[href^="http"]')]
+      .map((a) => ({
+        title: (a.querySelector('h3')?.textContent || a.textContent || '').trim(),
+        link: a.href,
+      }))
+      .filter((r) => r.title && !/google\\./.test(r.link) && !/gstatic/.test(r.link))
+      .slice(0, 10);
+    return JSON.stringify({
+      pageTitle: document.title,
+      url: location.href,
+      loginRequired: location.href.includes('accounts.google.com') || /before you continue/i.test(document.body?.innerText || ''),
+      results,
+      pageText: (document.body?.innerText || '').slice(0, 4000),
+    });
+  })()`;
+  const r = await agentNavigateAndEval(url, "googleSearch", evalJs, o);
+  if (!r.ok) return { ...r, tool: "googleSearch" };
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed = typeof r.value === "string" ? JSON.parse(r.value) : {};
+  } catch {
+    /* malformed eval result */
+  }
+  return { tool: "googleSearch", query, surfaceId: r.surfaceId, ...parsed };
+}
+
+async function handleReadGoogleDriveDoc(args: unknown): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const url = requireUrl(o["url"]);
+  if (!/^https:\/\/(drive|docs|sites)\.google\.com\//i.test(url)) {
+    throw new Error("BROWSER_006: url must be a drive|docs|sites.google.com URL");
+  }
+  const evalJs = `(() => JSON.stringify({
+    pageTitle: document.title,
+    url: location.href,
+    loginRequired: location.href.includes('accounts.google.com') || /Sign in|before you continue/i.test((document.body?.innerText || '').slice(0, 500)),
+    text: (document.body?.innerText || '').slice(0, ${RECIPE_TEXT_LIMIT}),
+  }))()`;
+  const r = await agentNavigateAndEval(url, "readGoogleDriveDoc", evalJs, o);
+  if (!r.ok) return { ...r, tool: "readGoogleDriveDoc" };
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed = typeof r.value === "string" ? JSON.parse(r.value) : {};
+  } catch { /* ignore */ }
+  if (parsed["loginRequired"]) {
+    // Hand to the human: log in once, click Done, ask again.
+    notifyHandoff(r.surfaceId, true, "Google sign-in required — log in once, then Done");
+    browserHandoffs.set(r.surfaceId, {
+      reason: "Google sign-in required",
+      ts: Date.now(),
+    });
+    return {
+      tool: "readGoogleDriveDoc",
+      status: "login-required",
+      handoff: true,
+      surfaceId: r.surfaceId,
+      url,
+      note: "Human: sign in in the pane, click Done; then ask the agent again.",
+    };
+  }
+  return { tool: "readGoogleDriveDoc", surfaceId: r.surfaceId, url, ...parsed };
+}
+
+async function handleScrapeSelective(args: unknown): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const url = requireUrl(o["url"]);
+  const selector =
+    typeof o["selector"] === "string" && o["selector"].trim()
+      ? o["selector"].trim().slice(0, 128)
+      : null;
+  const safeSel = selector ? JSON.stringify(selector) : "null";
+  const evalJs = `(() => {
+    const sel = ${safeSel};
+    const chunks = sel
+      ? [...document.querySelectorAll(sel)].map((el) => el.innerText.trim()).filter(Boolean).slice(0, 50)
+      : null;
+    return JSON.stringify({
+      pageTitle: document.title,
+      url: location.href,
+      matched: chunks ? chunks.length : null,
+      text: (chunks ? chunks.join('\n---\n') : (document.body?.innerText || '')).slice(0, ${RECIPE_TEXT_LIMIT}),
+    });
+  })()`;
+  const r = await agentNavigateAndEval(url, "scrapeSelective", evalJs, o);
+  if (!r.ok) return { ...r, tool: "scrapeSelective" };
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed = typeof r.value === "string" ? JSON.parse(r.value) : {};
+  } catch { /* ignore */ }
+  return { tool: "scrapeSelective", surfaceId: r.surfaceId, url, selector, ...parsed };
+}
+
 
 // ── Browser automation (agent-driven embedded views + human handoff) ─────
 

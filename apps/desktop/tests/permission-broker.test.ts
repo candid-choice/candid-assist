@@ -73,3 +73,17 @@ describe('PermissionBroker resolution broadcast', () => {
     ]);
   });
 });
+
+describe('PermissionBroker timeout dismissal', () => {
+  it('broadcasts permission:resolved(timeout) so orphan prompts dismiss', async () => {
+    const events: Record<string, unknown>[] = [];
+    const broker = new PermissionBroker((e) => events.push(e), 30);
+    const out = await broker.ensure('https://nobody-answers.example', 'browserNavigate');
+    expect(out).toEqual({ allowed: false, decision: 'timeout' });
+    expect(events.map((e) => e.event)).toEqual([
+      'permission:request',
+      'permission:resolved',
+    ]);
+    expect((events[1] as { data: { decision: string } }).data.decision).toBe('timeout');
+  });
+});

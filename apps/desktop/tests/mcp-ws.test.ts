@@ -85,11 +85,11 @@ describe('WebSocket MCP (pi transport)', () => {
     c.ws.close();
   });
 
-  it('tools/list over WS returns the 7 tools', async () => {
+  it('tools/list over WS returns all tools', async () => {
     const c = openClient();
     await c.waitForOpen();
     const res = await c.request('tools/list');
-    expect(res.result.tools).toHaveLength(23);
+    expect(res.result.tools).toHaveLength(26);
     c.ws.close();
   });
 

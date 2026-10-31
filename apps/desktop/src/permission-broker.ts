@@ -42,7 +42,7 @@ export class PermissionBroker {
 
   constructor(
     private broadcast: Broadcast,
-    private timeoutMs = 120_000,
+    private timeoutMs = 45_000,
   ) {}
 
   /** Renderer (re)sync — replaces server-side view of granted domains. */
@@ -82,6 +82,14 @@ export class PermissionBroker {
     return new Promise<PermissionOutcome>((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
+        // Tell every window to dismiss the now-pointless prompt —
+        // otherwise the human answers an orphan (and the agent already
+        // got its 'denied' answer).
+        this.broadcast({
+          event: "permission:resolved",
+          data: { id, decision: "timeout" },
+          timestamp: Date.now(),
+        });
         resolve({ allowed: false, decision: "timeout" });
       }, this.timeoutMs);
 
@@ -98,7 +106,10 @@ export class PermissionBroker {
   /** Renderer answered. Returns false for unknown/late ids. */
   respond(id: string, decision: PermissionDecision): boolean {
     const p = this.pending.get(id);
-    if (!p) return false;
+    if (!p) {
+      console.log(`[perm] late/orphan respond ${id} (${decision}) — ignored`);
+      return false;
+    }
     clearTimeout(p.timer);
     this.pending.delete(id);
     if (decision === "always") this.grants.add(normalizeHost(p.host));

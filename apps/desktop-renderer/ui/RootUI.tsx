@@ -92,6 +92,13 @@ if (typeof window !== "undefined") {
           url: d.url ?? "",
           tool: d.tool ?? "browser",
         });
+        // Make it noticeable even when the pane is scrolled/busy.
+        useStore.getState().pushUiMessage({
+          message: `${d.tool ?? "Agent"} wants to visit ${d.host} — choose in the prompt.`,
+          type: "warning",
+          title: "Web access consent",
+          ttlMs: 30_000,
+        });
       }
       return;
     }
