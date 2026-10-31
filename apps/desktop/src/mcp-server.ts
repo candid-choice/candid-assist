@@ -644,7 +644,7 @@ const TOOL_DEFINITIONS = [
   },
     {
       name: 'open3dSurface',
-      description: 'Open an interactive three.js 3D viewer surface (orbit/zoom/pan). Agent describes the scene with primitives: box|sphere|cylinder|torus|plane + position [x,y,z] + size + color #rrggbb. Push again with the same scene to update.',
+      description: 'Open an interactive three.js 3D viewer surface (orbit/zoom/pan). Agent describes the scene with primitives: box|sphere|cylinder|torus|plane + position [x,y,z] + size + color #rrggbb. Pass surfaceId to update an existing scene in place. Note: due to a validator quirk, include ALL primitive fields (type, position, size, rotation, color) on every primitive.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -666,6 +666,7 @@ const TOOL_DEFINITIONS = [
           background: { type: 'string', description: 'Scene background #rrggbb' },
           camera: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } } },
           prompt: { type: 'string' },
+          surfaceId: { type: 'string', description: 'Existing 3D surface id to update in place (omit to open a new one)' },
         },
         required: ['primitives'],
       },
@@ -1144,6 +1145,11 @@ function sendToWsClients(eventObj: Record<string, unknown>): void {
 /** Exported for tests + potential UI-side introspection. */
 export const permissionBroker = new PermissionBroker(sendToWsClients);
 
+/** Test hook: drop all stored surface records (does not touch windows). */
+export function __resetSurfacesForTest(): void {
+  openSurfaces.clear();
+}
+
 /** Broadcast an app-level event to all renderer windows (ws surface bus). */
 export function broadcastAppEvent(event: string, data?: unknown): void {
   sendToWsClients({ event, data, timestamp: Date.now() });
@@ -1284,7 +1290,12 @@ async function handleOpen3dSurface(args: unknown): Promise<Record<string, unknow
       ? (o["background"] as string)
       : "#161a21";
   const prompt = optPrompt(o["prompt"]);
-  const id = generateSurfaceId();
+  // Passing the previous surfaceId updates that scene in place
+  // (renderer upserts the view by id).
+  const reuse = typeof o["surfaceId"] === "string" && openSurfaces.has(o["surfaceId"])
+    ? o["surfaceId"]
+    : undefined;
+  const id = reuse ?? generateSurfaceId();
   openSurfaces.set(id, {
     surfaceId: id,
     type: "3d",
@@ -1298,7 +1309,7 @@ async function handleOpen3dSurface(args: unknown): Promise<Record<string, unknow
     lastActive: Date.now(),
     status: "open",
   });
-  return { surfaceId: id, status: "opened", primitiveCount: primitives.length };
+  return { surfaceId: id, status: reuse ? "updated" : "opened", primitiveCount: primitives.length };
 }
 
 async function handleGoogleSearch(args: unknown): Promise<Record<string, unknown>> {

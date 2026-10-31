@@ -479,3 +479,25 @@ describe('open3dSurface', () => {
     expect((await call3d({ primitives: [{ type: 'box', color: 'red' }] }, 973)).error.message).toMatch(/3D_004/);
   });
 });
+
+describe('open3dSurface in-place update', () => {
+  beforeEach(async () => {
+    const { __resetSurfacesForTest } = await import('../src/mcp-server');
+    __resetSurfacesForTest();
+  });
+  it('reuses a known surfaceId and reports updated', async () => {
+    const { processMcpMessage } = await import('../src/mcp-server');
+    const call = async (args: Record<string, unknown>, id: number) => {
+      const out = await processMcpMessage({
+        jsonrpc: '2.0', method: 'tools/call', params: { name: 'open3dSurface', arguments: args }, id,
+      } as never);
+      return (out as { response: Record<string, any> }).response;
+    };
+    const first = await call({ primitives: [{ type: 'box' }] }, 980);
+    expect(first.result.status).toBe('opened');
+    const second = await call({ primitives: [{ type: 'sphere' }, { type: 'torus' }], surfaceId: first.result.surfaceId }, 981);
+    expect(second.result.status).toBe('updated');
+    expect(second.result.surfaceId).toBe(first.result.surfaceId);
+    expect(second.result.primitiveCount).toBe(2);
+  });
+});
