@@ -102,6 +102,10 @@ interface AppState {
    * desktop MCP server belongs to this window at all. */
   mcpStandalone: boolean;
   setMcpAgentCount: (count: number) => void;
+  /** Live WebSocket MCP agents (harness identities) — drives sidebar
+   * graying of sessions whose agent has disconnected. */
+  mcpAgents: Array<{ client: string; agentSessionId: string | null }>;
+  setMcpAgents: (agents: Array<{ client: string; agentSessionId: string | null }>) => void;
   /** Domains the human granted "always" for agent web access. */
   browserGrants: string[];
   addBrowserGrant: (domain: string) => void;
@@ -284,6 +288,8 @@ export const useStore = create<AppState>()(
         set({ connectionState: state }),
 
       mcpAgentCount: 0,
+      mcpAgents: [],
+      setMcpAgents: (agents) => set({ mcpAgents: agents }),
       browserGrants: [],
       addBrowserGrant: (domain: string) =>
         set((state) => {

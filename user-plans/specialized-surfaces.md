@@ -16,6 +16,12 @@ in the loop, and rich workbenches that would need multiple IDE plugins.
   human answers Allow once / Always allow / Deny (modal in renderer).
   Always-grants persist (IndexedDB) and re-sync to the server on every
   ws (re)connect (`permission:sync`). Fail-closed on timeout/no-UI.
+- **Agent presence graying** — WS MCP connections carry their bound
+  harness identity; `agent:presence` events (+ `wsAgents` in the IPC
+  status) drive graying of sidebar sessions whose agent disconnected.
+- **three.js 3D viewer (item 3, DONE)** — `open3dSurface` MCP tool
+  (validated primitives 3D_001–3D_006) + `ThreeSurface` viewer
+  (OrbitControls, grid, lights, WebGL fallback); 🧊 tab icon.
 - **Guide reframed** — `SessionEmptyGuide` now leads with the web
   agency pillars (search, Drive, ChatGPT, scraping, handoff), keeps
   human-decision surfaces (input/diff/processes), flags roadmap
@@ -32,7 +38,7 @@ in the loop, and rich workbenches that would need multiple IDE plugins.
    `googleSearch(query)`, `readGoogleDriveDoc(url)`,
    `scrapeSelective(url, selector|goal)`. Implemented as MCP tools that
    compose the browser primitives + record consent per recipe.
-3. **Three.js 3D viewer surface** — `open3dSurface({ modelUrl|primitives,
+3. ~~**Three.js 3D viewer surface**~~ ✅ DONE — `open3dSurface({ modelUrl|primitives,
    camera })`: OrbitControls viewer, agent can push scene updates
    (`3d:update` events). Use case: enclosures, mechanisms, data as
    geometry.

@@ -89,7 +89,7 @@ describe('WebSocket MCP (pi transport)', () => {
     const c = openClient();
     await c.waitForOpen();
     const res = await c.request('tools/list');
-    expect(res.result.tools).toHaveLength(26);
+    expect(res.result.tools).toHaveLength(27);
     c.ws.close();
   });
 
@@ -139,9 +139,17 @@ describe('WebSocket MCP (pi transport)', () => {
 describe('showMessage — pi -> Electron toast proof-of-path', () => {
   it('broadcasts ui:message to surface WS clients', async () => {
     const surface = new WebSocket(`ws://127.0.0.1:${SURFACE_WS_PORT}`);
-    const got = new Promise<any>((resolve) =>
-      surface.once('message', (d) => resolve(JSON.parse(d.toString()))),
-    );
+    // First event may be an agent:presence push; wait for the real thing.
+    const got = new Promise<any>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('no ui:message within 5s')), 5000);
+      surface.on('message', (d) => {
+        const ev = JSON.parse(d.toString());
+        if (ev.event === 'ui:message') {
+          clearTimeout(t);
+          resolve(ev);
+        }
+      });
+    });
     await new Promise((r) => surface.once('open', r));
 
     const c = openClient();

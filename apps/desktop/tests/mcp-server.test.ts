@@ -122,7 +122,7 @@ describe('MCP tools/call router', () => {
       method: 'POST',
       body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
     }).then((r) => r.json());
-    expect(res.result.tools).toHaveLength(26);
+    expect(res.result.tools).toHaveLength(27);
     const names = res.result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain('openBrowserSurface');
     expect(names).toContain('openInputSurface');
@@ -448,5 +448,34 @@ describe('googleSearch bot-check handoff', () => {
     const res = (out as { response: Record<string, any> }).response;
     expect(res.result.status).toBe('human-check-required');
     expect(res.result.handoff).toBe(true);
+  });
+});
+
+describe('open3dSurface', () => {
+  async function call3d(args: Record<string, unknown>, id: number) {
+    const { processMcpMessage } = await import('../src/mcp-server');
+    const out = await processMcpMessage({
+      jsonrpc: '2.0', method: 'tools/call', params: { name: 'open3dSurface', arguments: args }, id,
+    } as never);
+    return (out as { response: Record<string, any> }).response;
+  }
+
+  it('opens a valid scene', async () => {
+    const res = await call3d({
+      primitives: [
+        { type: 'box', position: [0, 0.5, 0], size: 1, color: '#ff8800' },
+        { type: 'torus', size: 2 },
+      ],
+      camera: { x: 4, y: 3, z: 6 },
+    }, 970);
+    expect(res.result.status).toBe('opened');
+    expect(res.result.primitiveCount).toBe(2);
+    expect(res.result.surfaceId).toMatch(/^surf_/);
+  });
+
+  it('validates kinds, colors, and empty lists', async () => {
+    expect((await call3d({ primitives: [] }, 971)).error.message).toMatch(/3D_001/);
+    expect((await call3d({ primitives: [{ type: 'pyramid' }] }, 972)).error.message).toMatch(/3D_003/);
+    expect((await call3d({ primitives: [{ type: 'box', color: 'red' }] }, 973)).error.message).toMatch(/3D_004/);
   });
 });

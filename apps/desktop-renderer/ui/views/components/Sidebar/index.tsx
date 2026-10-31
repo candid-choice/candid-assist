@@ -16,6 +16,8 @@ export interface SidebarSession {
   status: "active" | "archived" | "waiting" | "dead";
   updatedAt: string;
   surfaceCount: number;
+  /** False when the owning agent's WebSocket MCP connection is gone. */
+  connected?: boolean;
 }
 
 export interface SidebarProps {
@@ -102,7 +104,7 @@ function Sidebar({
         {filtered.map((session) => (
           <div
             key={session.id}
-            className={`ha-sidebar-item ${session.status === "active" ? "active" : ""} ${activeSessionId === session.id ? "selected" : ""} ${session.status === "dead" ? "ha-sidebar-item--dead" : ""}`}
+            className={`ha-sidebar-item ${session.status === "active" ? "active" : ""} ${activeSessionId === session.id ? "selected" : ""} ${session.status === "dead" ? "ha-sidebar-item--dead" : ""} ${session.connected === false ? "ha-sidebar-item--offline" : ""}`}
             onClick={() => onSessionClick(session.id)}
             onContextMenu={(e) => {
               e.preventDefault();

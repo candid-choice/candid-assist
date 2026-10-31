@@ -20,6 +20,9 @@ let timer: ReturnType<typeof setInterval> | null = null;
 function apply(status: McpStatusPayload | undefined): void {
   const count = status?.mcp?.agentCount ?? 0;
   useStore.getState().setMcpAgentCount(count);
+  useStore
+    .getState()
+    .setMcpAgents(status?.mcp?.wsAgents ?? []);
 }
 
 /** Start presence tracking (idempotent). */

@@ -22,7 +22,10 @@ import type { SessionDoc } from "../../services/sync/types";
 // ── Mapping ────────────────────────────────────────────────────────────────
 
 /** Map backend session status → sidebar status vocabulary. */
-export function toSidebarSession(doc: SessionDoc): SidebarSession {
+export function toSidebarSession(
+  doc: SessionDoc,
+  liveAgentIds?: Set<string>,
+): SidebarSession {
   const status: SidebarSession["status"] =
     doc.status === "dead"
       ? "dead"
@@ -32,10 +35,18 @@ export function toSidebarSession(doc: SessionDoc): SidebarSession {
           ? "active"
           : "archived"; // done | error → archived bucket
 
+  // Sessions owned by an agent WebSocket: gray out when that agent is
+  // no longer connected (liveAgentIds known and the id is absent).
+  const connected =
+    liveAgentIds && doc.agentSessionId
+      ? liveAgentIds.has(doc.agentSessionId)
+      : undefined;
+
   return {
     id: doc.id,
     title: doc.title,
     status,
+    connected,
     updatedAt: doc.updatedAt,
     surfaceCount: doc.surfaces?.length ?? 0,
   };
@@ -56,6 +67,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const sessions = useStore((s) => s.sessions);
   const activeSessionId = useStore((s) => s.activeSessionId);
+  const mcpAgents = useStore((s) => s.mcpAgents);
   const [menu, setMenu] = useState<{
     session: SidebarSession;
     x: number;
@@ -114,7 +126,12 @@ export function AppSidebar({
         open={open}
         width={width}
         onToggle={onToggle ?? (() => {})}
-        sessions={sessions.map(toSidebarSession)}
+        sessions={sessions.map((sess) =>
+          toSidebarSession(
+            sess,
+            new Set(mcpAgents.map((a) => a.agentSessionId).filter(Boolean) as string[]),
+          ),
+        )}
         onSessionClick={handleSessionClick}
         onItemDelete={(id) => handleDelete(id)}
         onItemContextMenu={(session, x, y) => setMenu({ session, x, y })}

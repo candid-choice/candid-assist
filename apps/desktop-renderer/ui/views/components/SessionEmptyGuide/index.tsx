@@ -96,13 +96,26 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    icon: "🧪",
+    icon: "🧊",
     heading: "Workbenches the IDE can’t host",
-    blurb:
-      "Rich, purpose-built viewers that would need multiple IDE plugins — coming as dedicated surfaces.",
+    blurb: "Rich, purpose-built viewers that would need multiple IDE plugins.",
+    tier: "unique",
+    hints: [
+      {
+        title: "🧊 3D modeling (three.js viewer) — live",
+        try: [
+          "“render the enclosure as an interactive 3D model with a torus gasket”",
+          "agent pushes primitives (box/sphere/cylinder/torus/plane); you orbit, zoom, pan",
+        ],
+      },
+    ],
+  },
+  {
+    icon: "🧪",
+    heading: "More workbenches (roadmap)",
+    blurb: "Next up on the surfaces roadmap.",
     tier: "roadmap",
     hints: [
-      { title: "🎨 3D modeling (three.js viewer)", try: ["“render the enclosure as an interactive 3D model”"] },
       { title: "🔌 Circuit JSON / E-CAD preview", try: ["“preview this netlist/circuit JSON as a schematic”"] },
       { title: "🖥️ Live webdev preview", try: ["“run the landing page and let me review it side-by-side”"] },
     ],

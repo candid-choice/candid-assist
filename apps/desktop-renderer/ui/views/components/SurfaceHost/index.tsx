@@ -19,6 +19,7 @@ import { queueAction } from "../../errors/offline-queue";
 import type { EmbeddedSurface, SurfaceUserResponse } from "../../services/sync/types";
 
 import { BrowserSurface } from "../surfaces/BrowserSurface";
+import { ThreeSurface } from "../surfaces/ThreeSurface";
 import { ProcessSurface } from "../surfaces/ProcessSurface";
 import { CanvasSurface } from "../surfaces/CanvasSurface";
 import { ImageSurface } from "../surfaces/ImageSurface";
@@ -128,6 +129,8 @@ export function SurfaceHost({
             warning={(config as SurfaceConfig<BrowserPayload>).payload?.warning}
           />
         );
+      case "3d":
+        return <ThreeSurface config={config} />;
       case "image":
         return (
           <ImageSurface

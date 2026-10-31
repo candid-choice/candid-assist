@@ -265,3 +265,12 @@
   color: #fff;
   background: #dc2626;
 }
+
+/* Agent disconnected (WebSocket MCP gone) — dim + desaturate */
+.ha-sidebar-item--offline {
+  opacity: 0.5;
+  filter: grayscale(0.7);
+}
+.ha-sidebar-item--offline .ha-sidebar-item-title {
+  font-style: italic;
+}

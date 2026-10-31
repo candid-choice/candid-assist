@@ -52,6 +52,7 @@ export interface McpStatusPayload {
     agentConnected: boolean;
     agentCount: number;
     agents: Array<{ name: string; ip: string; lastSeen: number }>;
+    wsAgents?: Array<{ client: string; agentSessionId: string | null }>;
   };
   ws: { clients: number };
 }

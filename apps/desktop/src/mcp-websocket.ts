@@ -16,20 +16,43 @@ connection state: socket open + initialized + heartbeat-alive.
 import { randomUUID } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 
-import { processMcpMessage, setWsPresenceProvider, type McpAgentCtx } from "./mcp-server";
+import { processMcpMessage, setWsPresenceProvider, setWsAgentsProvider, broadcastAgentPresence, type McpAgentCtx } from "./mcp-server";
 
 const HEARTBEAT_MS = 15_000;
 const MAX_PAYLOAD = 1024 * 1024;
 
-interface McpWsConnection {
+export interface McpWsConnection {
   id: string;
   socket: WebSocket;
   isAlive: boolean;
   initialized: boolean;
   peer: string;
+  ctx?: McpAgentCtx;
 }
 
 const connections = new Map<string, McpWsConnection>();
+
+function firePresence(): void {
+  try {
+    broadcastAgentPresence();
+  } catch {
+    /* never break the socket over a presence push */
+  }
+}
+
+/** Live initialized agents, with their bound harness identity (ctx). */
+export function getLiveAgentInfos(): Array<{ client: string; agentSessionId: string | null }> {
+  const out: Array<{ client: string; agentSessionId: string | null }> = [];
+  for (const c of connections.values()) {
+    if (c.initialized && c.socket.readyState === WebSocket.OPEN) {
+      out.push({
+        client: c.ctx?.agentClient ?? "agent",
+        agentSessionId: c.ctx?.agentSessionId ?? null,
+      });
+    }
+  }
+  return out;
+}
 let wss: WebSocketServer | undefined;
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -51,6 +74,7 @@ export function startMcpWebSocketServer(opts: WsMcpStartOptions = {}): void {
     const peer = `${req.socket.remoteAddress}:${req.socket.remotePort ?? "?"}`;
     const conn: McpWsConnection = { id, socket, isAlive: true, initialized: false, peer };
     const ctx: McpAgentCtx = { connectionId: id };
+    conn.ctx = ctx; // presence reads the bound identity off the shared ctx
     connections.set(id, conn);
     console.log(`[mcp-ws] + connected ${id} from ${peer}`);
 
@@ -72,6 +96,7 @@ export function startMcpWebSocketServer(opts: WsMcpStartOptions = {}): void {
       const p = (parsed ?? {}) as Record<string, unknown>;
       if (p["jsonrpc"] === "2.0" && p["method"] === "initialize") {
         conn.initialized = true;
+        firePresence();
         const init = (p["params"] ?? {}) as Record<string, unknown>;
         const ci = (init["clientInfo"] ?? {}) as Record<string, unknown>;
         console.log(
@@ -89,6 +114,7 @@ export function startMcpWebSocketServer(opts: WsMcpStartOptions = {}): void {
     });
 
     socket.on("close", (code, reason) => {
+      firePresence();
       connections.delete(id);
       console.log(`[mcp-ws] - closed ${id} (${code}${reason.length ? ": " + reason.toString() : ""})`);
     });
@@ -123,6 +149,7 @@ export function startMcpWebSocketServer(opts: WsMcpStartOptions = {}): void {
   heartbeatTimer.unref?.();
 
   // /status agent presence = live initialized WS connections.
+  setWsAgentsProvider(() => getLiveAgentInfos());
   setWsPresenceProvider(() => {
     let n = 0;
     for (const c of connections.values()) {

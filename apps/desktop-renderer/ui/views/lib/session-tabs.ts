@@ -20,6 +20,7 @@ export interface ChromeTab {
 export function surfaceIcon(type: string): string {
   switch (type) {
     case "browser": return "🌐";
+    case "3d": return "🧊";
     case "input": return "❓";
     case "code-diff": return "🔀";
     case "canvas": return "🎨";

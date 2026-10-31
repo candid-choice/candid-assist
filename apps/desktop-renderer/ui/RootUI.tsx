@@ -60,6 +60,18 @@ if (typeof window !== "undefined") {
     });
   }
 
+  // Push grant changes to the server the moment they happen (the
+  // connect-time sync alone leaves a window where an 'always allow'
+  // click isn't yet known server-side).
+  let lastGrantsJson = JSON.stringify(useStore.getState().browserGrants);
+  useStore.subscribe((state) => {
+    const g = JSON.stringify(state.browserGrants);
+    if (g !== lastGrantsJson) {
+      lastGrantsJson = g;
+      wsService.send({ type: "permission:sync", domains: state.browserGrants });
+    }
+  });
+
   // Subscribe surface push events to store
   wsService.subscribe((event) => {
     if (event.event === "ui:message") {
@@ -69,6 +81,12 @@ if (typeof window !== "undefined") {
         const level = d.level === "success" || d.level === "warning" || d.level === "error" ? d.level : "info";
         useStore.getState().pushUiMessage({ message: d.message, type: level, title: d.title });
       }
+      return;
+    }
+    if (event.event === "agent:presence") {
+      // Live WS MCP agent set changed (agent connected/disconnected).
+      const d = event.data as { agents?: Array<{ client: string; agentSessionId: string | null }> };
+      useStore.getState().setMcpAgents(d?.agents ?? []);
       return;
     }
     if (event.event === "permission:grants-cleared") {

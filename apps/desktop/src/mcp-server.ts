@@ -103,6 +103,8 @@ export interface McpStatus {
     agentConnected: boolean;
     agentCount: number;
     agents: AgentInfo[];
+    /** WebSocket-transport agents currently live (with harness ids). */
+    wsAgents?: Array<{ client: string; agentSessionId: string | null }>;
   };
   ws: { clients: number };
 }
@@ -125,6 +127,7 @@ export function getMcpStatus(): McpStatus {
       agentConnected: active.length > 0 || wsPresenceProvider() > 0,
       agentCount: active.length + wsPresenceProvider(),
       agents: active,
+      wsAgents: wsAgentsProvider(),
     },
     ws: { clients: wss?.clients.size ?? 0 },
   };
@@ -640,6 +643,34 @@ const TOOL_DEFINITIONS = [
     },
   },
     {
+      name: 'open3dSurface',
+      description: 'Open an interactive three.js 3D viewer surface (orbit/zoom/pan). Agent describes the scene with primitives: box|sphere|cylinder|torus|plane + position [x,y,z] + size + color #rrggbb. Push again with the same scene to update.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          primitives: {
+            type: 'array',
+            description: '1-64 primitives',
+            items: {
+              type: 'object',
+              properties: {
+                type: { type: 'string', enum: ['box', 'sphere', 'cylinder', 'torus', 'plane'] },
+                position: { type: 'array', items: { type: 'number' } },
+                size: { type: 'number' },
+                color: { type: 'string' },
+                rotation: { type: 'array', items: { type: 'number' } },
+              },
+              required: ['type'],
+            },
+          },
+          background: { type: 'string', description: 'Scene background #rrggbb' },
+          camera: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } } },
+          prompt: { type: 'string' },
+        },
+        required: ['primitives'],
+      },
+    },
+    {
       name: 'googleSearch',
       description: 'Google web search via the embedded browser (consent-gated). Returns result titles/links + page text to summarize.',
       inputSchema: {
@@ -760,6 +791,7 @@ const TOOL_HANDLERS: Record<
   openInputSurface: handleOpenInputSurface,
   showMessage: handleShowMessage,
   browserNavigate: handleBrowserNavigate,
+  open3dSurface: handleOpen3dSurface,
   googleSearch: handleGoogleSearch,
   readGoogleDriveDoc: handleReadGoogleDriveDoc,
   scrapeSelective: handleScrapeSelective,
@@ -803,6 +835,7 @@ function handleBindAgentSession(args: unknown, ctx: McpAgentCtx): Record<string,
   if (client) ctx.agentClient = client;
   else if (!ctx.agentClient) ctx.agentClient = ctx.clientInfo?.name ?? "agent";
   console.log("[mcp] bound connection " + ctx.connectionId + " -> client=" + (ctx.agentClient ?? "?") + " session=" + sid);
+  broadcastAgentPresence();
   return { status: "bound", agentSessionId: sid, client: ctx.agentClient ?? null, title: title ?? null };
 }
 
@@ -881,6 +914,7 @@ export async function processMcpMessage(
       if (typeof a["agentSessionId"] === "string" && (a["agentSessionId"] as string).length > 0 && (a["agentSessionId"] as string).length <= 200) {
         if (ctx.agentSessionId !== a["agentSessionId"]) {
           console.log("[mcp] auto-bind conn=" + ctx.connectionId + " client=" + (ctx.agentClient ?? "agent") + " harness=" + a["agentSessionId"]);
+          broadcastAgentPresence();
         }
         ctx.agentSessionId = a["agentSessionId"] as string;
       }
@@ -953,6 +987,27 @@ function logMcpRequest(method: string, id: unknown, ip: string, port: number): v
 
 /** WebSocket MCP server reports live connection count for /status here. */
 let wsPresenceProvider: () => number = () => 0;
+let wsAgentsProvider: () => Array<{ client: string; agentSessionId: string | null }> = () => [];
+
+/** WebSocket MCP layer registers this to feed /status + presence events. */
+export function setWsAgentsProvider(
+  fn: () => Array<{ client: string; agentSessionId: string | null }>,
+): void {
+  wsAgentsProvider = fn;
+}
+
+/** Push the live agent set to renderer windows (sidebar graying). */
+export function broadcastAgentPresence(): void {
+  const event = JSON.stringify({
+    event: "agent:presence",
+    data: { agents: wsAgentsProvider() },
+    timestamp: Date.now(),
+  });
+  for (const client of wsClients) {
+    if (client.readyState === WebSocket.OPEN) client.send(event);
+  }
+}
+
 export function setWsPresenceProvider(fn: () => number): void {
   wsPresenceProvider = fn;
 }
@@ -1035,7 +1090,9 @@ function startWebSocketServer(port: number): WebSocketServer {
           }
         }
         if (msg && msg.type === "permission:sync" && Array.isArray(msg.domains)) {
-          permissionBroker.syncGrants(msg.domains.filter((d: unknown) => typeof d === "string"));
+          const doms = msg.domains.filter((d: unknown) => typeof d === "string") as string[];
+          permissionBroker.syncGrants(doms);
+          console.log("[perm] renderer synced grants:", JSON.stringify(doms));
         }
         if (
           msg &&
@@ -1043,7 +1100,8 @@ function startWebSocketServer(port: number): WebSocketServer {
           typeof msg.id === "string" &&
           ["once", "always", "deny"].includes(String(msg.decision))
         ) {
-          permissionBroker.respond(msg.id, msg.decision as PermissionDecision);
+          const ok = permissionBroker.respond(msg.id, msg.decision as PermissionDecision);
+          console.log("[perm] respond", msg.id, msg.decision, ok ? "(applied)" : "(late/orphan — ignored)");
         }
         if (msg && msg.type === "handoff:complete" && typeof msg.surfaceId === "string") {
           if (browserHandoffs.delete(msg.surfaceId)) {
@@ -1189,6 +1247,58 @@ async function agentNavigateAndEval(
   await sleep(1_500); // settle
   const value = await handle.executeJavaScript(evalJs);
   return { ok: true, surfaceId, value };
+}
+
+const SCENE_KINDS = new Set(["box", "sphere", "cylinder", "torus", "plane"]);
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+
+function validateScenePrimitives(raw: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(raw)) throw new Error("3D_001: primitives must be an array");
+  if (raw.length === 0) throw new Error("3D_001: primitives[] must contain at least one item");
+  if (raw.length > 64) throw new Error("3D_002: too many primitives (max 64)");
+  return raw.map((item, i) => {
+    const p = (item ?? {}) as Record<string, unknown>;
+    if (typeof p["type"] !== "string" || !SCENE_KINDS.has(p["type"])) {
+      throw new Error("3D_003: primitive[" + i + "] type must be one of box, sphere, cylinder, torus, plane");
+    }
+    if (p["color"] !== undefined && !(typeof p["color"] === "string" && HEX_COLOR.test(p["color"]))) {
+      throw new Error("3D_004: primitive[" + i + "] color must be #rrggbb");
+    }
+    if (p["size"] !== undefined && !(typeof p["size"] === "number" && Number.isFinite(p["size"]) && p["size"] > 0)) {
+      throw new Error("3D_005: primitive[" + i + "] size must be a positive number");
+    }
+    if (p["position"] !== undefined &&
+        !(Array.isArray(p["position"]) && p["position"].length === 3 && p["position"].every((n) => typeof n === "number" && Number.isFinite(n)))) {
+      throw new Error("3D_006: primitive[" + i + "] position must be [x,y,z] numbers");
+    }
+    return p as Record<string, unknown>;
+  });
+}
+
+async function handleOpen3dSurface(args: unknown): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const primitives = validateScenePrimitives(o["primitives"]);
+  if (openSurfaces.size >= MAX_SURFACES) throw new Error("MCP_002: Maximum surfaces reached");
+  const background =
+    typeof o["background"] === "string" && HEX_COLOR.test(o["background"])
+      ? (o["background"] as string)
+      : "#161a21";
+  const prompt = optPrompt(o["prompt"]);
+  const id = generateSurfaceId();
+  openSurfaces.set(id, {
+    surfaceId: id,
+    type: "3d",
+    payload: {
+      primitives,
+      background,
+      ...(o["camera"] && typeof o["camera"] === "object" ? { camera: o["camera"] } : {}),
+      ...(prompt ? { prompt } : {}),
+    },
+    createdAt: Date.now(),
+    lastActive: Date.now(),
+    status: "open",
+  });
+  return { surfaceId: id, status: "opened", primitiveCount: primitives.length };
 }
 
 async function handleGoogleSearch(args: unknown): Promise<Record<string, unknown>> {

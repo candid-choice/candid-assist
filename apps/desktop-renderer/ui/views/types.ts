@@ -6,6 +6,7 @@
 export type SurfaceType =
   | 'processManager'
   | 'browser'
+  | '3d'
   | 'image'
   | 'canvas'
   | 'screen'

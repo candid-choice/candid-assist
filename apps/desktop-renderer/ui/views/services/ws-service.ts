@@ -18,6 +18,7 @@ type SurfaceEventType =
   | "permission:request"
   | "permission:resolved"
   | "permission:grants-cleared"
+  | "agent:presence"
   | "surface:response"
   | "surface:close"
   | "surface:error"
