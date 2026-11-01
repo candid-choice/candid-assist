@@ -123,7 +123,7 @@ export function BrowserSurface({ url, onUrlChange, surfaceId, warning }: Browser
   );
 
   return (
-    <SurfaceFrame addressBar={addressBar}>
+    <SurfaceFrame rounded={false} addressBar={addressBar}>
       {warning && (
         <div className="ha-browser-warning" role="alert">
           ⚠ {warning}
