@@ -67,8 +67,19 @@
 }
 
 .ha-address-tab--active:hover {
-  background: var(--ha-primary, #6366f8);
-  filter: brightness(1.08);
+  /* Keep white-on-primary on hover: the base .ha-address-tab:hover rule
+     would otherwise paint primary-on-primary (invisible). */
+  background: var(--ha-primary-hover, #4f52e0);
+  color: #fff;
+  border-color: var(--ha-primary-hover, #4f52e0);
+  filter: none;
+}
+.ha-address-tab--active:hover .ha-address-tab-close {
+  color: rgba(255, 255, 255, 0.85);
+}
+.ha-address-tab--active:hover .ha-address-tab-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
 }
 
 /* ── URL input ─────────────────────────────────────────────── */

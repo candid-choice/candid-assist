@@ -91,16 +91,6 @@ function Sidebar({
     >
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="ha-sidebar-header">
-        {onAddSession && (
-          <button
-            type="button"
-            className="ha-sidebar-add-session"
-            onClick={onAddSession}
-            title="Add a session you own (with direct chat)"
-          >
-            ＋ Add session
-          </button>
-        )}
       </div>
 
       {/* ── Search ─────────────────────────────────────────────── */}
@@ -176,6 +166,18 @@ function Sidebar({
         )}
       </div>
 
+      {onAddSession && (
+        <div className="ha-sidebar-footer">
+          <button
+            type="button"
+            className="ha-sidebar-footer-btn ha-sidebar-add-session"
+            onClick={onAddSession}
+            title="Add a session you own (with direct chat)"
+          >
+            ＋ Add session
+          </button>
+        </div>
+      )}
     </div>
   );
 }
