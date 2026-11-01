@@ -20,6 +20,7 @@
     "vitest": "^3"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.4.0",
     "electron-updater": "^6.8.11",
     "uuid": "^11.1.0",
     "ws": "^8.18.2"

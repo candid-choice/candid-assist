@@ -24,6 +24,8 @@ import { deriveSessionTabs, reopenRecordedSurface, pickVisibleSurface } from "./
 import { SessionEmptyGuide } from "./components/SessionEmptyGuide";
 import { deriveTaskTitle, useCreateSession } from "./hooks/use-create-session";
 import { useHideNativeViews } from "./hooks/use-hide-native-views";
+import { ChatDock } from "./components/ChatDock";
+import { getDesktopBridge } from "./services/desktop-bridge";
 
 function App() {
   // ── Surface state ─────────────────────────────────────────────────────
@@ -36,6 +38,8 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const sidebarWidth = useStore((s) => s.sidebarWidth);
   const settingsOpen = useStoreSelector((s) => s.settingsOpen);
+  const chatOpen = useStoreSelector((s) => s.chatOpen);
+  const setChatOpen = useStoreSelector((s) => s.setChatOpen);
   const setSettingsOpen = useStoreSelector((s) => s.setSettingsOpen);
   const theme = useStoreSelector((s) => s.settings.theme);
   const composerOpen = useStoreSelector((s) => s.composerOpen);
@@ -116,7 +120,22 @@ function App() {
     <div className="human-assist-app h-full w-full">
       <WindowShell
         title="Human Assist"
-        userStatus={<UserMenu onOpenSettings={() => setSettingsOpen(true)} />}
+        userStatus={
+          <>
+            {getDesktopBridge()?.chat && (
+              <button
+                type="button"
+                className={`ha-chat-toggle${chatOpen ? " ha-chat-toggle--active" : ""}`}
+                title={chatOpen ? "Hide chat" : "Open chat"}
+                aria-pressed={chatOpen}
+                onClick={() => setChatOpen(!chatOpen)}
+              >
+                💬
+              </button>
+            )}
+            <UserMenu onOpenSettings={() => setSettingsOpen(true)} />
+          </>
+        }
         footer={
           <span className="ha-footer-status">
             <ConnectionIndicator />
@@ -174,6 +193,11 @@ function App() {
               ))}
             </div>
           </div>
+
+          {/* ── Direct chat (Electron only, togglable from the titlebar) ── */}
+          {getDesktopBridge()?.chat && chatOpen && (
+            <ChatDock sessionId={activeSession?.id ?? null} />
+          )}
         </div>
       </WindowShell>
 

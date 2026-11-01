@@ -13,6 +13,8 @@ get no preload and a host-allowlist navigation policy.
 import { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, webContents as webContentsNS } from 'electron';
 
 import { checkForUpdates as checkAppUpdate, onUpdaterState } from '../../src/updater';
+import { setChatRuntimeFactory, setChatEventListener, sendChat, abortChat } from '../../src/chat-service';
+import { createPiChatRuntime } from './chat-runtime';
 import { setUiControlHandlers, getMcpStatus, clearDomainGrants } from '../../src/mcp-server';
 import {
   registerGuest,
@@ -191,6 +193,20 @@ ipcMain.handle('desktop:mcp:status', (event) => {
   return getMcpStatus();
 });
 
+// --- Direct chat (in-process pi agent; MCP stays untouched) -----------
+ipcMain.handle('desktop:chat:send', (_event, payload: { sessionId?: unknown; text?: unknown; cwd?: unknown }) => {
+  const sessionId = String(payload?.sessionId ?? '');
+  const text = String(payload?.text ?? '');
+  const cwd = typeof payload?.cwd === 'string' ? payload.cwd : undefined;
+  if (!sessionId || !text) return { ok: false, error: 'sessionId and text required' };
+  void sendChat(sessionId, text, cwd);
+  return { ok: true };
+});
+ipcMain.handle('desktop:chat:abort', (_event, payload: { sessionId?: unknown }) => {
+  abortChat(String(payload?.sessionId ?? ''));
+  return { ok: true };
+});
+
 let lastMcpAgentSnapshot = "";
 setInterval(() => {
   let status;
@@ -297,6 +313,11 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+setChatRuntimeFactory(createPiChatRuntime);
+setChatEventListener((sessionId, event) => {
+  win?.webContents.send('desktop:chat:event', { sessionId, ...event });
 });
 
 setUiControlHandlers({

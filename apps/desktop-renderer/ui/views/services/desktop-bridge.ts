@@ -32,6 +32,12 @@ export interface DesktopAPI {
     unregisterGuest: (surfaceId: string) => void;
   };
   /** Optional in tests/mocks; present in the real Electron preload. */
+  /** Direct chat with the in-process pi agent (Electron only). */
+  chat?: {
+    send: (sessionId: string, text: string, cwd?: string) => Promise<{ ok: boolean; error?: string }>;
+    abort: (sessionId: string) => Promise<{ ok: boolean }>;
+    onEvent: (callback: (e: { sessionId: string; kind: string; text: string }) => void) => () => void;
+  };
   mcp?: {
     getStatus: () => Promise<McpStatusPayload>;
     onStatus: (callback: (status: McpStatusPayload) => void) => () => void;

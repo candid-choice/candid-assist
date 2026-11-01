@@ -54,6 +54,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 // ── Store ────────────────────────────────────────────────────────────────
 
+/** One direct-chat message (assistant text, user input, tool marker, error). */
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant" | "tool" | "error";
+  text: string;
+  ts: string;
+}
+
 interface AppState {
   // ── Surface state ──────────────────────────────────────────────────────
   activeSurface: SurfaceConfig<SurfacePayload> | null;
@@ -106,6 +114,15 @@ interface AppState {
    * graying of sessions whose agent has disconnected. */
   mcpAgents: Array<{ client: string; agentSessionId: string | null }>;
   setMcpAgents: (agents: Array<{ client: string; agentSessionId: string | null }>) => void;
+
+  /** Direct-chat transcripts keyed by harness session id. */
+  chatBySession: Record<string, ChatMessage[]>;
+  chatOpen: boolean;
+  chatBusy: Record<string, boolean>;
+  setChatOpen: (open: boolean) => void;
+  appendChatMessage: (sessionId: string, msg: ChatMessage) => void;
+  setChatBusy: (sessionId: string, busy: boolean) => void;
+  clearChat: (sessionId: string) => void;
   /** Domains the human granted "always" for agent web access. */
   browserGrants: string[];
   addBrowserGrant: (domain: string) => void;
@@ -185,6 +202,8 @@ function persistableSlice(state: AppState) {
     settings: state.settings,
     sidebarWidth: state.sidebarWidth,
     browserGrants: state.browserGrants,
+    chatBySession: state.chatBySession,
+    chatOpen: state.chatOpen,
   };
 }
 
@@ -290,6 +309,28 @@ export const useStore = create<AppState>()(
       mcpAgentCount: 0,
       mcpAgents: [],
       setMcpAgents: (agents) => set({ mcpAgents: agents }),
+
+      chatBySession: {},
+      chatOpen: false,
+      chatBusy: {},
+      setChatOpen: (open) => set({ chatOpen: open }),
+      appendChatMessage: (sessionId, msg) =>
+        set((st) => ({
+          chatBySession: {
+            ...st.chatBySession,
+            [sessionId]: [...(st.chatBySession[sessionId] ?? []), msg],
+          },
+        })),
+      setChatBusy: (sessionId, busy) =>
+        set((st) => ({ chatBusy: { ...st.chatBusy, [sessionId]: busy } })),
+      clearChat: (sessionId) =>
+        set((st) => {
+          const next = { ...st.chatBySession };
+          delete next[sessionId];
+          const busy = { ...st.chatBusy };
+          delete busy[sessionId];
+          return { chatBySession: next, chatBusy: busy };
+        }),
       browserGrants: [],
       addBrowserGrant: (domain: string) =>
         set((state) => {

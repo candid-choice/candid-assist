@@ -52,6 +52,12 @@ export interface DesktopAPI {
     getStatus: () => Promise<McpStatusPayload>;
     onStatus: (callback: (status: McpStatusPayload) => void) => () => void;
   };
+  /** Direct chat with the in-process pi agent (Electron only). */
+  chat: {
+    send: (sessionId: string, text: string, cwd?: string) => Promise<{ ok: boolean; error?: string }>;
+    abort: (sessionId: string) => Promise<{ ok: boolean }>;
+    onEvent: (callback: (e: { sessionId: string; kind: string; text: string }) => void) => () => void;
+  };
   /** Runtime discriminator used by the renderer. */
   readonly runtime: 'electron';
 }
@@ -74,6 +80,16 @@ const api: DesktopAPI = {
       ipcRenderer.send('desktop:guest:register', { surfaceId, webContentsId }),
     unregisterGuest: (surfaceId) =>
       ipcRenderer.send('desktop:guest:unregister', { surfaceId }),
+  },
+  chat: {
+    send: (sessionId, text, cwd) => ipcRenderer.invoke('desktop:chat:send', { sessionId, text, cwd }),
+    abort: (sessionId) => ipcRenderer.invoke('desktop:chat:abort', { sessionId }),
+    onEvent: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: { sessionId: string; kind: string; text: string }) =>
+        callback(payload);
+      ipcRenderer.on('desktop:chat:event', listener);
+      return () => ipcRenderer.removeListener('desktop:chat:event', listener);
+    },
   },
   mcp: {
     getStatus: () => ipcRenderer.invoke('desktop:mcp:status'),
