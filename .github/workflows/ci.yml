@@ -1,10 +1,14 @@
 name: CI
 
 on:
-  push:
-    branches: [main, electron-migration, feature/agent-browser-control]
-  pull_request:
-  workflow_dispatch:
+  # DISABLED for now (was: push + pull_request). The workflow file is kept
+  # so it can be restored by putting the triggers back:
+  #   push:
+  #     branches: [main, electron-migration, feature/agent-browser-control]
+  #     paths-ignore: ['docs/**']
+  #   pull_request:
+  #     branches: [main, electron-migration, feature/agent-browser-control]
+  workflow_dispatch: # manual-only escape hatch; runs nothing automatically
 
 concurrency:
   group: ci-${{ github.ref }}
