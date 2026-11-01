@@ -2,7 +2,7 @@
 
 **Playwright (localhost:3616) is for layout & mechanics smoke tests only.**
 It's fast for: CSS/layout regressions, console-error checks, component
-states, guide/settings screens, tab rendering.
+states, guide/settings screens, tab rendering — in STANDALONE mode only.
 
 **The real test is always the Electron app.** Anything touching these is
 only truly verified in the desktop window (my Electron instance, logs in
@@ -17,18 +17,6 @@ only truly verified in the desktop window (my Electron instance, logs in
 - process manager controls, updater, reloadUI/restartApp
 - IndexedDB persistence across real restarts
 
-## Layout-testing the DESKTOP context in Playwright
-
-Append `&stubBridge=1` to the dev URL:
-
-    http://localhost:3616/?wsPort=3614&mcpPort=3615&stubBridge=1
-
-This injects a dev-only stub `window.desktop` (never in production
-builds), so the renderer runs its live-services path (ws connect,
-surface rendering, presence via HTTP fallback) and you see what the
-Electron window shows — minus real IPC (no webview guest, no window
-controls).
-
 ## Verifying in Electron
 
 - I can't screenshot the Electron window directly; I verify via:
@@ -37,3 +25,17 @@ controls).
 - After main-process changes I restart the instance
   (`electron-vite dev` + Singleton cleanup); renderer changes hot-reload
   (Next dev) — or force via the `reloadUI` MCP tool.
+
+## Why plain tabs can NEVER see MCP
+
+`getDesktopBridge()` is strict: only the real Electron preload
+(`window.desktop` with `runtime: 'electron'`) unlocks live services.
+A plain tab (even with `?wsPort`/`?mcpPort`/`?stubBridge` params):
+- starts no WebSocket connection (standalone guard)
+- polls nothing; presence exists only over IPC
+- shows "Standalone renderer" in the footer
+
+There is deliberately **no dev stub bridge** and no HTTP presence
+fallback — browser-side observation of MCP was tried and removed as a
+design violation (2026-11-01). If you need desktop-context layout
+checks, screenshot the Electron app (ask the human) instead.
