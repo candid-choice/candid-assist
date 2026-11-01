@@ -21,3 +21,11 @@ argument-hint: "[what to work on]"
 ## Current State
 
 Working on `user-flow-ideation` branch. Reviewing/creating plan files for Human Assist desktop app.
+
+## Launching the app (always)
+
+Always start the full stack — including the Electron desktop app — with
+`pnpm run dev` at the repo root (web + backend + renderer + electron +
+firebase emulator together). Never launch `electron-vite dev` or the
+renderer manually; ad-hoc launches get orphaned and leave the desktop
+app dead. Use a scoped `pkill -f candid-assist` before relaunching.
