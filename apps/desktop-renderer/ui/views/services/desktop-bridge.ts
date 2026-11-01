@@ -58,8 +58,53 @@ export interface McpStatusPayload {
 }
 
 /** Returns the Electron bridge when running under Electron, else undefined. */
+function stubBridgeIfRequested(): DesktopAPI | undefined {
+  // Dev-only stub so Playwright can layout-test the DESKTOP context
+  // (live services, surfaces, presence) via ?stubBridge=1. Never active
+  // in production builds.
+  if (typeof window === 'undefined') return undefined;
+  if (process.env.NODE_ENV === 'production') return undefined;
+  if (!new URLSearchParams(window.location.search).has('stubBridge')) return undefined;
+  if (stubBridge) return stubBridge;
+  const port = () => new URLSearchParams(window.location.search).get('mcpPort') ?? '3615';
+  stubBridge = {
+    runtime: 'electron',
+    window: { minimize: () => {}, maximize: () => {}, close: () => {} },
+    view: {
+      create: () => {}, setBounds: () => {}, setVisible: () => {}, destroy: () => {},
+      registerGuest: () => {}, unregisterGuest: () => {},
+    },
+    mcp: {
+      getStatus: async () => {
+        try {
+          const res = await fetch('http://localhost:' + port() + '/status', {
+            signal: AbortSignal.timeout(2000),
+          });
+          return (await res.json()) as McpStatusPayload;
+        } catch {
+          return {
+            ok: false,
+            mcp: { agentLastSeen: 0, agentConnected: false, agentCount: 0, agents: [] },
+            ws: { clients: 0 },
+          };
+        }
+      },
+      onStatus: () => () => {},
+    },
+    system: {
+      pickFolder: async () => null,
+      checkForUpdates: async () => ({ phase: 'unavailable' }),
+      clearWebProfile: async () => ({ status: 'cleared' }),
+    },
+  };
+  return stubBridge;
+}
+let stubBridge: DesktopAPI | undefined;
+
+/** Returns the Electron bridge when running under Electron, else undefined. */
 export function getDesktopBridge(): DesktopAPI | undefined {
   if (typeof window === 'undefined') return undefined;
   const api = (window as unknown as { desktop?: DesktopAPI }).desktop;
-  return api?.runtime === 'electron' ? api : undefined;
+  if (api?.runtime === 'electron') return api;
+  return stubBridgeIfRequested();
 }
