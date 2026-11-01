@@ -290,8 +290,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  align-self: stretch; /* match the search box height exactly */
+  min-height: 26px;
   padding: 0;
   border: 1px solid var(--ha-border);
   border-radius: 6px;
