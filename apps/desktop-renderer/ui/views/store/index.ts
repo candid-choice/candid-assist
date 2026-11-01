@@ -118,8 +118,10 @@ interface AppState {
   /** Direct-chat transcripts keyed by harness session id. */
   chatBySession: Record<string, ChatMessage[]>;
   chatOpen: boolean;
+  chatWidth: number;
   chatBusy: Record<string, boolean>;
   setChatOpen: (open: boolean) => void;
+  setChatWidth: (width: number) => void;
   appendChatMessage: (sessionId: string, msg: ChatMessage) => void;
   setChatBusy: (sessionId: string, busy: boolean) => void;
   clearChat: (sessionId: string) => void;
@@ -204,6 +206,7 @@ function persistableSlice(state: AppState) {
     browserGrants: state.browserGrants,
     chatBySession: state.chatBySession,
     chatOpen: state.chatOpen,
+    chatWidth: state.chatWidth,
   };
 }
 
@@ -312,8 +315,11 @@ export const useStore = create<AppState>()(
 
       chatBySession: {},
       chatOpen: false,
+      chatWidth: 320,
       chatBusy: {},
       setChatOpen: (open) => set({ chatOpen: open }),
+      setChatWidth: (width: number) =>
+        set({ chatWidth: Math.min(560, Math.max(240, Math.round(width))) }),
       appendChatMessage: (sessionId, msg) =>
         set((st) => ({
           chatBySession: {

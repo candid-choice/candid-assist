@@ -11,6 +11,7 @@ import { useCallback, useState } from "react";
 import { Sidebar, type SidebarSession } from "../Sidebar";
 import { SidebarContextMenu } from "../SidebarContextMenu";
 import { useStore } from "../../store";
+import { addUserSession } from "../../lib/user-session";
 import {
   updateSessionStatus,
   deleteSession,
@@ -133,6 +134,8 @@ export function AppSidebar({
       <Sidebar
         open={open}
         width={width}
+        onBackgroundClick={() => useStore.getState().setActiveSession(null)}
+        onAddSession={() => addUserSession()}
         onToggle={onToggle ?? (() => {})}
         sessions={sessions.map((sess) =>
           toSidebarSession(

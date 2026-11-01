@@ -4,7 +4,8 @@
  * are kept per harness session in the persisted store.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import "./index.css";
 import { useStore, type ChatMessage } from "../../store";
 import { getDesktopBridge } from "../../services/desktop-bridge";
@@ -18,9 +19,11 @@ function newId(): string {
 export interface ChatDockProps {
   /** Harness session id the chat belongs to (null = none selected). */
   sessionId: string | null;
+  /** Collapse the dock (✕ in the header). */
+  onClose?: () => void;
 }
 
-export function ChatDock({ sessionId }: ChatDockProps) {
+export function ChatDock({ sessionId, onClose }: ChatDockProps) {
   const bridge = getDesktopBridge();
   const chat = bridge?.chat;
   const messages = useStore((s) =>
@@ -31,6 +34,8 @@ export function ChatDock({ sessionId }: ChatDockProps) {
   const setChatBusy = useStore((s) => s.setChatBusy);
   const clearChat = useStore((s) => s.clearChat);
   const workspacePath = useStore((s) => s.settings.workspacePath);
+  const chatWidth = useStore((s) => s.chatWidth);
+  const setChatWidth = useStore((s) => s.setChatWidth);
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef<Map<string, string>>(new Map());
@@ -71,10 +76,58 @@ export function ChatDock({ sessionId }: ChatDockProps) {
     setChatBusy(sessionId, false);
   };
 
+  // ── Left-edge drag resize (mirrors SidebarResizer's frame lock) ─────
+  const [chatDragging, setChatDragging] = useState(false);
+  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const onChatResizeStart = useCallback((e: ReactMouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    resizeRef.current = {
+      startX: e.clientX,
+      startWidth: useStore.getState().chatWidth,
+    };
+    setChatDragging(true);
+  }, []);
+  useEffect(() => {
+    if (!chatDragging) return;
+    const onMove = (e: MouseEvent) => {
+      const d = resizeRef.current;
+      if (!d) return;
+      setChatWidth(d.startWidth + (d.startX - e.clientX)); // right column: drag left = wider
+    };
+    const onUp = () => {
+      resizeRef.current = null;
+      setChatDragging(false);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.body.classList.add("ha-resizing-sidebar");
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.classList.remove("ha-resizing-sidebar");
+    };
+  }, [chatDragging, setChatWidth]);
+
   return (
-    <div className="ha-chat-dock" role="complementary" aria-label="Chat">
+    <div
+      className="ha-chat-dock"
+      role="complementary"
+      aria-label="Chat"
+      style={{ width: chatWidth }}
+    >
+      {chatDragging && <div className="ha-chat-resize-overlay" data-testid="chat-resize-overlay" />}
+      <div
+        className={`ha-chat-resizer${chatDragging ? " ha-chat-resizer--active" : ""}`}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize chat"
+        title="Drag to resize · double-click to reset"
+        onMouseDown={onChatResizeStart}
+        onDoubleClick={() => setChatWidth(320)}
+      />
       <div className="ha-chat-dock-header">
-        <span className="ha-chat-dock-title">💬 Chat</span>
+        <span className="ha-chat-dock-title">Chat</span>
         <span className="ha-chat-dock-sub">{sessionId ? "direct · in-app" : "no session"}</span>
         <button
           type="button"
@@ -85,6 +138,17 @@ export function ChatDock({ sessionId }: ChatDockProps) {
         >
           Clear
         </button>
+        {onClose && (
+          <button
+            type="button"
+            className="ha-chat-dock-close"
+            title="Hide chat"
+            aria-label="Hide chat"
+            onClick={onClose}
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       <div className="ha-chat-dock-list" ref={listRef}>

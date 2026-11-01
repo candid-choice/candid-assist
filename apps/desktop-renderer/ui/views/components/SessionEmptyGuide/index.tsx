@@ -132,19 +132,26 @@ const SECTIONS: Section[] = [
 ];
 
 export interface SessionEmptyGuideProps {
-  session: SessionDoc;
+  /** Null when no session is selected — renders the generic usage guide. */
+  session: SessionDoc | null;
 }
 
 export function SessionEmptyGuide({ session }: SessionEmptyGuideProps) {
   return (
     <div className="ha-session-guide" data-testid="session-guide">
       <div className="ha-session-guide-head">
-        <h2 className="ha-session-guide-title">{session.title}</h2>
+        <h2 className="ha-session-guide-title">
+          {session ? session.title : "Candid Assist — how to use it"}
+        </h2>
         <p className="ha-session-guide-sub">
-          Session is live but has no surfaces yet. Ask your agent to use the{" "}
-          <code>human-assist</code> MCP server — this app is where the agent
-          can <strong>be on the web as you</strong>, and render things an IDE
-          can’t.
+          {session
+            ? "Session is live but has no surfaces yet. Ask your agent to use the " +
+              "human-assist MCP server — this app is where the agent can " +
+              "be on the web as you, and render things an IDE can’t."
+            : "Select a session on the left (or click the empty sidebar to " +
+              "deselect), start a new task, or connect an agent over the " +
+              "human-assist MCP server. Surfaces appear here, scoped to the " +
+              "selected session. Here’s what makes this worth opening:"}
         </p>
       </div>
 
