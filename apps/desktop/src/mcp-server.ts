@@ -1145,6 +1145,11 @@ function sendToWsClients(eventObj: Record<string, unknown>): void {
 /** Exported for tests + potential UI-side introspection. */
 export const permissionBroker = new PermissionBroker(sendToWsClients);
 
+/** Test hook: ids of currently-open surface records. */
+export function __listSurfacesForTest(): string[] {
+  return [...openSurfaces.keys()];
+}
+
 /** Test hook: drop all stored surface records (does not touch windows). */
 export function __resetSurfacesForTest(): void {
   openSurfaces.clear();
@@ -1176,6 +1181,33 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** Find a live surface already doing this exact task (same searchQuery
+ * or same URL) so repeated requests re-navigate ONE tab instead of
+ * spawning twins. */
+function findTaskSurface(url: string, agentArgs: Record<string, unknown>): string | undefined {
+  const query = typeof agentArgs["query"] === "string"
+    ? (agentArgs["query"] as string).trim().toLowerCase()
+    : undefined;
+  const goal = typeof agentArgs["goal"] === "string"
+    ? (agentArgs["goal"] as string).trim().toLowerCase()
+    : undefined;
+  let fallback: string | undefined;
+  for (const [id, rec] of openSurfaces.entries()) {
+    if (rec.status !== "open" || rec.type !== "browser") continue;
+    const p = (rec.payload ?? {}) as Record<string, unknown>;
+    if (query && typeof p["searchQuery"] === "string" &&
+        (p["searchQuery"] as string).trim().toLowerCase() === query) {
+      return id; // exact task match wins outright
+    }
+    if (goal && typeof p["goal"] === "string" &&
+        (p["goal"] as string).trim().toLowerCase() === goal) {
+      return id;
+    }
+    if (!fallback && typeof p["url"] === "string" && p["url"] === url) fallback = id;
+  }
+  return fallback;
+}
+
 /** Navigate (reusing or opening an agent browser surface) and evaluate
  * JS in the page after a settle delay. Consent-gated. */
 async function agentNavigateAndEval(
@@ -1191,9 +1223,11 @@ async function agentNavigateAndEval(
   const perm = await permissionBroker.ensure(url, tool);
   if (!perm.allowed) return { ok: false, status: "denied", reason: perm.decision, url };
 
-  // Each task gets its OWN tab: reuse only when the caller explicitly
-  // passes a surfaceId that has a live guest (e.g. continuing a task).
-  let surfaceId = typeof agentArgs["surfaceId"] === "string" ? agentArgs["surfaceId"] : undefined;
+  // Each task gets its OWN tab — but the SAME task (same searchQuery/
+  // goal/URL) re-navigates its existing tab instead of opening a twin.
+  let surfaceId = typeof agentArgs["surfaceId"] === "string"
+    ? agentArgs["surfaceId"]
+    : findTaskSurface(url, agentArgs);
   let handle: GuestHandle | undefined;
   if (surfaceId) {
     try {
@@ -1252,7 +1286,12 @@ async function agentNavigateAndEval(
   try {
     await handle.loadURL(url);
   } catch (e) {
-    throw new Error("BROWSER_008: load failed: " + (e as Error).message);
+    // A freshly-pushed <webview src=...> is already navigating to this
+    // exact URL; calling loadURL on top of it aborts the in-flight load
+    // (ERR_ABORTED -3). Treat that as "already on our way" and settle.
+    if (!/\(-3\)|ERR_ABORTED/i.test((e as Error).message)) {
+      throw new Error("BROWSER_008: load failed: " + (e as Error).message);
+    }
   }
   await sleep(1_500); // settle
   const value = await handle.executeJavaScript(evalJs);
@@ -1323,23 +1362,25 @@ async function handleGoogleSearch(args: unknown): Promise<Record<string, unknown
   if (!query) throw new Error("MCP_001: query required");
   if (query.length > 512) throw new Error("MCP_012: query too long (max 512)");
   const url = "https://www.google.com/search?q=" + encodeURIComponent(query);
-  const evalJs = `(() => {
+  const evalJs = `(function(){ try {
     const results = [...document.querySelectorAll('a[href^="http"]')]
       .map((a) => ({
-        title: (a.querySelector('h3')?.textContent || a.textContent || '').trim(),
+        title: (a.querySelector('h3') ? a.querySelector('h3').textContent : a.textContent) || '',
         link: a.href,
       }))
-      .filter((r) => r.title && !/google\\./.test(r.link) && !/gstatic/.test(r.link))
+      .filter((r) => r.title && r.title.trim() && r.link.indexOf('google.') === -1 && r.link.indexOf('gstatic') === -1)
       .slice(0, 10);
     return JSON.stringify({
       pageTitle: document.title,
       url: location.href,
-      loginRequired: location.href.includes('accounts.google.com') || /before you continue/i.test(document.body?.innerText || ''),
-      botCheck: /sorry\/index|unusual traffic|recaptcha|are you a robot/i.test(location.href + ' ' + (document.body?.innerText || '')),
+      loginRequired: location.href.indexOf('accounts.google.com') !== -1 || /before you continue/i.test(document.body ? document.body.innerText : ''),
+      botCheck: /sorry\\/index|unusual traffic|recaptcha|are you a robot/i.test(location.href + ' ' + (document.body ? document.body.innerText : '')),
       results,
-      pageText: (document.body?.innerText || '').slice(0, 4000),
+      pageText: (document.body ? document.body.innerText : '').slice(0, 4000),
     });
-  })()`;
+  } catch (e) {
+    return JSON.stringify({ evalError: String(e && e.message ? e.message : e), url: typeof location !== 'undefined' ? location.href : '?' });
+  } })()`;
   const r = await agentNavigateAndEval(url, "googleSearch", evalJs, o);
   if (!r.ok) return { ...r, tool: "googleSearch" };
   let parsed: Record<string, unknown> = {};

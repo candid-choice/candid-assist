@@ -57,13 +57,18 @@
 }
 
 .ha-address-tab--active {
-  background: var(--ha-primary-light);
-  color: var(--ha-primary);
+  /* Strongly distinguish the open tab: solid primary chip + white text
+     + bottom accent bar, instead of a subtle tint. */
+  background: var(--ha-primary, #6366f8);
+  color: #fff;
   font-weight: 600;
+  box-shadow: inset 0 -2px 0 rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--ha-primary, #6366f8);
 }
 
 .ha-address-tab--active:hover {
-  background: var(--ha-primary-light);
+  background: var(--ha-primary, #6366f8);
+  filter: brightness(1.08);
 }
 
 /* ── URL input ─────────────────────────────────────────────── */

@@ -501,3 +501,69 @@ describe('open3dSurface in-place update', () => {
     expect(second.result.primitiveCount).toBe(2);
   });
 });
+
+describe('recipe loadURL abort tolerance', () => {
+  it('treats ERR_ABORTED (-3) from a self-loading webview as success', async () => {
+    const { permissionBroker } = await import('../src/mcp-server');
+    const { setGuestResolver, registerGuest } = await import('../src/guest-registry');
+    permissionBroker.syncGrants(['google.com']);
+    setGuestResolver(() => ({
+      executeJavaScript: async () => JSON.stringify({
+        pageTitle: 'ok', url: 'https://ok', loginRequired: false,
+        results: [{ title: 'x', link: 'https://x' }], pageText: 'ok',
+      }),
+      loadURL: async () => { throw new Error(" (-3) loading 'https://www.google.com/search'"); },
+      capturePage: async () => ({ toDataURL: () => 'data:,' }),
+      isDestroyed: () => false,
+      getURL: () => 'https://www.google.com/search',
+    }));
+    registerGuest('surf_abort', 91);
+    const { processMcpMessage } = await import('../src/mcp-server');
+    const out = await processMcpMessage({
+      jsonrpc: '2.0', method: 'tools/call',
+      params: { name: 'googleSearch', arguments: { query: 'x', surfaceId: 'surf_abort' } },
+      id: 985,
+    } as never);
+    const res = (out as { response: Record<string, any> }).response;
+    expect(res.result.results).toHaveLength(1);
+  });
+});
+
+describe('recipe dedupe (same task → same tab)', () => {
+  it('re-navigates the existing tab for an identical search query', { timeout: 20_000 }, async () => {
+    const { permissionBroker, processMcpMessage, __resetSurfacesForTest } = await import('../src/mcp-server');
+    const { setGuestResolver, registerGuest } = await import('../src/guest-registry');
+    __resetSurfacesForTest();
+    permissionBroker.syncGrants(['google.com']);
+    setGuestResolver(() => ({
+      executeJavaScript: async () => JSON.stringify({ pageTitle: 'ok', url: 'g', loginRequired: false, botCheck: false, results: [], pageText: '' }),
+      loadURL: async () => {},
+      capturePage: async () => ({ toDataURL: () => 'data:,' }),
+      isDestroyed: () => false,
+      getURL: () => 'https://www.google.com/search?q=duplicate+test',
+    }));
+    const call = async (id: number) => {
+      const out = await processMcpMessage({
+        jsonrpc: '2.0', method: 'tools/call',
+        params: { name: 'googleSearch', arguments: { query: 'duplicate test' } }, id,
+      } as never);
+      return (out as { response: Record<string, any> }).response;
+    };
+    // Helper: fire the call, register the guest it creates, await result.
+    const { __listSurfacesForTest } = await import('../src/mcp-server');
+    const callWithGuest = async (id: number) => {
+      const p = call(id);
+      for (let waited = 0; waited < 3000; waited += 100) {
+        await new Promise((r) => setTimeout(r, 100));
+        for (const sid of __listSurfacesForTest()) registerGuest(sid, 92);
+        if ((await Promise.race([p.then(() => 'done'), Promise.resolve('wait')])) === 'done') break;
+      }
+      return (await p) as { result?: Record<string, any> };
+    };
+    const a = await callWithGuest(990);
+    const b = await callWithGuest(991);
+    // second call must reuse the first surface, not open a twin
+    expect(b.result!.surfaceId).toBe(a.result!.surfaceId);
+    // (surface reused — no twin opened)
+  });
+});
