@@ -55,6 +55,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('AppSidebar per-row delete', () => {
+  it('renders a delete button that removes the session after confirm', async () => {
+    useStore.getState().setSessions([makeSession('a'), makeSession('b')]);
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const fetchFn = mockFetch(async () => ({ ok: true, json: async () => ({}) }));
+    render(<AppSidebar />);
+
+    const buttons = await screen.findAllByRole('button', { name: /delete session a/i });
+    fireEvent.click(buttons[0]!);
+    expect(confirmSpy).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(useStore.getState().sessions.map((s) => s.id)).toEqual(['b']),
+    );
+    expect(fetchFn.mock.calls.some((call) => String(call[0]).includes('sessions/a'))).toBe(true);
+    confirmSpy.mockRestore();
+  });
+});
+
 // ── Mapping ────────────────────────────────────────────────────────────────
 
 describe('toSidebarSession', () => {
@@ -156,5 +174,28 @@ describe('AppDashboard', () => {
   it('renders nothing when inactive', () => {
     const { container } = render(<AppDashboard active={false} />);
     expect(container.innerHTML).toBe('');
+  });
+});
+
+describe('AppSidebar session switching follows content', () => {
+  it('clicking a session selects its last surface or clears the pane', async () => {
+    useStore.getState().setSessions([makeSession('a'), makeSession('b')]);
+    useStore.setState({
+      views: [
+        { id: 'va', label: 'A', type: 'browser', title: 't', payload: {}, source: 'mcp', createdAt: 1, sessionId: 'a' },
+        { id: 'va2', label: 'A2', type: 'browser', title: 't', payload: {}, source: 'mcp', createdAt: 2, sessionId: 'a' },
+      ],
+      activeSurface: null,
+      activeViewId: null,
+    } as never);
+    render(<AppSidebar />);
+
+    fireEvent.click(await screen.findByText('Session a'));
+    expect(useStore.getState().activeSessionId).toBe('a');
+    expect(useStore.getState().activeSurface?.id).toBe('va2'); // last owned view
+
+    fireEvent.click(screen.getByText('Session b'));
+    expect(useStore.getState().activeSessionId).toBe('b');
+    expect(useStore.getState().activeSurface).toBeNull(); // empty session → guide
   });
 });

@@ -85,6 +85,49 @@ describe('session state', () => {
     expect(useStore.getState().activeSessionId).toBe('a');
   });
 
+  it('removeSession closes the session surfaces and agent mapping', () => {
+    useStore.getState().setSessions([makeSession('a'), makeSession('b')]);
+    useStore.setState({
+      views: [
+        { id: 'v1', label: 'Browser · a', type: 'browser', title: 't', payload: {}, source: 'mcp', createdAt: 1, sessionId: 'a' },
+        { id: 'v2', label: 'Browser · b', type: 'browser', title: 't', payload: {}, source: 'mcp', createdAt: 1, sessionId: 'b' },
+      ],
+      activeViewId: 'v1',
+      activeSurface: { id: 'v1', label: 'x', type: 'browser', title: 't', payload: {}, source: 'mcp', createdAt: 1, sessionId: 'a' },
+      agentSessions: { 'pi::x': 'a' },
+    } as never);
+
+    useStore.getState().removeSession('a');
+
+    const st = useStore.getState();
+    expect(st.views.map((v) => v.id)).toEqual(['v2']);
+    expect(st.activeSurface).toBeNull();
+    expect(st.agentSessions['pi::x']).toBeUndefined();
+  });
+
+  it('deleteAllSessions is a full reset (views, activeSurface, activeViewId)', () => {
+    useStore.getState().setSessions([makeSession('a'), makeSession('b')]);
+    useStore.setState({
+      views: [
+        { id: 'v1', label: 'Browser · reactnative', type: 'browser', title: 't', payload: {}, source: 'mcp', createdAt: 1, sessionId: 'a' },
+        { id: 'v2', label: 'Orphan', type: 'browser', title: 't', payload: {}, source: 'mcp', createdAt: 1 },
+      ],
+      activeViewId: 'v1',
+      activeSurface: { id: 'v1', label: 'x', type: 'browser', title: 't', payload: {}, source: 'mcp', createdAt: 1, sessionId: 'a' },
+      agentSessions: { 'pi::x': 'a' },
+    } as never);
+
+    useStore.getState().deleteAllSessions();
+
+    const st = useStore.getState();
+    expect(st.sessions).toEqual([]);
+    expect(st.agentSessions).toEqual({});
+    expect(st.activeSessionId).toBeNull();
+    expect(st.views).toEqual([]);
+    expect(st.activeViewId).toBeNull();
+    expect(st.activeSurface).toBeNull();
+  });
+
   it('setActiveSession sets and clears', () => {
     useStore.getState().setActiveSession('a');
     expect(useStore.getState().activeSessionId).toBe('a');

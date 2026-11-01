@@ -7,7 +7,7 @@ Options: Copy Session ID, Archive, Delete.
 interface SidebarSession {
   id: string;
   title: string;
-  status: 'active' | 'archived' | 'waiting';
+  status: string;
   updatedAt: string;
   surfaceCount: number;
   archived?: boolean;
@@ -18,6 +18,7 @@ interface SidebarContextMenuProps {
   onClose: () => void;
   onCopyId?: () => void;
   onArchive?: (id: string) => void;
+  onMarkDead?: (id: string) => void;
   onDelete?: (id: string) => void;
 }
 
@@ -26,6 +27,7 @@ export function SidebarContextMenu({
   onClose,
   onCopyId,
   onArchive,
+  onMarkDead,
   onDelete,
 }: SidebarContextMenuProps) {
   return (
@@ -75,6 +77,15 @@ export function SidebarContextMenu({
         }}
       >
         <span>{session.archived ? 'Restore' : 'Archive'}</span>
+      </button>
+      <button
+        style={menuButtonStyle(false)}
+        onClick={() => {
+          onMarkDead?.(session.id);
+          onClose();
+        }}
+      >
+        ☠ Mark dead
       </button>
       <div
         style={{

@@ -50,3 +50,76 @@
   background: #ffffff;
   z-index: 0;
 }
+
+/* ── Agent handoff overlay (human verification) ──────────────────────── */
+/* Absolute fill of the surface content area (block+overflow parent, so
+   percentage-height flex children would collapse). */
+.ha-electron-webview-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ha-surface-frame-content:has(.ha-electron-webview-wrap) {
+  position: relative;
+}
+
+.ha-webview-handoff {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--ha-surface);
+  border-top: 2px solid var(--ha-primary);
+  box-shadow: var(--ha-shadow-lg);
+  z-index: 10;
+}
+
+.ha-webview-handoff-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--ha-text);
+}
+
+.ha-webview-handoff-text span {
+  color: var(--ha-text-secondary);
+  font-size: 11px;
+}
+
+.ha-webview-handoff-done {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: none;
+  border-radius: var(--ha-radius-sm);
+  background: var(--ha-primary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ha-webview-handoff-done:hover {
+  background: var(--ha-primary-hover);
+}
+
+.ha-browser-warning {
+  padding: 6px 12px;
+  background: #fff8e1;
+  border-bottom: 1px solid #ffe082;
+  color: #8d6e00;
+  font-size: 12px;
+}
+
+:root[data-theme="dark"] .ha-browser-warning {
+  background: #3a3020;
+  color: #ffd54f;
+  border-bottom-color: #6d5520;
+}

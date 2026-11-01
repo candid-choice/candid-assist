@@ -13,7 +13,18 @@ Usage:
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-type SurfaceEventType = "surface:push" | "surface:response" | "surface:close" | "surface:error" | "ui:message";
+type SurfaceEventType =
+  | "surface:push"
+  | "permission:request"
+  | "permission:resolved"
+  | "permission:grants-cleared"
+  | "agent:presence"
+  | "surface:response"
+  | "surface:close"
+  | "surface:error"
+  | "ui:message"
+  | "surface:handoff"
+  | "ui:action";
 
 interface SurfaceEvent {
   event: SurfaceEventType;
@@ -136,6 +147,29 @@ class WsService {
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /** Send a JSON message to the desktop MCP server (renderer → main),
+   *  e.g. { type: 'handoff:complete', surfaceId } to release browser
+   *  automation lock after the human finished a verification. */
+  send(message: Record<string, unknown>): boolean {
+    // View portal is observation-only: never let a debugging tab answer
+    // consent, control processes, or release handoffs.
+    const type = String(message["type"] ?? "");
+    if (
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).has("viewPortal") &&
+      process.env.NODE_ENV !== "production" &&
+      ["permission:respond", "process:control", "handoff:complete"].includes(type)
+    ) {
+      console.warn("[ws] view portal is read-only — refused", type);
+      return false;
+    }
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(message));
+      return true;
+    }
+    return false;
   }
 
   // ── Internal ───────────────────────────────────────────────────────────

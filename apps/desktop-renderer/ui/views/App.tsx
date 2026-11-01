@@ -9,6 +9,7 @@ import {
   SurfaceHost,
   ConnectionIndicator,
   AppSidebar,
+  SidebarResizer,
   AppDashboard,
   AppSessionDetail,
   UserMenu,
@@ -16,10 +17,15 @@ import {
   TaskComposer,
   SignInScreen,
   ToastContainer,
+  SessionHarnessBadge,
 } from "./components";
-import { useStoreSelector } from "./store";
+import { useStoreSelector, useStore } from "./store";
+import { deriveSessionTabs, reopenRecordedSurface, pickVisibleSurface } from "./lib/session-tabs";
+import { SessionEmptyGuide } from "./components/SessionEmptyGuide";
 import { deriveTaskTitle, useCreateSession } from "./hooks/use-create-session";
 import { useHideNativeViews } from "./hooks/use-hide-native-views";
+import { ChatDock } from "./components/ChatDock";
+import { getDesktopBridge } from "./services/desktop-bridge";
 
 function App() {
   // ── Surface state ─────────────────────────────────────────────────────
@@ -30,7 +36,10 @@ function App() {
   const activeSurface = useStoreSelector((s) => s.activeSurface);
   const activeSessionId = useStoreSelector((s) => s.activeSessionId);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useStore((s) => s.sidebarWidth);
   const settingsOpen = useStoreSelector((s) => s.settingsOpen);
+  const chatOpen = useStoreSelector((s) => s.chatOpen);
+  const setChatOpen = useStoreSelector((s) => s.setChatOpen);
   const setSettingsOpen = useStoreSelector((s) => s.setSettingsOpen);
   const theme = useStoreSelector((s) => s.settings.theme);
   const composerOpen = useStoreSelector((s) => s.composerOpen);
@@ -58,12 +67,49 @@ function App() {
   const activeViewId = useStoreSelector((s) => s.activeViewId);
   const views = useStoreSelector((s) => s.views);
   const setActiveView = useStoreSelector((s) => s.setActiveView);
+  const closeView = useStoreSelector((s) => s.closeView);
 
   // ── Render ────────────────────────────────────────────────────────────
-  const addressBarTabs = views.map((v) => ({
-    id: v.id,
-    label: v.label,
+  const activeSession = useStoreSelector((s) =>
+    s.activeSessionId
+      ? (s.sessions.find((x) => x.id === s.activeSessionId) ?? null)
+      : null,
+  );
+
+  // Chrome tabs: surfaces belonging to the ACTIVE session — open views
+  // plus recorded surfaces the session opened (click to re-open).
+  const sessionTabs = deriveSessionTabs(activeSession, views as never);
+  const addressBarTabs = sessionTabs.map((t) => ({
+    id: t.id,
+    label: t.label,
+    icon: t.icon,
   }));
+
+  // Strict session scoping: never show a surface from another session,
+  // and none at all when no session is selected.
+  const sessionOpenViews = (views as never[]).filter((v) =>
+    activeSession
+      ? (v as { sessionId?: string }).sessionId === activeSession.id
+      : false,
+  ) as typeof views;
+  const visibleSurface = pickVisibleSurface(activeSession, activeSurface, sessionOpenViews as never[]) as typeof activeSurface;
+
+  const handleTabClick = useCallback(
+    (id: string) => {
+      if (id.startsWith("saved:")) {
+        const surfaceId = id.slice("saved:".length);
+        const rec = activeSession?.surfaces?.find(
+          (r) => r.surfaceId === surfaceId,
+        );
+        if (rec && activeSession) {
+          useStore.getState().openSurface(reopenRecordedSurface(rec, activeSession.id) as never);
+        }
+        return;
+      }
+      useStore.getState().selectView(id);
+    },
+    [activeSession],
+  );
 
   const handleHelpAction = useCallback(
     () => closeHelpPalette(),
@@ -74,10 +120,18 @@ function App() {
     <div className="human-assist-app h-full w-full">
       <WindowShell
         title="Human Assist"
-        userStatus={<UserMenu onOpenSettings={() => setSettingsOpen(true)} />}
+        userStatus={
+          <UserMenu
+            onOpenSettings={() => setSettingsOpen(true)}
+            chatAvailable={!!getDesktopBridge()?.chat}
+            chatOpen={chatOpen}
+            onToggleChat={getDesktopBridge()?.chat ? () => setChatOpen(!chatOpen) : undefined}
+          />
+        }
         footer={
           <span className="ha-footer-status">
             <ConnectionIndicator />
+            <SessionHarnessBadge />
           </span>
         }
       >
@@ -85,20 +139,27 @@ function App() {
         <div className="ha-app-row">
           <AppSidebar
             open={sidebarOpen}
-            width={240}
+            width={sidebarWidth}
             onToggle={() => setSidebarOpen((v) => !v)}
           />
 
+          <SidebarResizer />
+
           <div className="ha-app-main">
-            {/* ── Chrome bar: address bar ── */}
-            <div className="ha-chrome-bar">
-              <AddressBar
-                tabs={addressBarTabs}
-                activeTabId={activeViewId}
-                onTabClick={setActiveView}
-              />
-              <div className="ha-chrome-spacer" />
-            </div>
+            {/* ── Chrome bar: only when there are tabs — an empty bar
+                 would float a stray horizontal line beside the sidebar
+                 divider ── */}
+            {addressBarTabs.length > 0 && (
+              <div className="ha-chrome-bar">
+                <AddressBar
+                  tabs={addressBarTabs}
+                  activeTabId={visibleSurface?.id ?? null}
+                  onTabClick={handleTabClick}
+                  onTabClose={closeView}
+                />
+                <div className="ha-chrome-spacer" />
+              </div>
+            )}
 
             {/* ── Content ── */}
             <div className="ha-chrome-content" style={{ overflow: "hidden" }}>
@@ -106,8 +167,10 @@ function App() {
                 <SettingsScreen onBack={() => setSettingsOpen(false)} />
               ) : signInOpen ? (
                 <SignInScreen onDismiss={closeSignIn} />
-              ) : activeSurface ? (
-                <SurfaceHost config={activeSurface} isViewActive />
+              ) : activeSession && sessionTabs.length === 0 ? (
+                <SessionEmptyGuide session={activeSession} />
+              ) : visibleSurface ? (
+                <SurfaceHost config={visibleSurface} isViewActive />
               ) : activeSessionId ? (
                 <AppSessionDetail />
               ) : (
@@ -122,6 +185,11 @@ function App() {
               ))}
             </div>
           </div>
+
+          {/* ── Direct chat (Electron only, togglable from the titlebar) ── */}
+          {getDesktopBridge()?.chat && chatOpen && (
+            <ChatDock sessionId={activeSession?.id ?? null} />
+          )}
         </div>
       </WindowShell>
 

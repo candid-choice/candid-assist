@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/node": "^20.19.43",
     "@types/ws": "^8",
     "electron": "^45.0.0",
     "electron-builder": "^26.18.0",
@@ -19,6 +20,8 @@
     "vitest": "^3"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.4.0",
+    "electron-updater": "^6.8.11",
     "uuid": "^11.1.0",
     "ws": "^8.18.2"
   },

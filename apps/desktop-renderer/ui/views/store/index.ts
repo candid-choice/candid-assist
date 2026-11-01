@@ -40,16 +40,27 @@ export interface AppSettings {
   autoMinimize: boolean;
   desktopNotifications: boolean;
   autoCloseSurfaces: boolean;
+  /** Active workspace directory (used for session creation). */
+  workspacePath: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'light',
   autoMinimize: true,
   desktopNotifications: true,
+  workspacePath: '',
   autoCloseSurfaces: true,
 };
 
 // ── Store ────────────────────────────────────────────────────────────────
+
+/** One direct-chat message (assistant text, user input, tool marker, error). */
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant" | "tool" | "error";
+  text: string;
+  ts: string;
+}
 
 interface AppState {
   // ── Surface state ──────────────────────────────────────────────────────
@@ -63,6 +74,10 @@ interface AppState {
   toggleHelpPalette: () => void;
   closeHelpPalette: () => void;
   registerOnComplete: (fn: (result: SurfaceResult) => void) => void;
+
+  /** Sidebar width (px, user-resizable; persisted). */
+  sidebarWidth: number;
+  setSidebarWidth: (width: number) => void;
 
   // ── UI overlays (transient, not persisted) ────────────────────────────
   composerOpen: boolean;
@@ -91,7 +106,43 @@ interface AppState {
   /** Number of MCP agents (pi sessions, Claude Code, scripts) the
    *  server has seen within its online window. Volatile — never persisted. */
   mcpAgentCount: number;
+  /** True when running outside Electron (plain browser tab): no
+   * desktop MCP server belongs to this window at all. */
+  mcpStandalone: boolean;
   setMcpAgentCount: (count: number) => void;
+  /** Live WebSocket MCP agents (harness identities) — drives sidebar
+   * graying of sessions whose agent has disconnected. */
+  mcpAgents: Array<{ client: string; agentSessionId: string | null }>;
+  setMcpAgents: (agents: Array<{ client: string; agentSessionId: string | null }>) => void;
+
+  /** Direct-chat transcripts keyed by harness session id. */
+  chatBySession: Record<string, ChatMessage[]>;
+  chatOpen: boolean;
+  chatBusy: Record<string, boolean>;
+  setChatOpen: (open: boolean) => void;
+  appendChatMessage: (sessionId: string, msg: ChatMessage) => void;
+  setChatBusy: (sessionId: string, busy: boolean) => void;
+  clearChat: (sessionId: string) => void;
+  /** Domains the human granted "always" for agent web access. */
+  browserGrants: string[];
+  addBrowserGrant: (domain: string) => void;
+  clearBrowserGrants: () => void;
+  removeBrowserGrant: (domain: string) => void;
+  pendingPermission: {
+    id: string;
+    host: string;
+    url: string;
+    tool: string;
+  } | null;
+  setPendingPermission: (
+    p: { id: string; host: string; url: string; tool: string } | null,
+  ) => void;
+  setMcpStandalone: (v: boolean) => void;
+
+  /** Browser automation handoffs: surfaceId -> reason while the human
+   *  has control (agent tools blocked). Volatile. */
+  browserHandoffs: Record<string, { reason: string | null }>;
+  setBrowserHandoff: (surfaceId: string, reason: string | null) => void;
 
   // ── UI messages (pi → toast via MCP showMessage) ─────────────────────
   uiMessages: { id: string; type: 'info' | 'success' | 'warning' | 'error'; message: string }[];
@@ -110,6 +161,13 @@ interface AppState {
   removeSession: (id: string) => void;
   setActiveSession: (id: string | null) => void;
 
+  /** Coding-agent session map: "client::agentSessionId" → local session id.
+   *  Lets MCP agent actions record into a dedicated sidebar session. */
+  agentSessions: Record<string, string>;
+  setAgentSession: (agentKey: string, sessionId: string) => void;
+  /** Remove every session (and their bound views/agent maps). */
+  deleteAllSessions: () => void;
+
   // ── View manager ───────────────────────────────────────────────────────
   settings: AppSettings;
   updateSettings: (patch: Partial<AppSettings>) => void;
@@ -117,6 +175,8 @@ interface AppState {
   activeViewId: string | null;
   views: SurfaceConfig<BrowserPayload>[];
   setActiveView: (id: string) => void;
+  selectView: (id: string) => void;
+  closeView: (id: string) => void;
   updateViewUrl: (id: string, url: string) => void;
 }
 
@@ -138,7 +198,12 @@ function persistableSlice(state: AppState) {
     authUser: state.authUser,
     sessions: state.sessions,
     activeSessionId: state.activeSessionId,
+    agentSessions: state.agentSessions,
     settings: state.settings,
+    sidebarWidth: state.sidebarWidth,
+    browserGrants: state.browserGrants,
+    chatBySession: state.chatBySession,
+    chatOpen: state.chatOpen,
   };
 }
 
@@ -152,8 +217,41 @@ export const useStore = create<AppState>()(
       onSurfaceComplete: null,
 
       openSurface: (config: SurfaceConfig<SurfacePayload>) => {
-        set({ activeSurface: config, helpPaletteOpen: false });
+        set((state) => {
+          const others = state.views.filter((v) => v.id !== config.id);
+          return {
+            activeSurface: config,
+            helpPaletteOpen: false,
+            views: [...others, config] as typeof state.views,
+            activeViewId: config.id,
+          };
+        });
       },
+
+      selectView: (id: string) =>
+        set((state) => {
+          const v = state.views.find((x) => x.id === id);
+          if (!v) return {};
+          return {
+            activeSurface: v as unknown as SurfaceConfig<SurfacePayload>,
+            activeViewId: id,
+          };
+        }),
+
+      closeView: (id: string) =>
+        set((state) => {
+          const remaining = state.views.filter((v) => v.id !== id);
+          const wasActive =
+            state.activeSurface?.id === id || state.activeViewId === id;
+          const next = remaining[remaining.length - 1];
+          return {
+            views: remaining,
+            activeViewId: next ? next.id : null,
+            activeSurface: wasActive
+              ? ((next as unknown as SurfaceConfig<SurfacePayload>) ?? null)
+              : state.activeSurface,
+          };
+        }),
 
       completeSurface: (result: SurfaceResult) => {
         set((state) => ({
@@ -209,8 +307,61 @@ export const useStore = create<AppState>()(
         set({ connectionState: state }),
 
       mcpAgentCount: 0,
+      mcpAgents: [],
+      setMcpAgents: (agents) => set({ mcpAgents: agents }),
+
+      chatBySession: {},
+      chatOpen: false,
+      chatBusy: {},
+      setChatOpen: (open) => set({ chatOpen: open }),
+      appendChatMessage: (sessionId, msg) =>
+        set((st) => ({
+          chatBySession: {
+            ...st.chatBySession,
+            [sessionId]: [...(st.chatBySession[sessionId] ?? []), msg],
+          },
+        })),
+      setChatBusy: (sessionId, busy) =>
+        set((st) => ({ chatBusy: { ...st.chatBusy, [sessionId]: busy } })),
+      clearChat: (sessionId) =>
+        set((st) => {
+          const next = { ...st.chatBySession };
+          delete next[sessionId];
+          const busy = { ...st.chatBusy };
+          delete busy[sessionId];
+          return { chatBySession: next, chatBusy: busy };
+        }),
+      browserGrants: [],
+      addBrowserGrant: (domain: string) =>
+        set((state) => {
+          const d = domain.toLowerCase().replace(/^www\./, "");
+          return state.browserGrants.includes(d)
+            ? {}
+            : { browserGrants: [...state.browserGrants, d] };
+        }),
+      clearBrowserGrants: () => set({ browserGrants: [] }),
+      removeBrowserGrant: (domain: string) =>
+        set((state) => ({
+          browserGrants: state.browserGrants.filter(
+            (d) => d !== domain.toLowerCase().replace(/^www\./, ""),
+          ),
+        })),
+      pendingPermission: null,
+      setPendingPermission: (p) => set({ pendingPermission: p }),
+      mcpStandalone: false,
+
+      browserHandoffs: {},
+
+      setBrowserHandoff: (surfaceId: string, reason: string | null) =>
+        set((s) => {
+          const next = { ...s.browserHandoffs };
+          if (reason === null) delete next[surfaceId];
+          else next[surfaceId] = { reason };
+          return { browserHandoffs: next };
+        }),
 
       setMcpAgentCount: (count: number) => set({ mcpAgentCount: Math.max(0, count) }),
+      setMcpStandalone: (v: boolean) => set({ mcpStandalone: v }),
 
       uiMessages: [],
 
@@ -248,19 +399,71 @@ export const useStore = create<AppState>()(
           ),
         })),
 
-      removeSession: (id: string) =>
-        set((s) => ({
-          sessions: s.sessions.filter((sess) => sess.id !== id),
-          activeSessionId: s.activeSessionId === id ? null : s.activeSessionId,
+      deleteAllSessions: () =>
+        set(() => ({
+          // A true reset: every view is session-owned (all surfaces come
+          // from MCP pushes bound to a session), so clear-all empties the
+          // whole workspace — including any orphaned surface whose session
+          // was already removed — otherwise it persists in IndexedDB and
+          // reappears on the next reload.
+          sessions: [],
+          agentSessions: {},
+          activeSessionId: null,
+          views: [],
+          activeViewId: null,
+          activeSurface: null,
         })),
 
+      removeSession: (id: string) =>
+        set((s) => {
+          // Deleting a session closes every surface it owns.
+          const agentSessions = { ...s.agentSessions };
+          for (const [key, sid] of Object.entries(agentSessions)) {
+            if (sid === id) delete agentSessions[key];
+          }
+          const removed = new Set(
+            s.views
+              .filter((v) => (v as unknown as { sessionId?: string }).sessionId === id)
+              .map((v) => v.id),
+          );
+          const views = s.views.filter(
+            (v) => (v as unknown as { sessionId?: string }).sessionId !== id,
+          );
+          let activeViewId = s.activeViewId;
+          if (activeViewId && removed.has(activeViewId)) {
+            activeViewId = views.length > 0 ? views[views.length - 1].id : null;
+          }
+          const activeSurface =
+            s.activeSurface && removed.has(s.activeSurface.id)
+              ? null
+              : s.activeSurface;
+          return {
+            sessions: s.sessions.filter((sess) => sess.id !== id),
+            agentSessions,
+            activeSessionId: s.activeSessionId === id ? null : s.activeSessionId,
+            views,
+            activeViewId,
+            activeSurface,
+          };
+        }),
+
       setActiveSession: (id: string | null) => set({ activeSessionId: id }),
+
+      sidebarWidth: 240,
+
+      setSidebarWidth: (width: number) =>
+        set({ sidebarWidth: Math.min(520, Math.max(180, Math.round(width))) }),
+
+      agentSessions: {},
+
+      setAgentSession: (agentKey: string, sessionId: string) =>
+        set((s) => ({ agentSessions: { ...s.agentSessions, [agentKey]: sessionId } })),
 
       // ── View manager ───────────────────────────────────────────────────
       activeViewId: null,
       views: defaultViews,
 
-      setActiveView: (id: string) => set({ activeViewId: id }),
+      setActiveView: (id: string) => get().selectView(id),
 
       updateViewUrl: (id: string, url: string) =>
         set((s) => ({
@@ -275,6 +478,10 @@ export const useStore = create<AppState>()(
       // to discard stale persisted state when the durable shape changes.
       version: 1,
       storage: createJSONStorage(() => idbStorage),
+      // v0 → v1 was a pure shape-cleanup (dropped legacy seeds); pass the
+      // old state through so zustand doesn't log a migrate error.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      migrate: (persistedState: any) => persistedState as AppState,
       partialize: persistableSlice,
     },
   ),

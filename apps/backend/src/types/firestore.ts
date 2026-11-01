@@ -84,7 +84,7 @@ export interface UserProfile {
 // ──────────────────────────────────────────────
 
 /** Session status values. */
-export type SessionStatus = 'active' | 'waiting' | 'done' | 'error';
+export type SessionStatus = 'active' | 'waiting' | 'done' | 'error' | 'dead';
 
 /** User's response on a surface. */
 export interface SurfaceUserResponse {
@@ -131,6 +131,10 @@ export interface SessionDoc {
   updatedAt: TimestampString;
   /** When the session was archived (soft-delete). */
   archivedAt: Nullable<TimestampString>;
+  /** Coding-agent linkage (set when the session was created by an
+   *  MCP agent action, e.g. a pi or Claude Code session). */
+  agentSessionId?: string;
+  agentClient?: string;
 }
 
 // ──────────────────────────────────────────────

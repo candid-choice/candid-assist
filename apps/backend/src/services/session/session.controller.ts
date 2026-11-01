@@ -70,6 +70,8 @@ export class SessionController {
     @Req() req: UserRequest,
     @Body('title') title: string,
     @Body('workspacePath') workspacePath: string,
+    @Body('agentSessionId') agentSessionId?: string,
+    @Body('agentClient') agentClient?: string,
   ) {
     if (!title || !workspacePath) {
       throw new BadRequestException('Title and workspace path are required');
@@ -79,7 +81,10 @@ export class SessionController {
       throw new BadRequestException('User not authenticated');
     }
 
-    return this.sessionService.createSession(req.user.uid, title);
+    return this.sessionService.createSession(req.user.uid, title, {
+      agentSessionId,
+      agentClient,
+    });
   }
 
   /**

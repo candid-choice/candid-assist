@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  # DISABLED for now (was: push + pull_request). The workflow file is kept
+  # so it can be restored by putting the triggers back:
+  #   push:
+  #     branches: [main, electron-migration, feature/agent-browser-control]
+  #     paths-ignore: ['docs/**']
+  #   pull_request:
+  #     branches: [main, electron-migration, feature/agent-browser-control]
+  workflow_dispatch: # manual-only escape hatch; runs nothing automatically
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    name: Desktop (tests + renderer build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # --ignore-scripts skips `electrobun prepare` (native binaries are not
+      # needed for vitest or the Vite renderer build).
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Unit & component tests (vitest)
+        run: pnpm --filter harness-desktop test
+
+      - name: Vite renderer build
+        run: pnpm --filter harness-desktop vite:build
+
+  backend:
+    name: Backend (NestJS build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build
+        run: pnpm --filter backend build
+
+  web:
+    name: Web (Next.js build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build
+        run: pnpm --filter web build

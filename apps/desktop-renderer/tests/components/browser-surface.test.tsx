@@ -6,7 +6,7 @@ toggleHidden() on the element.
 */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, cleanup, act, fireEvent } from '@testing-library/react';
+import { render, cleanup, act, fireEvent, screen } from '@testing-library/react';
 
 // Stub the Electrobun custom element so toggleHidden is observable.
 class FakeWebview extends HTMLElement {
@@ -79,6 +79,8 @@ function stubDesktop() {
       setBounds: vi.fn(),
       setVisible: vi.fn(),
       destroy: vi.fn(),
+      registerGuest: vi.fn(),
+      unregisterGuest: vi.fn(),
     },
     runtime: 'electron' as const,
   };
@@ -159,5 +161,56 @@ describe('useWindowMaximize (Electron mode)', () => {
       // local helper to avoid importing screen at top while unused elsewhere
       return document.querySelector('button')!;
     }
+  });
+});
+
+// ── Agent handoff overlay ─────────────────────────────────────────────────
+
+import { wsService } from '@/views/services/ws-service';
+
+vi.mock('@/views/services/ws-service', () => ({
+  wsService: { send: vi.fn(() => true) },
+}));
+
+describe('BrowserSurface (agent handoff)', () => {
+  beforeEach(() => {
+    useStore.setState({ browserHandoffs: {} });
+  });
+
+  it('shows the handoff banner with reason and releases on Done', () => {
+    stubDesktop();
+    useStore.setState({
+      browserHandoffs: { 'surf-x': { reason: 'solve the CAPTCHA' } },
+    });
+    render(
+      <BrowserSurface url="https://claude.ai" onUrlChange={() => {}} surfaceId="surf-x" />,
+    );
+
+    expect(screen.getByText('solve the CAPTCHA')).toBeTruthy();
+    fireEvent.click(screen.getByText('Done — hand back'));
+    expect(wsService.send).toHaveBeenCalledWith({
+      type: 'handoff:complete',
+      surfaceId: 'surf-x',
+    });
+  });
+
+  it('shows no banner when there is no handoff', () => {
+    stubDesktop();
+    const { container } = render(
+      <BrowserSurface url="https://claude.ai" onUrlChange={() => {}} surfaceId="surf-z" />,
+    );
+    expect(container.querySelector('.ha-webview-handoff')).toBeNull();
+  });
+
+  it('is StrictMode-safe: keeps guest registration across remounts', () => {
+    const api = stubDesktop();
+    const { unmount, rerender } = render(
+      <BrowserSurface url="https://example.com" onUrlChange={() => {}} surfaceId="surf-y" />,
+    );
+    rerender(<BrowserSurface url="https://example.com" onUrlChange={() => {}} surfaceId="surf-y" />);
+    unmount();
+    // Registration must survive unmounts (server prunes dead guests via
+    // isDestroyed); accidental unregister here was the original bug.
+    expect(api.view.unregisterGuest).not.toHaveBeenCalled();
   });
 });

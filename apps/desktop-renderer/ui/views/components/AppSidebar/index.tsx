@@ -6,27 +6,47 @@ Connects the presentational Sidebar to the Zustand store:
   - session click → setActiveSession
 */
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import { Sidebar, type SidebarSession } from "../Sidebar";
+import { SidebarContextMenu } from "../SidebarContextMenu";
 import { useStore } from "../../store";
+import {
+  updateSessionStatus,
+  deleteSession,
+  archiveSession,
+} from "../../services/sync/sync-service";
+import { queueAction } from "../../errors/offline-queue";
 import type { SessionDoc } from "../../services/sync/types";
 
 // ── Mapping ────────────────────────────────────────────────────────────────
 
 /** Map backend session status → sidebar status vocabulary. */
-export function toSidebarSession(doc: SessionDoc): SidebarSession {
+export function toSidebarSession(
+  doc: SessionDoc,
+  liveAgentIds?: Set<string>,
+): SidebarSession {
   const status: SidebarSession["status"] =
-    doc.status === "waiting"
-      ? "waiting"
-      : doc.status === "active"
-        ? "active"
-        : "archived"; // done | error → archived bucket
+    doc.status === "dead"
+      ? "dead"
+      : doc.status === "waiting"
+        ? "waiting"
+        : doc.status === "active"
+          ? "active"
+          : "archived"; // done | error → archived bucket
+
+  // Sessions owned by an agent WebSocket: gray out when that agent is
+  // no longer connected (liveAgentIds known and the id is absent).
+  const connected =
+    liveAgentIds && doc.agentSessionId
+      ? liveAgentIds.has(doc.agentSessionId)
+      : undefined;
 
   return {
     id: doc.id,
     title: doc.title,
     status,
+    connected,
     updatedAt: doc.updatedAt,
     surfaceCount: doc.surfaces?.length ?? 0,
   };
@@ -47,21 +67,114 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const sessions = useStore((s) => s.sessions);
   const activeSessionId = useStore((s) => s.activeSessionId);
+  const mcpAgents = useStore((s) => s.mcpAgents);
+  const [menu, setMenu] = useState<{
+    session: SidebarSession;
+    x: number;
+    y: number;
+  } | null>(null);
 
-  const handleSessionClick = useCallback(
-    (id: string) => useStore.getState().setActiveSession(id),
-    [],
-  );
+  const handleSessionClick = useCallback((id: string) => {
+    const st = useStore.getState();
+    st.setActiveSession(id);
+    // Main content follows the session: show its most recent open
+    // surface, or none (which reveals the guide/dashboard).
+    const owned = st.views.filter(
+      (v) => (v as unknown as { sessionId?: string }).sessionId === id,
+    );
+    const last = owned[owned.length - 1];
+    if (last) st.selectView(last.id);
+    else st.cancelSurface();
+  }, []);
+
+  const syncOr = (op: string, data: Record<string, unknown>) => {
+    void (async () => {
+      try {
+        if (op === "status") {
+          await updateSessionStatus(String(data.sessionId), String(data.status) as never);
+        } else if (op === "delete") {
+          await deleteSession(String(data.sessionId));
+        } else if (op === "archive") {
+          await archiveSession(String(data.sessionId));
+        }
+      } catch {
+        void queueAction(op === "status" ? "updateSession" : (op as never), data);
+      }
+    })();
+  };
+
+  const handleMarkDead = useCallback((id: string) => {
+    useStore.getState().updateSession(id, { status: "dead" });
+    syncOr("status", { sessionId: id, status: "dead" });
+    setMenu(null);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    useStore.getState().removeSession(id);
+    syncOr("delete", { sessionId: id });
+    setMenu(null);
+  }, []);
+
+  const handleArchive = useCallback((id: string) => {
+    useStore.getState().removeSession(id);
+    syncOr("archive", { sessionId: id });
+    setMenu(null);
+  }, []);
+
+  const handleClearAll = useCallback(() => {
+    for (const sess of useStore.getState().sessions) {
+      syncOr("delete", { sessionId: sess.id });
+    }
+    useStore.getState().deleteAllSessions();
+  }, []);
 
   return (
-    <Sidebar
-      open={open}
-      width={width}
-      onToggle={onToggle ?? (() => {})}
-      sessions={sessions.map(toSidebarSession)}
-      onSessionClick={handleSessionClick}
-      activeSessionId={activeSessionId}
-    />
+    <>
+      <Sidebar
+        open={open}
+        width={width}
+        onToggle={onToggle ?? (() => {})}
+        sessions={sessions.map((sess) =>
+          toSidebarSession(
+            sess,
+            new Set(mcpAgents.map((a) => a.agentSessionId).filter(Boolean) as string[]),
+          ),
+        )}
+        onSessionClick={handleSessionClick}
+        onItemDelete={(id) => handleDelete(id)}
+        onItemContextMenu={(session, x, y) => setMenu({ session, x, y })}
+        onClearAll={handleClearAll}
+        activeSessionId={activeSessionId}
+      />
+      {menu && (
+        <div
+          style={{
+            position: "fixed",
+            left: menu.x,
+            top: menu.y,
+            zIndex: 3000,
+            background: "var(--ha-surface, #fff)",
+            border: "1px solid var(--ha-border, #ddd)",
+            borderRadius: 8,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+            padding: "4px 0",
+          }}
+          onMouseLeave={() => setMenu(null)}
+        >
+          <SidebarContextMenu
+            session={menu.session}
+            onClose={() => setMenu(null)}
+            onCopyId={() => {
+              void navigator.clipboard?.writeText(menu.session.id);
+              setMenu(null);
+            }}
+            onArchive={handleArchive}
+            onMarkDead={handleMarkDead}
+            onDelete={handleDelete}
+          />
+        </div>
+      )}
+    </>
   );
 }
 

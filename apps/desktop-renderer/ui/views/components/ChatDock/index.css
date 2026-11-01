@@ -1,0 +1,164 @@
+/* ChatDock — right-column direct chat panel. */
+
+.ha-chat-dock {
+  display: flex;
+  flex-direction: column;
+  width: 320px;
+  min-width: 240px;
+  max-width: 480px;
+  height: 100%;
+  border-left: 1px solid var(--ha-border);
+  background: var(--ha-surface);
+  flex-shrink: 0;
+}
+
+.ha-chat-dock-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ha-border);
+  flex-shrink: 0;
+}
+
+.ha-chat-dock-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ha-text);
+}
+
+.ha-chat-dock-sub {
+  font-size: 11px;
+  color: var(--ha-text-secondary);
+  flex: 1;
+}
+
+.ha-chat-dock-clear {
+  border: none;
+  background: transparent;
+  color: var(--ha-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.ha-chat-dock-clear:hover:not(:disabled) {
+  background: var(--ha-bg-hover, rgba(127, 127, 127, 0.12));
+  color: var(--ha-text);
+}
+
+.ha-chat-dock-clear:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ha-chat-dock-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ha-chat-dock-empty {
+  color: var(--ha-text-secondary);
+  font-size: 12px;
+  text-align: center;
+  margin-top: 24px;
+  padding: 0 12px;
+}
+
+.ha-chat-bubble {
+  max-width: 92%;
+  padding: 7px 10px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+.ha-chat-bubble--user {
+  align-self: flex-end;
+  background: var(--ha-primary, #6366f8);
+  color: #fff;
+  border-bottom-right-radius: 3px;
+}
+
+.ha-chat-bubble--assistant {
+  align-self: flex-start;
+  background: var(--ha-bg-elevated, rgba(127, 127, 127, 0.1));
+  color: var(--ha-text);
+  border-bottom-left-radius: 3px;
+}
+
+.ha-chat-bubble--error {
+  align-self: flex-start;
+  background: rgba(220, 70, 70, 0.12);
+  color: var(--ha-danger, #c0392b);
+  font-size: 12px;
+}
+
+.ha-chat-tool {
+  align-self: center;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--ha-text-secondary);
+}
+
+.ha-chat-typing {
+  animation: ha-chat-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes ha-chat-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+.ha-chat-dock-composer {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--ha-border);
+  flex-shrink: 0;
+}
+
+.ha-chat-input {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--ha-border);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 12.5px;
+  font-family: inherit;
+  background: var(--ha-bg-input, #fff);
+  color: var(--ha-text);
+}
+
+.ha-chat-input:focus {
+  outline: none;
+  border-color: var(--ha-primary, #6366f8);
+}
+
+.ha-chat-send {
+  width: 34px;
+  border: none;
+  border-radius: 8px;
+  background: var(--ha-primary, #6366f8);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ha-chat-send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ha-chat-send--stop {
+  background: var(--ha-danger, #c0392b);
+}

@@ -23,6 +23,7 @@ export class SessionService {
   async createSession(
     userId: string,
     title: string,
+    meta?: { agentSessionId?: string; agentClient?: string },
   ): Promise<SessionDoc> {
     const db = this.getDb();
     const now = new Date().toISOString();
@@ -35,6 +36,8 @@ export class SessionService {
       createdAt: now,
       updatedAt: now,
       archivedAt: null,
+      ...(meta?.agentSessionId ? { agentSessionId: meta.agentSessionId } : {}),
+      ...(meta?.agentClient ? { agentClient: meta.agentClient } : {}),
     });
 
     return {

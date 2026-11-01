@@ -16,17 +16,29 @@ import { App } from "./views/App";
 import "./views/index.css";
 
 import { wsService } from "./views/services/ws-service";
+import { ensureAgentSessionFor } from "./views/lib/agent-session";
 import { useStore } from "./views/store";
 import { AuthProvider } from "./views/context/auth-provider";
 import {
   syncFromServer,
   executeSyncAction,
+  createSession,
 } from "./views/services/sync/sync-service";
-import { setReplayExecutor, onReconnect } from "./views/errors/offline-queue";
+import { setReplayExecutor, onReconnect, queueAction } from "./views/errors/offline-queue";
+import { surfaceLabel } from "./views/lib/session-tabs";
 import { startMcpStatusPolling } from "./views/services/mcp-status";
+import { shouldStartLiveServices } from "./views/services/standalone-guard";
+import { PermissionGate } from "./views/components/PermissionGate";
 
 // ── Live services (module scope — run once, not per StrictMode render) ──
-if (typeof window !== "undefined") {
+if (typeof window !== "undefined" && !shouldStartLiveServices()) {
+  // Plain browser tab: no WS, no IPC polling, no server sync — the
+  // desktop app is the only place agent sessions/surfaces are shown.
+  useStore.getState().setMcpStandalone(true);
+  useStore.getState().setConnectionState("disconnected");
+}
+
+if (typeof window !== "undefined" && shouldStartLiveServices()) {
   // Connect WebSocket for surface events
   wsService.connect();
 
@@ -36,6 +48,11 @@ if (typeof window !== "undefined") {
     if (state === "connected") {
       // WS back up → flush queued writes immediately
       onReconnect();
+      // Re-share the human's "always allow" domain grants with the server
+      wsService.send({
+        type: "permission:sync",
+        domains: useStore.getState().browserGrants,
+      });
     }
   });
 
@@ -52,6 +69,18 @@ if (typeof window !== "undefined") {
     });
   }
 
+  // Push grant changes to the server the moment they happen (the
+  // connect-time sync alone leaves a window where an 'always allow'
+  // click isn't yet known server-side).
+  let lastGrantsJson = JSON.stringify(useStore.getState().browserGrants);
+  useStore.subscribe((state) => {
+    const g = JSON.stringify(state.browserGrants);
+    if (g !== lastGrantsJson) {
+      lastGrantsJson = g;
+      wsService.send({ type: "permission:sync", domains: state.browserGrants });
+    }
+  });
+
   // Subscribe surface push events to store
   wsService.subscribe((event) => {
     if (event.event === "ui:message") {
@@ -63,19 +92,95 @@ if (typeof window !== "undefined") {
       }
       return;
     }
+    if (event.event === "agent:presence") {
+      // Live WS MCP agent set changed (connected / bound / disconnected).
+      const d = event.data as { agents?: Array<{ client: string; agentSessionId: string | null }> };
+      const agents = d?.agents ?? [];
+      useStore.getState().setMcpAgents(agents);
+      // A bound agent means "a new session connected": materialize its
+      // sidebar row immediately instead of waiting for a surface push.
+      for (const a of agents) {
+        if (a.agentSessionId) ensureAgentSessionFor({ client: a.client, agentSessionId: a.agentSessionId });
+      }
+      return;
+    }
+    if (event.event === "permission:grants-cleared") {
+      // Saved sign-ins wiped server-side → forget grants locally too.
+      useStore.getState().clearBrowserGrants();
+      return;
+    }
+    if (event.event === "permission:resolved") {
+      // Answered elsewhere (another window / automation) → dismiss our prompt.
+      const d = event.data as { id?: string };
+      const cur = useStore.getState().pendingPermission;
+      if (d?.id && cur?.id === d.id) useStore.getState().setPendingPermission(null);
+      return;
+    }
+    if (event.event === "permission:request") {
+      const d = event.data as { id?: string; host?: string; url?: string; tool?: string };
+      if (d?.id && d.host) {
+        useStore.getState().setPendingPermission({
+          id: d.id,
+          host: d.host,
+          url: d.url ?? "",
+          tool: d.tool ?? "browser",
+        });
+        // Make it noticeable even when the pane is scrolled/busy.
+        useStore.getState().pushUiMessage({
+          message: `${d.tool ?? "Agent"} wants to visit ${d.host} — choose in the prompt.`,
+          type: "warning",
+          title: "Web access consent",
+          ttlMs: 30_000,
+        });
+      }
+      return;
+    }
+    if (event.event === "surface:handoff") {
+      // Agent handed the browser pane to the human (or got it back).
+      const d = event.data as { surfaceId?: string; active?: boolean; reason?: string | null };
+      if (d?.surfaceId) {
+        useStore
+          .getState()
+          .setBrowserHandoff(d.surfaceId, d.active ? (d.reason ?? "agent needs a human") : null);
+      }
+      return;
+    }
+    if (event.event === "ui:action") {
+      // Non-surface agent activity (browser ops, showMessage, …):
+      // record it against the harness session.
+      const d = event.data as {
+        tool?: string;
+        agent?: { client?: string; agentSessionId?: string | null };
+      };
+      if (d?.agent?.client) ensureAgentSessionFor(d.agent);
+      return;
+    }
     if (event.event === "surface:push") {
-      const { surfaceId, type, payload } = event.data;
+      const { surfaceId, type, payload, agent } = event.data as {
+        surfaceId: string;
+        type: string;
+        payload: Record<string, unknown>;
+        agent?: { client?: string; agentSessionId?: string | null };
+      };
+
+      // Agent-linked recording: actions from a bound coding session
+      // record into a dedicated sidebar session (created on first
+      // action, reused thereafter).
+      let sessionId = useStore.getState().activeSessionId ?? undefined;
+      const agentSession = agent?.client ? ensureAgentSessionFor(agent) : undefined;
+      if (agentSession) sessionId = agentSession;
+
       useStore.getState().openSurface({
         id: surfaceId,
-        label: type.charAt(0).toUpperCase() + type.slice(1).replace(/-/g, " "),
+        label: surfaceLabel(type, payload),
         type: type as never,
         title: type.charAt(0).toUpperCase() + type.slice(1) + " Surface",
         payload,
         source: "mcp",
         createdAt: Date.now(),
-        // Bind to the session that was active when the surface arrived,
-        // so the user's response round-trips into that session's history.
-        sessionId: useStore.getState().activeSessionId ?? undefined,
+        // Bind to the session (agent-mapped or active) so the user's
+        // response round-trips into that session's history.
+        sessionId,
       });
     }
   });
@@ -84,11 +189,13 @@ if (typeof window !== "undefined") {
   (window as unknown as { __haStore: unknown }).__haStore = useStore;
 }
 
+
 export default function RootUI() {
   return (
     <StrictMode>
       <AuthProvider>
         <App />
+        <PermissionGate />
       </AuthProvider>
     </StrictMode>
   );

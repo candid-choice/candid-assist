@@ -85,11 +85,11 @@ describe('WebSocket MCP (pi transport)', () => {
     c.ws.close();
   });
 
-  it('tools/list over WS returns the 7 tools', async () => {
+  it('tools/list over WS returns all tools', async () => {
     const c = openClient();
     await c.waitForOpen();
     const res = await c.request('tools/list');
-    expect(res.result.tools).toHaveLength(8);
+    expect(res.result.tools).toHaveLength(27);
     c.ws.close();
   });
 
@@ -139,9 +139,17 @@ describe('WebSocket MCP (pi transport)', () => {
 describe('showMessage — pi -> Electron toast proof-of-path', () => {
   it('broadcasts ui:message to surface WS clients', async () => {
     const surface = new WebSocket(`ws://127.0.0.1:${SURFACE_WS_PORT}`);
-    const got = new Promise<any>((resolve) =>
-      surface.once('message', (d) => resolve(JSON.parse(d.toString()))),
-    );
+    // First event may be an agent:presence push; wait for the real thing.
+    const got = new Promise<any>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('no ui:message within 5s')), 5000);
+      surface.on('message', (d) => {
+        const ev = JSON.parse(d.toString());
+        if (ev.event === 'ui:message') {
+          clearTimeout(t);
+          resolve(ev);
+        }
+      });
+    });
     await new Promise((r) => surface.once('open', r));
 
     const c = openClient();
@@ -166,6 +174,79 @@ describe('showMessage — pi -> Electron toast proof-of-path', () => {
     await c.waitForOpen();
     const res = await c.request('tools/call', { name: 'showMessage', arguments: {} });
     expect(res.error?.message).toContain('MCP_003');
+    c.ws.close();
+  });
+});
+
+describe('bindAgentSession — coding-session recording', () => {
+  it('binds connection and tags subsequent surface broadcasts with agent identity', async () => {
+    const surface = new WebSocket(`ws://127.0.0.1:${SURFACE_WS_PORT}`);
+    const got = new Promise<any>((resolve) => {
+      const onMsg = (d: unknown) => {
+        const ev = JSON.parse(d.toString());
+        if (ev.event === 'surface:push') {
+          surface.off('message', onMsg);
+          resolve(ev);
+        }
+      };
+      surface.on('message', onMsg);
+    });
+    await new Promise((r) => surface.once('open', r));
+
+    const c = openClient();
+    await c.waitForOpen();
+    await c.request('initialize', { clientInfo: { name: 'pi', version: '1.4.0' } });
+    const bind = await c.request('tools/call', {
+      name: 'bindAgentSession',
+      arguments: { agentSessionId: 'pi-session-abc123', client: 'pi' },
+    });
+    expect(bind.result.status).toBe('bound');
+    expect(bind.result.agentSessionId).toBe('pi-session-abc123');
+
+    await c.request('tools/call', {
+      name: 'openInputSurface',
+      arguments: { question: 'recorded action', kind: 'confirm' },
+    });
+    const ev = await got;
+    expect(ev.data.agent).toBeDefined();
+    expect(ev.data.agent.client).toBe('pi');
+    expect(ev.data.agent.agentSessionId).toBe('pi-session-abc123');
+    surface.close();
+    c.ws.close();
+  });
+
+  it('rejects missing agentSessionId with MCP_005', async () => {
+    const c = openClient();
+    await c.waitForOpen();
+    const res = await c.request('tools/call', { name: 'bindAgentSession', arguments: {} });
+    expect(res.error?.message).toContain('MCP_005');
+    c.ws.close();
+  });
+});
+
+describe('harness identity auto-bind (extension-injected args)', () => {
+  it('binds connection from agentSessionId present on any tool call', async () => {
+    const surface = new WebSocket(`ws://127.0.0.1:${SURFACE_WS_PORT}`);
+    const got = new Promise<any>((resolve) => {
+      const onMsg = (d: unknown) => {
+        const ev = JSON.parse(d.toString());
+        if (ev.event === 'surface:push') { surface.off('message', onMsg); resolve(ev); }
+      };
+      surface.on('message', onMsg);
+    });
+    await new Promise((r) => surface.once('open', r));
+
+    const c = openClient();
+    await c.waitForOpen();
+    await c.request('initialize', { clientInfo: { name: '0xKobold', version: '0.1.0' } });
+    // Simulate the pi extension's injected args on a normal action tool
+    await c.request('tools/call', {
+      name: 'openCanvasSurface',
+      arguments: { prompt: 'chart', agentSessionId: 'harness-777', agentClient: 'pi' },
+    });
+    const ev = await got;
+    expect(ev.data.agent).toEqual({ client: 'pi', agentSessionId: 'harness-777' });
+    surface.close();
     c.ws.close();
   });
 });

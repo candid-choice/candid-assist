@@ -1,53 +1,85 @@
-/** MCP agent presence — polls the desktop MCP server's /status endpoint.
+/** MCP agent presence — served over Electron IPC, never an HTTP probe.
 
-The footer indicator should reflect whether an AGENT (pi.dev, Claude
-Code) is actually connected to the MCP server, which only the server
-knows (it timestamps incoming JSON-RPC). This module polls
-GET http://localhost:3615/status and mirrors agentConnected into the
-store (volatile).
+The MCP server runs in Electron's MAIN (Node) process. The Electron
+window asks main directly via `desktop.mcp.getStatus()`
+(ipcRenderer.invoke → ipcMain.handle) and receives pushes whenever the
+agent count changes (`desktop.mcp.onStatus`, webContents.send). A poll
+remains only as a slow safety net for missed events.
 
-Port overridable via ?mcpPort= query param (Electron main appends it
-alongside wsPort) or VITE_MCP_URL.
+A plain browser tab has no bridge → 'Standalone renderer' (there is no
+MCP server belonging to that window; the HTTP /status endpoint exists
+only for external/dev clients).
 */
 
 import { useStore } from "../store";
+import { getDesktopBridge, type McpStatusPayload } from "./desktop-bridge";
+import { isViewPortal } from "./standalone-guard";
+import { ensureAgentSessionFor } from "../lib/agent-session";
 
-function mcpStatusUrl(): string {
-  if (typeof window === "undefined") return "http://localhost:3615/status";
-  const params = new URLSearchParams(window.location.search);
-  const mcpPort = params.get("mcpPort");
-  if (mcpPort) return `http://localhost:${mcpPort}/status`;
-  return import.meta.env?.VITE_MCP_URL
-    ? `${import.meta.env.VITE_MCP_URL.replace(/\/mcp\/?$/, "")}/status`
-    : "http://localhost:3615/status";
-}
-
+let unsubscribe: (() => void) | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
 
-async function tick(url: string): Promise<void> {
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
-    const data = (await res.json()) as {
-      mcp?: { agentConnected?: boolean; agentCount?: number };
-    };
-    const count =
-      data?.mcp?.agentCount ?? (data?.mcp?.agentConnected ? 1 : 0);
-    useStore.getState().setMcpAgentCount(count);
-  } catch {
-    // Server unreachable → definitely no agent
-    useStore.getState().setMcpAgentCount(0);
+function apply(status: McpStatusPayload | undefined): void {
+  const count = status?.mcp?.agentCount ?? 0;
+  useStore.getState().setMcpAgentCount(count);
+  const agents = status?.mcp?.wsAgents ?? [];
+  useStore.getState().setMcpAgents(agents);
+  // Connected+bound agent ⇒ new session: show its row right away
+  // (don't wait for the first surface push).
+  for (const a of agents) {
+    if (a.agentSessionId) ensureAgentSessionFor({ client: a.client, agentSessionId: a.agentSessionId });
   }
 }
 
-/** Start polling (idempotent). 10s cadence. */
+/** Start presence tracking (idempotent). */
 export function startMcpStatusPolling(intervalMs = 5_000): void {
-  if (timer) return;
-  const url = mcpStatusUrl();
-  void tick(url);
-  timer = setInterval(() => void tick(url), intervalMs);
+  if (timer || unsubscribe) return;
+  const bridge = getDesktopBridge();
+
+  // View portal (dev + ?viewPortal=1): port-link to the desktop app's
+  // HTTP /status — the ONLY non-IPC presence path, and read-only.
+  if (!bridge && isViewPortal()) {
+    const port = new URLSearchParams(window.location.search).get("mcpPort") ?? "3615";
+    const poll = async () => {
+      try {
+        const res = await fetch(`http://localhost:${port}/status`, { signal: AbortSignal.timeout(3000) });
+        apply((await res.json()) as McpStatusPayload);
+      } catch {
+        useStore.getState().setMcpAgentCount(0);
+      }
+    };
+    void poll();
+    timer = setInterval(() => void poll(), intervalMs);
+    return;
+  }
+
+  if (!bridge) {
+    // Plain browser tab: no desktop app owns an MCP server for us.
+    useStore.getState().setMcpStandalone(true);
+    useStore.getState().setMcpAgentCount(0);
+    return;
+  }
+  useStore.getState().setMcpStandalone(false);
+
+  if (!bridge.mcp) {
+    // Older preload without the mcp channel: stay honest-offline.
+    useStore.getState().setMcpAgentCount(0);
+    return;
+  }
+
+  // Initial fetch + event stream from main.
+  void bridge.mcp.getStatus().then(apply).catch(() => apply(undefined));
+  unsubscribe = bridge.mcp.onStatus(apply);
+
+  // Slow safety net in case an event was missed (e.g. window reload).
+  timer = setInterval(() => {
+    void bridge.mcp?.getStatus().then(apply).catch(() => apply(undefined));
+  }, intervalMs);
 }
 
 export function stopMcpStatusPolling(): void {
   if (timer) clearInterval(timer);
   timer = null;
+  if (unsubscribe) unsubscribe();
+  unsubscribe = null;
 }

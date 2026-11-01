@@ -10,7 +10,18 @@ Security: contextIsolation + sandbox, no nodeIntegration; remote views
 get no preload and a host-allowlist navigation policy.
 */
 
-import { app, BrowserWindow, WebContentsView, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, webContents as webContentsNS } from 'electron';
+
+import { checkForUpdates as checkAppUpdate, onUpdaterState } from '../../src/updater';
+import { setChatRuntimeFactory, setChatEventListener, sendChat, abortChat } from '../../src/chat-service';
+import { createPiChatRuntime } from './chat-runtime';
+import { setUiControlHandlers, getMcpStatus, clearDomainGrants } from '../../src/mcp-server';
+import {
+  registerGuest,
+  unregisterGuest,
+  setGuestResolver,
+  type GuestHandle,
+} from '../../src/guest-registry';
 import path from 'node:path';
 
 import { startMcpServer } from '../../src/mcp-server';
@@ -137,10 +148,105 @@ function enforceNavigationPolicy(wc: Electron.WebContents, initialUrl: string): 
 
 // DOM <webview> guests: apply the same navigation lockdown as native
 // views — same-host navigation only, popups open externally.
-app.on('did-attach-webview', (_e, guestContents, params) => {
-  const initialUrl = String((params as { url?: unknown }).url ?? '');
+// Runtime emits did-attach-webview on app (verified), but Electron 45
+// typings only declare it on WebContents — hence the cast.
+(app as unknown as {
+  on(
+    event: 'did-attach-webview',
+    listener: (event: unknown, guestContents: Electron.WebContents) => void,
+  ): void;
+}).on('did-attach-webview', (_event: unknown, guestContents: Electron.WebContents) => {
+  // The guest has already navigated to its src; getURL() gives us the
+  // host to pin (same-host navigation only, popups open externally).
+  const initialUrl = guestContents.getURL();
   console.log('[main] webview attached:', initialUrl || '(no src)');
   enforceNavigationPolicy(guestContents, initialUrl);
+});
+
+// ── Guest <webview> registry (agent browser tools) ───────────────────────
+setGuestResolver((_surfaceId, wcId) => {
+  const wc = webContentsNS.fromId(wcId);
+  if (!wc || wc.isDestroyed()) return undefined;
+  return wc as unknown as GuestHandle;
+});
+
+ipcMain.on('desktop:guest:register', (_e, msg: { surfaceId: string; webContentsId: number }) => {
+  if (typeof msg?.surfaceId === 'string' && typeof msg?.webContentsId === 'number') {
+    registerGuest(msg.surfaceId, msg.webContentsId);
+  }
+});
+
+ipcMain.handle('desktop:updater:check', async () => {
+  return checkAppUpdate();
+});
+
+// ── MCP presence over IPC ───────────────────────────────────────────
+// The MCP server lives in THIS (main/Node) process, so the renderer asks
+// us directly instead of probing http://localhost:<mcpPort>/status. That
+// HTTP endpoint stays only for external/dev clients (e.g. plain-browser
+// renderer tabs), never for the Electron window.
+ipcMain.handle('desktop:mcp:status', (event) => {
+  // Baseline sender check: only the window's main frame may ask.
+  if (event.senderFrame && event.senderFrame !== event.sender.mainFrame) {
+    throw new Error('Unauthorized IPC caller');
+  }
+  return getMcpStatus();
+});
+
+// --- Direct chat (in-process pi agent; MCP stays untouched) -----------
+ipcMain.handle('desktop:chat:send', (_event, payload: { sessionId?: unknown; text?: unknown; cwd?: unknown }) => {
+  const sessionId = String(payload?.sessionId ?? '');
+  const text = String(payload?.text ?? '');
+  const cwd = typeof payload?.cwd === 'string' ? payload.cwd : undefined;
+  if (!sessionId || !text) return { ok: false, error: 'sessionId and text required' };
+  void sendChat(sessionId, text, cwd);
+  return { ok: true };
+});
+ipcMain.handle('desktop:chat:abort', (_event, payload: { sessionId?: unknown }) => {
+  abortChat(String(payload?.sessionId ?? ''));
+  return { ok: true };
+});
+
+let lastMcpAgentSnapshot = "";
+setInterval(() => {
+  let status;
+  try {
+    status = getMcpStatus();
+  } catch {
+    return;
+  }
+  // Compare the FULL snapshot, not just the count: an agent binding its
+  // harness identity (first tool call) keeps count equal but must push a
+  // presence update so the renderer can show the new session immediately.
+  const snapshot = JSON.stringify(status.mcp.wsAgents ?? []);
+  if (snapshot === lastMcpAgentSnapshot) return;
+  lastMcpAgentSnapshot = snapshot;
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send('desktop:mcp:status', status);
+  }
+}, 2000);
+
+// Wipe the persistent web partition (saved sign-ins) + domain grants.
+ipcMain.handle('desktop:web:clear-profile', async (event) => {
+  if (event.senderFrame && event.senderFrame !== event.sender.mainFrame) {
+    throw new Error('Unauthorized IPC caller');
+  }
+  const { session } = await import('electron');
+  await session.fromPartition('persist:harness-web').clearStorageData();
+  clearDomainGrants();
+  return { status: 'cleared' };
+});
+
+ipcMain.handle('desktop:workspace:pick', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.on('desktop:guest:unregister', (_e, msg: { surfaceId: string }) => {
+  if (typeof msg?.surfaceId === 'string') unregisterGuest(msg.surfaceId);
 });
 
 // ── IPC: embedded views ────────────────────────────────────────────────
@@ -207,6 +313,26 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+setChatRuntimeFactory(createPiChatRuntime);
+setChatEventListener((sessionId, event) => {
+  win?.webContents.send('desktop:chat:event', { sessionId, ...event });
+});
+
+setUiControlHandlers({
+  reloadUI: () => {
+    if (!win || win.isDestroyed()) return { reloaded: false };
+    win.webContents.reloadIgnoringCache();
+    console.log('[main] renderer reload requested via MCP');
+    return { reloaded: true };
+  },
+  restartApp: () => {
+    console.log('[main] app restart requested via MCP');
+    app.relaunch();
+    setTimeout(() => app.exit(0), 150);
+    return { relaunched: true };
+  },
 });
 
 app.on('before-quit', () => {

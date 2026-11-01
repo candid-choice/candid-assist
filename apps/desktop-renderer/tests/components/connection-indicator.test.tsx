@@ -85,3 +85,12 @@ describe('ConnectionIndicator — agent count', () => {
     expect(screen.getByRole('status').textContent).toBe('3 MCP agents connected');
   });
 });
+
+describe('ConnectionIndicator standalone mode', () => {
+  it('shows Standalone renderer when no desktop bridge exists', () => {
+    useStore.setState({ mcpStandalone: true, mcpAgentCount: 3 } as never);
+    render(<ConnectionIndicator />);
+    expect(screen.getByRole('status').textContent).toContain('Standalone renderer');
+    useStore.setState({ mcpStandalone: false } as never);
+  });
+});

@@ -13,9 +13,11 @@ import "./index.css";
 export interface SidebarSession {
   id: string;
   title: string;
-  status: "active" | "archived" | "waiting";
+  status: "active" | "archived" | "waiting" | "dead";
   updatedAt: string;
   surfaceCount: number;
+  /** False when the owning agent's WebSocket MCP connection is gone. */
+  connected?: boolean;
 }
 
 export interface SidebarProps {
@@ -24,6 +26,9 @@ export interface SidebarProps {
   onToggle: () => void;
   sessions: SidebarSession[];
   onSessionClick: (id: string) => void;
+  onItemDelete?: (id: string) => void;
+  onItemContextMenu?: (session: SidebarSession, x: number, y: number) => void;
+  onClearAll?: () => void;
   activeSessionId: string | null;
 }
 
@@ -40,6 +45,8 @@ function formatTimeAgo(dateStr: string): string {
 
 function statusColor(status: string): string {
   switch (status) {
+    case "dead":
+      return "#9e9e9e";
     case "active":
       return "var(--ha-primary)";
     case "waiting":
@@ -57,6 +64,9 @@ function Sidebar({
   onToggle,
   sessions,
   onSessionClick,
+  onItemDelete,
+  onItemContextMenu,
+  onClearAll,
   activeSessionId,
 }: SidebarProps) {
   const [search, setSearch] = useState("");
@@ -69,17 +79,6 @@ function Sidebar({
     <div className={`ha-sidebar ${open ? "open" : ""}`} style={{ width: open ? `${width}px` : "0px" }}>
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="ha-sidebar-header">
-        <button className="ha-sidebar-toggle" onClick={onToggle} title={open ? "Collapse" : "Expand"}>
-          {open ? (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-          )}
-        </button>
       </div>
 
       {/* ── Search ─────────────────────────────────────────────── */}
@@ -105,8 +104,12 @@ function Sidebar({
         {filtered.map((session) => (
           <div
             key={session.id}
-            className={`ha-sidebar-item ${session.status === "active" ? "active" : ""} ${activeSessionId === session.id ? "selected" : ""}`}
+            className={`ha-sidebar-item ${session.status === "active" ? "active" : ""} ${activeSessionId === session.id ? "selected" : ""} ${session.status === "dead" ? "ha-sidebar-item--dead" : ""} ${session.connected === false ? "ha-sidebar-item--offline" : ""}`}
             onClick={() => onSessionClick(session.id)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              onItemContextMenu?.(session, e.clientX, e.clientY);
+            }}
           >
             <span className="ha-sidebar-dot" style={{ backgroundColor: statusColor(session.status) }} />
             <div className="ha-sidebar-item-content">
@@ -115,8 +118,35 @@ function Sidebar({
                 {formatTimeAgo(session.updatedAt)} · {session.surfaceCount} surface{session.surfaceCount !== 1 ? "s" : ""}
               </div>
             </div>
+            {onItemDelete && (
+              <button
+                type="button"
+                className="ha-sidebar-item-delete"
+                title="Delete session"
+                aria-label={`Delete ${session.title}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (window.confirm(`Delete “${session.title}”? This cannot be undone.`)) {
+                    onItemDelete(session.id);
+                  }
+                }}
+              >
+                ✕
+              </button>
+            )}
           </div>
         ))}
+        {onClearAll && sessions.length > 0 && (
+          <button
+            type="button"
+            className="ha-sidebar-clear-all"
+            onClick={() => {
+              if (window.confirm("Delete ALL sessions? This cannot be undone.")) onClearAll();
+            }}
+          >
+            Clear all sessions
+          </button>
+        )}
       </div>
 
     </div>
