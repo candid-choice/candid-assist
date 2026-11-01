@@ -127,6 +127,8 @@ interface AppState {
   chatModels: string[];
   /** Predefined OpenAI-compatible chat endpoint. */
   chatBaseUrl: string;
+  /** Wire protocol for the chat endpoint (endpoint serves both). */
+  chatApi: 'auto' | 'openai-completions' | 'anthropic-messages';
   chatBusy: Record<string, boolean>;
   setChatOpen: (open: boolean) => void;
   setChatWidth: (width: number) => void;
@@ -139,6 +141,7 @@ interface AppState {
   setChatModel: (model: string | null) => void;
   setChatModels: (models: string[]) => void;
   setChatBaseUrl: (url: string) => void;
+  setChatApi: (api: 'auto' | 'openai-completions' | 'anthropic-messages') => void;
   /** Domains the human granted "always" for agent web access. */
   browserGrants: string[];
   addBrowserGrant: (domain: string) => void;
@@ -225,6 +228,7 @@ function persistableSlice(state: AppState) {
     chatModel: state.chatModel,
     chatModels: state.chatModels,
     chatBaseUrl: state.chatBaseUrl,
+    chatApi: state.chatApi,
   };
 }
 
@@ -338,6 +342,7 @@ export const useStore = create<AppState>()(
       chatModel: null,
       chatModels: [],
       chatBaseUrl: 'http://100.83.1.126:1234/v1',
+      chatApi: 'auto',
       chatBusy: {},
       setChatOpen: (open) => set({ chatOpen: open }),
       setChatWidth: (width: number) =>
@@ -352,6 +357,7 @@ export const useStore = create<AppState>()(
       setChatModel: (model) => set({ chatModel: model }),
       setChatModels: (models) => set({ chatModels: models }),
       setChatBaseUrl: (url) => set({ chatBaseUrl: url.trim() }),
+      setChatApi: (api) => set({ chatApi: api }),
       appendChatMessage: (sessionId, msg) =>
         set((st) => ({
           chatBySession: {

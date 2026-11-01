@@ -28,6 +28,8 @@ export interface PiChatRuntimeOptions {
   baseUrl?: string;
   /** Model id the endpoint is serving; falls back to the first listed. */
   modelId?: string;
+  /** Wire protocol — the endpoint serves both OpenAI and Anthropic styles. */
+  api?: 'auto' | 'openai-completions' | 'anthropic-messages';
   /** Chat-owned session id (stable across app restarts). */
   chatSessionId?: string;
 }
@@ -68,10 +70,22 @@ export async function createPiChatRuntime(opts: PiChatRuntimeOptions): Promise<C
   const indexPath = join(chatDir, 'index.json');
   mkdirSync(sessionsDir, { recursive: true });
 
-  // 1) Live catalog from the endpoint — the picker and the runtime always
-  //    agree on what is currently served.
-  const modelIds = await fetchChatModels(baseUrl);
-  if (modelIds.length === 0) throw new Error('CHAT_006: endpoint serves no models');
+  // 1) Live catalog + protocol. The endpoint (e.g. a LiteLLM-style proxy)
+  //    typically serves BOTH OpenAI (/v1/chat/completions) and Anthropic
+  //    (/v1/messages) routes. 'auto' probes the OpenAI /models route: if it
+  //    answers, speak OpenAI; otherwise fall back to the Anthropic wire.
+  let modelIds: string[] = [];
+  let probeOk = false;
+  try {
+    modelIds = await fetchChatModels(baseUrl);
+    probeOk = modelIds.length > 0;
+  } catch {
+    probeOk = false;
+  }
+  const api =
+    opts.api && opts.api !== 'auto' ? opts.api : probeOk ? 'openai-completions' : 'anthropic-messages';
+  if (!probeOk && !opts.modelId) throw new Error('CHAT_006: endpoint serves no models');
+  if (!probeOk && opts.modelId) modelIds = [opts.modelId];
   const chosen =
     opts.modelId && modelIds.includes(opts.modelId) ? opts.modelId : opts.modelId ?? modelIds[0];
 
@@ -84,7 +98,7 @@ export async function createPiChatRuntime(opts: PiChatRuntimeOptions): Promise<C
         providers: {
           [PROVIDER_ID]: {
             baseUrl: normalizeBase(baseUrl),
-            api: 'openai-completions',
+            api,
             apiKey: 'chat-local',
             models: modelIds.map((id) => ({ id })),
           },

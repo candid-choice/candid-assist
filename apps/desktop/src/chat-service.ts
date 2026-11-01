@@ -18,12 +18,16 @@ export interface ChatRuntime {
   dispose(): void;
 }
 
+export type ChatApiMode = 'auto' | 'openai-completions' | 'anthropic-messages';
+
 export interface ChatRunOptions {
   cwd?: string;
   /** OpenAI-compatible endpoint base URL (predefined default). */
   baseUrl?: string;
   /** Model id the endpoint is currently serving. */
   modelId?: string;
+  /** Wire protocol; 'auto' probes the endpoint. */
+  api?: ChatApiMode;
 }
 
 export type RuntimeFactory = (

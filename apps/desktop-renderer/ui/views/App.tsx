@@ -38,8 +38,6 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const sidebarWidth = useStore((s) => s.sidebarWidth);
   const settingsOpen = useStoreSelector((s) => s.settingsOpen);
-  const chatOpen = useStoreSelector((s) => s.chatOpen);
-  const setChatOpen = useStoreSelector((s) => s.setChatOpen);
   const setSettingsOpen = useStoreSelector((s) => s.setSettingsOpen);
   const theme = useStoreSelector((s) => s.settings.theme);
   const composerOpen = useStoreSelector((s) => s.composerOpen);
@@ -75,12 +73,8 @@ function App() {
       : null,
   );
 
-  // Chat column appears automatically with user-added (chat-capable)
-  // sessions; ✕ in the dock header collapses it until next selection.
-  useEffect(() => {
-    if (activeSession && isChatCapableSession(activeSession)) setChatOpen(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSession?.id]);
+  // Chat for user-added sessions is PINNED: the dock renders whenever a
+  // chat-capable session is active (no collapse, no close).
 
   // Chrome tabs: surfaces belonging to the ACTIVE session — open views
   // plus recorded surfaces the session opened (click to re-open).
@@ -189,10 +183,9 @@ function App() {
 
           {/* ── Direct chat (Electron only, togglable from the titlebar) ── */}
           {getDesktopBridge()?.chat &&
-            chatOpen &&
             activeSession &&
             isChatCapableSession(activeSession) && (
-            <ChatDock sessionId={activeSession.id} onClose={() => setChatOpen(false)} />
+            <ChatDock sessionId={activeSession.id} />
           )}
         </div>
       </WindowShell>

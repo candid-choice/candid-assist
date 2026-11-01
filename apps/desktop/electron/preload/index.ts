@@ -57,7 +57,12 @@ export interface DesktopAPI {
     send: (
       sessionId: string,
       text: string,
-      opts?: { cwd?: string; baseUrl?: string; modelId?: string },
+      opts?: {
+        cwd?: string;
+        baseUrl?: string;
+        modelId?: string;
+        api?: 'auto' | 'openai-completions' | 'anthropic-messages';
+      },
     ) => Promise<{ ok: boolean; error?: string }>;
     abort: (sessionId: string) => Promise<{ ok: boolean }>;
     listModels: (
@@ -96,6 +101,7 @@ const api: DesktopAPI = {
         cwd: opts?.cwd,
         baseUrl: opts?.baseUrl,
         modelId: opts?.modelId,
+        api: opts?.api,
       }),
     abort: (sessionId) => ipcRenderer.invoke('desktop:chat:abort', { sessionId }),
     listModels: (baseUrl) => ipcRenderer.invoke('desktop:chat:models', { baseUrl }),

@@ -218,3 +218,30 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.ha-chat-dock-spacer {
+  flex: 1;
+}
+
+/* Second row: endpoint model + protocol pickers */
+.ha-chat-model-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ha-border);
+}
+.ha-chat-model-bar .ha-chat-model-select {
+  flex: 1;
+  max-width: none;
+  min-width: 0;
+}
+.ha-chat-api-select {
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid var(--ha-border);
+  border-radius: 5px;
+  background: var(--ha-surface);
+  color: var(--ha-text-secondary);
+}

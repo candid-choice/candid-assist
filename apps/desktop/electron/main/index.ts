@@ -204,6 +204,7 @@ ipcMain.handle(
       cwd?: unknown;
       baseUrl?: unknown;
       modelId?: unknown;
+      api?: unknown;
     },
   ) => {
     const sessionId = String(payload?.sessionId ?? '');
@@ -213,6 +214,10 @@ ipcMain.handle(
       cwd: typeof payload?.cwd === 'string' ? payload.cwd : undefined,
       baseUrl: typeof payload?.baseUrl === 'string' && payload.baseUrl ? payload.baseUrl : undefined,
       modelId: typeof payload?.modelId === 'string' && payload.modelId ? payload.modelId : undefined,
+      api:
+        payload?.api === 'openai-completions' || payload?.api === 'anthropic-messages' || payload?.api === 'auto'
+          ? payload.api
+          : undefined,
     });
     return { ok: true };
   },

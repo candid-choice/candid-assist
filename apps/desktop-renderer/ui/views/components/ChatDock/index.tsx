@@ -19,11 +19,14 @@ function newId(): string {
 export interface ChatDockProps {
   /** Harness session id the chat belongs to (null = none selected). */
   sessionId: string | null;
-  /** Collapse the dock (✕ in the header). */
-  onClose?: () => void;
 }
 
-export function ChatDock({ sessionId, onClose }: ChatDockProps) {
+/**
+ * Direct chat for user-owned sessions. The dock is PINNED while such a
+ * session is selected — chat is part of what a manual session is, so
+ * there is no collapse/close control.
+ */
+export function ChatDock({ sessionId }: ChatDockProps) {
   const bridge = getDesktopBridge();
   const chat = bridge?.chat;
   // Chat owns its conversation id (independent of the harness session id)
@@ -35,6 +38,8 @@ export function ChatDock({ sessionId, onClose }: ChatDockProps) {
   const chatModels = useStore((s) => s.chatModels);
   const setChatModels = useStore((s) => s.setChatModels);
   const chatBaseUrl = useStore((s) => s.chatBaseUrl);
+  const chatApi = useStore((s) => s.chatApi);
+  const setChatApi = useStore((s) => s.setChatApi);
   const messages = useStore((s) =>
     (chatId ? s.chatBySession[chatId] : undefined) ?? NO_MESSAGES
   );
@@ -97,6 +102,7 @@ export function ChatDock({ sessionId, onClose }: ChatDockProps) {
       cwd: workspacePath || undefined,
       baseUrl: chatBaseUrl || undefined,
       modelId: chatModel || undefined,
+      api: chatApi,
     });
   };
 
@@ -158,8 +164,30 @@ export function ChatDock({ sessionId, onClose }: ChatDockProps) {
       />
       <div className="ha-chat-dock-header">
         <span className="ha-chat-dock-title">Chat</span>
-        <span className="ha-chat-dock-sub">{sessionId ? "direct · in-app" : "no session"}</span>
-        {chat && (
+        <span className="ha-chat-dock-spacer" />
+        <button
+          type="button"
+          className="ha-chat-dock-clear"
+          title="Start a new chat (keeps this one’s history)"
+          aria-label="New chat"
+          onClick={() => sessionId && newChatFor(sessionId)}
+          disabled={!sessionId}
+        >
+          ＋ New
+        </button>
+        <button
+          type="button"
+          className="ha-chat-dock-clear"
+          title="Clear this chat"
+          onClick={() => chatId && clearChat(chatId)}
+          disabled={!chatId || messages.length === 0}
+        >
+          Clear
+        </button>
+      </div>
+
+      {chat && (
+        <div className="ha-chat-model-bar">
           <select
             className="ha-chat-model-select"
             aria-label="Chat model"
@@ -176,48 +204,28 @@ export function ChatDock({ sessionId, onClose }: ChatDockProps) {
               </option>
             ))}
           </select>
-        )}
-        <button
-          type="button"
-          className="ha-chat-dock-clear"
-          title="Refresh model list"
-          aria-label="Refresh model list"
-          onClick={refreshModels}
-          disabled={!chat}
-        >
-          ⟳
-        </button>
-        <button
-          type="button"
-          className="ha-chat-dock-clear"
-          title="Start a new chat (keeps this one’s history)"
-          aria-label="New chat"
-          onClick={() => sessionId && newChatFor(sessionId)}
-          disabled={!sessionId}
-        >
-          ＋
-        </button>
-        <button
-          type="button"
-          className="ha-chat-dock-clear"
-          title="Clear this chat"
-          onClick={() => chatId && clearChat(chatId)}
-          disabled={!chatId || messages.length === 0}
-        >
-          Clear
-        </button>
-        {onClose && (
+          <select
+            className="ha-chat-api-select"
+            aria-label="Chat API"
+            title="Endpoint wire protocol"
+            value={chatApi}
+            onChange={(e) => setChatApi(e.target.value as "auto" | "openai-completions" | "anthropic-messages")}
+          >
+            <option value="auto">auto</option>
+            <option value="openai-completions">openai</option>
+            <option value="anthropic-messages">anthropic</option>
+          </select>
           <button
             type="button"
-            className="ha-chat-dock-close"
-            title="Hide chat"
-            aria-label="Hide chat"
-            onClick={onClose}
+            className="ha-chat-dock-clear"
+            title="Refresh model list"
+            aria-label="Refresh model list"
+            onClick={refreshModels}
           >
-            ✕
+            ⟳
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="ha-chat-dock-list" ref={listRef}>
         {messages.length === 0 && (
