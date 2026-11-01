@@ -129,7 +129,11 @@ export function BrowserSurface({ url, onUrlChange, surfaceId, warning }: Browser
           ⚠ {warning}
         </div>
       )}
-      {desktop ? (
+      {!url ? (
+        <div className="ha-browser-empty" style={{ padding: 24, color: "var(--ha-text-secondary)", fontSize: 13 }}>
+          No URL for this browser surface yet.
+        </div>
+      ) : desktop ? (
         <div className="ha-electron-webview-wrap">
           <webview
             ref={webviewElRef as never}

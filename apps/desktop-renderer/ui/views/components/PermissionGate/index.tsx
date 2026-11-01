@@ -10,6 +10,7 @@ import { useCallback } from "react";
 
 import { useStore } from "../../store";
 import { wsService } from "../../services/ws-service";
+import { isViewPortal } from "../../services/standalone-guard";
 
 import "./index.css";
 
@@ -34,6 +35,8 @@ export function PermissionGate() {
 
   if (!pending) return null;
 
+  const portal = typeof window !== "undefined" && isViewPortal();
+
   return (
     <div className="ha-permission-overlay" role="alertdialog" aria-modal="true">
       <div className="ha-permission-card">
@@ -55,9 +58,15 @@ export function PermissionGate() {
           Logins you make here are saved for future agent sessions. Granting
           “Always” remembers this domain.
         </p>
+        {portal && (
+          <p className="ha-permission-note" style={{ fontStyle: "italic" }}>
+            View portal is read-only — answer consent prompts in the desktop app.
+          </p>
+        )}
         <div className="ha-permission-actions">
           <button
             type="button"
+            disabled={portal}
             className="ha-permission-btn ha-permission-btn--deny"
             onClick={() => respond("deny")}
           >
@@ -65,6 +74,7 @@ export function PermissionGate() {
           </button>
           <button
             type="button"
+            disabled={portal}
             className="ha-permission-btn"
             onClick={() => respond("once")}
           >
@@ -72,6 +82,7 @@ export function PermissionGate() {
           </button>
           <button
             type="button"
+            disabled={portal}
             className="ha-permission-btn ha-permission-btn--always"
             onClick={() => respond("always")}
           >

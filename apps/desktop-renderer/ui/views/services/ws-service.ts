@@ -153,6 +153,18 @@ class WsService {
    *  e.g. { type: 'handoff:complete', surfaceId } to release browser
    *  automation lock after the human finished a verification. */
   send(message: Record<string, unknown>): boolean {
+    // View portal is observation-only: never let a debugging tab answer
+    // consent, control processes, or release handoffs.
+    const type = String(message["type"] ?? "");
+    if (
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).has("viewPortal") &&
+      process.env.NODE_ENV !== "production" &&
+      ["permission:respond", "process:control", "handoff:complete"].includes(type)
+    ) {
+      console.warn("[ws] view portal is read-only — refused", type);
+      return false;
+    }
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
       return true;

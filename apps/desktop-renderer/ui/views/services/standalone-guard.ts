@@ -9,8 +9,23 @@ says so in the footer.
 
 import { getDesktopBridge } from "./desktop-bridge";
 
+/**
+ * View Portal: a DEV-ONLY debugging mode (?viewPortal=1) where a plain
+ * browser tab port-links to the running desktop app's servers
+ * (surface ws + HTTP /status) to OBSERVE agent activity. It is:
+ *   - clearly labeled "View portal (read-only)" in the footer
+ *   - receive-only: state-changing ws messages are refused (wsService)
+ *   - never available in production builds
+ * The desktop Electron window remains the only interactive runtime.
+ */
+export function isViewPortal(): boolean {
+  if (typeof window === "undefined") return false;
+  if (process.env.NODE_ENV === "production") return false;
+  return new URLSearchParams(window.location.search).has("viewPortal");
+}
+
 /** True when live services (WS/IPC/sync) may run. */
 export function shouldStartLiveServices(): boolean {
   if (typeof window === "undefined") return false;
-  return getDesktopBridge() !== undefined;
+  return getDesktopBridge() !== undefined || isViewPortal();
 }

@@ -950,10 +950,14 @@ const __toolName = (params as Record<string, unknown>)["name"];
     if (resultSurfaceId && openSurfaces.has(resultSurfaceId)) {
       // Real surface (open* tools): broadcast the push for rendering.
       const entry = openSurfaces.get(resultSurfaceId);
+      // Use the STORED record payload (url/searchQuery/... normalized by
+      // the tool) — raw arguments lack fields like url for recipes and
+      // made BrowserSurface render src="".
+      const argExtras = ((params as Record<string, unknown>)["arguments"] ?? {}) as Record<string, unknown>;
       notifySurfacePush({
         surfaceId: resultSurfaceId,
         type: entry?.type ?? "unknown",
-        payload: ((params as Record<string, unknown>)["arguments"] ?? {}) as Record<string, unknown>,
+        payload: { ...argExtras, ...(entry?.payload ?? {}) },
         status: "pushed",
         ...agentTag,
       });

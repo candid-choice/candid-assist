@@ -26,16 +26,22 @@ only truly verified in the desktop window (my Electron instance, logs in
   (`electron-vite dev` + Singleton cleanup); renderer changes hot-reload
   (Next dev) — or force via the `reloadUI` MCP tool.
 
-## Why plain tabs can NEVER see MCP
+## Three runtime modes (footer tells you which you're in)
 
-`getDesktopBridge()` is strict: only the real Electron preload
-(`window.desktop` with `runtime: 'electron'`) unlocks live services.
-A plain tab (even with `?wsPort`/`?mcpPort`/`?stubBridge` params):
-- starts no WebSocket connection (standalone guard)
-- polls nothing; presence exists only over IPC
-- shows "Standalone renderer" in the footer
+1. **Electron desktop app** — the real runtime. `window.desktop` from
+   the trusted preload unlocks everything: presence over IPC, surfaces,
+   consent, controls.
+2. **Standalone tab** (default for plain browsers) — no live services
+   at all; footer: "Standalone renderer". Even with `?wsPort/?mcpPort`
+   it observes nothing.
+3. **View portal** (`?viewPortal=1`, DEV ONLY) — an explicitly-labeled
+   OBSERVER: footer reads "View portal (read-only) · N agent(s)". It
+   port-links to the desktop app (surface ws + HTTP /status) so you can
+   debug agent activity in a browser console. Strictly receive-only:
+   `wsService.send` refuses `permission:respond`, `process:control`,
+   `handoff:complete`, and the consent modal renders with disabled
+   buttons. It answers nothing; the desktop app decides everything.
 
-There is deliberately **no dev stub bridge** and no HTTP presence
-fallback — browser-side observation of MCP was tried and removed as a
-design violation (2026-11-01). If you need desktop-context layout
-checks, screenshot the Electron app (ask the human) instead.
+The earlier `stubBridge` hack was removed (it let a tab impersonate the
+desktop — design violation). The view portal replaces it honestly:
+observation, clearly labeled, never impersonation.

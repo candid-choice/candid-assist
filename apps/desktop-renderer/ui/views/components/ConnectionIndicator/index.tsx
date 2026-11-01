@@ -13,6 +13,7 @@ calling is "Waiting for agent…" (pushing a surface would go nowhere).
 import "./index.css";
 
 import { useStore } from "../../store";
+import { isViewPortal } from "../../services/standalone-guard";
 import type { ConnectionState } from "../../store";
 
 interface IndicatorMeta {
@@ -48,12 +49,21 @@ export function ConnectionIndicator() {
   const connectionState = useStore((s) => s.connectionState);
   const agentCount = useStore((s) => s.mcpAgentCount);
   const standalone = useStore((s) => s.mcpStandalone);
+  const portal = typeof window !== "undefined" && isViewPortal();
   const meta = standalone
     ? {
         label: "Standalone renderer",
         dotClass: "ha-connection-dot--disconnected",
       }
-    : resolve(connectionState, agentCount);
+    : portal
+      ? {
+          label:
+            agentCount > 0
+              ? `View portal (read-only) · ${agentCount} agent(s)`
+              : "View portal (read-only)",
+          dotClass: "ha-connection-dot--connecting",
+        }
+      : resolve(connectionState, agentCount);
 
   return (
     <span

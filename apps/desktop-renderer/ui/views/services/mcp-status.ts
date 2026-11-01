@@ -13,6 +13,7 @@ only for external/dev clients).
 
 import { useStore } from "../store";
 import { getDesktopBridge, type McpStatusPayload } from "./desktop-bridge";
+import { isViewPortal } from "./standalone-guard";
 
 let unsubscribe: (() => void) | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -29,6 +30,24 @@ function apply(status: McpStatusPayload | undefined): void {
 export function startMcpStatusPolling(intervalMs = 5_000): void {
   if (timer || unsubscribe) return;
   const bridge = getDesktopBridge();
+
+  // View portal (dev + ?viewPortal=1): port-link to the desktop app's
+  // HTTP /status — the ONLY non-IPC presence path, and read-only.
+  if (!bridge && isViewPortal()) {
+    const port = new URLSearchParams(window.location.search).get("mcpPort") ?? "3615";
+    const poll = async () => {
+      try {
+        const res = await fetch(`http://localhost:${port}/status`, { signal: AbortSignal.timeout(3000) });
+        apply((await res.json()) as McpStatusPayload);
+      } catch {
+        useStore.getState().setMcpAgentCount(0);
+      }
+    };
+    void poll();
+    timer = setInterval(() => void poll(), intervalMs);
+    return;
+  }
+
   if (!bridge) {
     // Plain browser tab: no desktop app owns an MCP server for us.
     useStore.getState().setMcpStandalone(true);
