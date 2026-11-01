@@ -66,3 +66,33 @@ describe('mcp-status over IPC', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('presence materializes sessions immediately', () => {
+  it('a bound agent in an IPC presence push creates its sidebar row', async () => {
+    const origFetch = global.fetch;
+    global.fetch = vi.fn(async () => new Response(JSON.stringify({ id: 'srv-1' }), { status: 201 })) as unknown as typeof fetch;
+    const bridge = installBridge();
+    startMcpStatusPolling(60_000);
+    await new Promise((r) => setTimeout(r, 10)); // initial getStatus
+
+    bridge.push({
+      ok: true,
+      mcp: {
+        agentLastSeen: Date.now(),
+        agentConnected: true,
+        agentCount: 1,
+        agents: [],
+        wsAgents: [{ client: 'pi', agentSessionId: 'live-abc-123' }],
+      },
+      ws: { clients: 1 },
+    });
+
+    const st = useStore.getState();
+    const row = Object.values(st.sessions).find((x) => x.agentSessionId === 'live-abc-123');
+    expect(row).toBeDefined();
+    expect(st.agentSessions['pi::live-abc-123']).toBeDefined();
+    stopMcpStatusPolling();
+    bridge.uninstall();
+    global.fetch = origFetch;
+  });
+});

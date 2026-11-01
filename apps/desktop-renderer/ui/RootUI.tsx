@@ -16,6 +16,7 @@ import { App } from "./views/App";
 import "./views/index.css";
 
 import { wsService } from "./views/services/ws-service";
+import { ensureAgentSessionFor } from "./views/lib/agent-session";
 import { useStore } from "./views/store";
 import { AuthProvider } from "./views/context/auth-provider";
 import {
@@ -92,9 +93,15 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
       return;
     }
     if (event.event === "agent:presence") {
-      // Live WS MCP agent set changed (agent connected/disconnected).
+      // Live WS MCP agent set changed (connected / bound / disconnected).
       const d = event.data as { agents?: Array<{ client: string; agentSessionId: string | null }> };
-      useStore.getState().setMcpAgents(d?.agents ?? []);
+      const agents = d?.agents ?? [];
+      useStore.getState().setMcpAgents(agents);
+      // A bound agent means "a new session connected": materialize its
+      // sidebar row immediately instead of waiting for a surface push.
+      for (const a of agents) {
+        if (a.agentSessionId) ensureAgentSessionFor({ client: a.client, agentSessionId: a.agentSessionId });
+      }
       return;
     }
     if (event.event === "permission:grants-cleared") {
@@ -182,58 +189,6 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
   (window as unknown as { __haStore: unknown }).__haStore = useStore;
 }
 
-/** Upsert the sidebar session for an agent connection; returns its id. */
-function ensureAgentSessionFor(agent: {
-  client?: string;
-  agentSessionId?: string | null;
-}): string | undefined {
-  if (!agent?.client) return undefined;
-  const agentSessionId = agent.agentSessionId || "anonymous";
-  const key = `${agent.client}::${agentSessionId}`;
-  const mapped = useStore.getState().agentSessions[key];
-  if (mapped) return mapped;
-
-  const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const title = `${agent.client} · ${agentSessionId.slice(0, 6)} · ${time}`;
-  const nowIso = new Date().toISOString();
-  const tempId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  // Optimistic row: appears in the sidebar immediately (even offline /
-  // signed-out), then reconciles with the server id.
-  useStore.getState().addSession({
-    id: tempId,
-    userId: useStore.getState().authUser?.id ?? "local",
-    title,
-    status: "active",
-    surfaces: [],
-    createdAt: nowIso,
-    updatedAt: nowIso,
-    archivedAt: null,
-    agentSessionId: agent.agentSessionId ?? undefined,
-    agentClient: agent.client,
-  });
-  useStore.getState().setAgentSession(key, tempId);
-  void (async () => {
-    try {
-      const doc = await createSession(title, "", {
-        agentSessionId: agent.agentSessionId ?? undefined,
-        agentClient: agent.client,
-      });
-      const st = useStore.getState();
-      st.addSession(doc);
-      st.removeSession(tempId);
-      st.setAgentSession(key, doc.id);
-    } catch {
-      // Offline / backend down — queued for replay; row stays.
-      void queueAction("createSession", {
-        title,
-        workspacePath: "",
-        agentSessionId: agent.agentSessionId ?? undefined,
-        agentClient: agent.client,
-      });
-    }
-  })();
-  return tempId;
-}
 
 export default function RootUI() {
   return (

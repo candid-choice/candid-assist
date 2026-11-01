@@ -14,6 +14,7 @@ only for external/dev clients).
 import { useStore } from "../store";
 import { getDesktopBridge, type McpStatusPayload } from "./desktop-bridge";
 import { isViewPortal } from "./standalone-guard";
+import { ensureAgentSessionFor } from "../lib/agent-session";
 
 let unsubscribe: (() => void) | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -21,9 +22,13 @@ let timer: ReturnType<typeof setInterval> | null = null;
 function apply(status: McpStatusPayload | undefined): void {
   const count = status?.mcp?.agentCount ?? 0;
   useStore.getState().setMcpAgentCount(count);
-  useStore
-    .getState()
-    .setMcpAgents(status?.mcp?.wsAgents ?? []);
+  const agents = status?.mcp?.wsAgents ?? [];
+  useStore.getState().setMcpAgents(agents);
+  // Connected+bound agent ⇒ new session: show its row right away
+  // (don't wait for the first surface push).
+  for (const a of agents) {
+    if (a.agentSessionId) ensureAgentSessionFor({ client: a.client, agentSessionId: a.agentSessionId });
+  }
 }
 
 /** Start presence tracking (idempotent). */

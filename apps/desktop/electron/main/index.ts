@@ -191,7 +191,7 @@ ipcMain.handle('desktop:mcp:status', (event) => {
   return getMcpStatus();
 });
 
-let lastMcpAgentCount = -1;
+let lastMcpAgentSnapshot = "";
 setInterval(() => {
   let status;
   try {
@@ -199,8 +199,12 @@ setInterval(() => {
   } catch {
     return;
   }
-  if (status.mcp.agentCount === lastMcpAgentCount) return;
-  lastMcpAgentCount = status.mcp.agentCount;
+  // Compare the FULL snapshot, not just the count: an agent binding its
+  // harness identity (first tool call) keeps count equal but must push a
+  // presence update so the renderer can show the new session immediately.
+  const snapshot = JSON.stringify(status.mcp.wsAgents ?? []);
+  if (snapshot === lastMcpAgentSnapshot) return;
+  lastMcpAgentSnapshot = snapshot;
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) win.webContents.send('desktop:mcp:status', status);
   }
