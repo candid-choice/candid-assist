@@ -274,3 +274,27 @@
 .ha-sidebar-item--offline .ha-sidebar-item-title {
   font-style: italic;
 }
+
+/* ＋ add-session affordance at the right end of the search row */
+.ha-sidebar-search-add {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--ha-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ha-text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.ha-sidebar-search-add:hover {
+  color: #fff;
+  background: var(--ha-primary, #6366f8);
+  border-color: var(--ha-primary, #6366f8);
+}
