@@ -94,6 +94,7 @@ function Sidebar({
       </div>
 
       {/* ── Search ─────────────────────────────────────────────── */}
+      <div className="ha-sidebar-search-row">
       <div className="ha-sidebar-search">
         <IconSearch size={14} className="ha-sidebar-search-icon" />
         <input
@@ -102,17 +103,18 @@ function Sidebar({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        {onAddSession && (
-          <button
-            type="button"
-            className="ha-sidebar-search-add"
-            onClick={onAddSession}
-            title="Add a session you own (with direct chat)"
-            aria-label="Add session"
-          >
-            ＋
-          </button>
-        )}
+      </div>
+      {onAddSession && (
+        <button
+          type="button"
+          className="ha-sidebar-search-add"
+          onClick={onAddSession}
+          title="Add a session you own (with direct chat)"
+          aria-label="Add session"
+        >
+          ＋
+        </button>
+      )}
       </div>
 
       {/* ── Session List ───────────────────────────────────────── */}

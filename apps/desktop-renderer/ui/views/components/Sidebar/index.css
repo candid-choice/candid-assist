@@ -71,15 +71,24 @@
 
 /* ── Search ─────────────────────────────────────────────────────────── */
 
+.ha-sidebar-search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 8px;
+}
+
 .ha-sidebar-search {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
   padding: 6px 12px;
   background: var(--ha-surface);
   border: 1px solid var(--ha-border);
   border-radius: 6px;
-  margin: 0 8px;
+  margin: 0;
 }
 
 .ha-sidebar-search-icon {
