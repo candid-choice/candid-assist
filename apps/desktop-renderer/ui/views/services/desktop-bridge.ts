@@ -34,8 +34,15 @@ export interface DesktopAPI {
   /** Optional in tests/mocks; present in the real Electron preload. */
   /** Direct chat with the in-process pi agent (Electron only). */
   chat?: {
-    send: (sessionId: string, text: string, cwd?: string) => Promise<{ ok: boolean; error?: string }>;
+    send: (
+      sessionId: string,
+      text: string,
+      opts?: { cwd?: string; baseUrl?: string; modelId?: string },
+    ) => Promise<{ ok: boolean; error?: string }>;
     abort: (sessionId: string) => Promise<{ ok: boolean }>;
+    listModels?: (
+      baseUrl?: string,
+    ) => Promise<{ ok: boolean; baseUrl: string; models: string[]; error?: string }>;
     onEvent: (callback: (e: { sessionId: string; kind: string; text: string }) => void) => () => void;
   };
   mcp?: {

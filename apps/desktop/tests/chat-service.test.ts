@@ -108,3 +108,29 @@ describe('chat-service', () => {
     expect(events.some(([, e]) => e.kind === 'error' && e.text.includes('CHAT_004') && e.text.includes('model down'))).toBe(true);
   });
 });
+
+it('passes endpoint/model/chatSessionId options through to the runtime factory', async () => {
+  const seen: unknown[] = [];
+  setChatRuntimeFactory(async (opts) => {
+    seen.push(opts);
+    return {
+      async prompt(_t: string, emit: (e: { kind: string; text: string }) => void) {
+        emit({ kind: 'done', text: '' });
+      },
+      abort() {},
+      dispose() {},
+    };
+  });
+  await sendChat('chat-42', 'hi', {
+    cwd: '/repo',
+    baseUrl: 'http://100.83.1.126:1234/v1',
+    modelId: 'qwen3-8b',
+  });
+  expect(seen[0]).toEqual({
+    cwd: '/repo',
+    baseUrl: 'http://100.83.1.126:1234/v1',
+    modelId: 'qwen3-8b',
+    chatSessionId: 'chat-42',
+  });
+  setChatRuntimeFactory(null);
+});

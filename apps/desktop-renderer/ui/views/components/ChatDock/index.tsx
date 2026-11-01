@@ -26,10 +26,19 @@ export interface ChatDockProps {
 export function ChatDock({ sessionId, onClose }: ChatDockProps) {
   const bridge = getDesktopBridge();
   const chat = bridge?.chat;
+  // Chat owns its conversation id (independent of the harness session id)
+  // plus the endpoint/model it talks to.
+  const chatId = useStore((s) => (sessionId ? s.chatIds[sessionId] ?? null : null));
+  const newChatFor = useStore((s) => s.newChatFor);
+  const chatModel = useStore((s) => s.chatModel);
+  const setChatModel = useStore((s) => s.setChatModel);
+  const chatModels = useStore((s) => s.chatModels);
+  const setChatModels = useStore((s) => s.setChatModels);
+  const chatBaseUrl = useStore((s) => s.chatBaseUrl);
   const messages = useStore((s) =>
-    (sessionId ? s.chatBySession[sessionId] : undefined) ?? NO_MESSAGES
+    (chatId ? s.chatBySession[chatId] : undefined) ?? NO_MESSAGES
   );
-  const busy = useStore((s) => (sessionId ? s.chatBusy[sessionId] === true : false));
+  const busy = useStore((s) => (chatId ? s.chatBusy[chatId] === true : false));
   const appendChatMessage = useStore((s) => s.appendChatMessage);
   const setChatBusy = useStore((s) => s.setChatBusy);
   const clearChat = useStore((s) => s.clearChat);
@@ -37,6 +46,23 @@ export function ChatDock({ sessionId, onClose }: ChatDockProps) {
   const chatWidth = useStore((s) => s.chatWidth);
   const setChatWidth = useStore((s) => s.setChatWidth);
   const [draft, setDraft] = useState("");
+
+  // Ensure this user session has a chat conversation id of its own.
+  useEffect(() => {
+    if (sessionId && !chatId) newChatFor(sessionId);
+  }, [sessionId, chatId, newChatFor]);
+
+  // Discover which models the endpoint is currently serving.
+  const refreshModels = useCallback(() => {
+    if (!chat?.listModels) return;
+    void chat
+      .listModels(chatBaseUrl || undefined)
+      .then((res) => setChatModels(res.models ?? []))
+      .catch(() => setChatModels([]));
+  }, [chat, chatBaseUrl, setChatModels]);
+  useEffect(() => {
+    refreshModels();
+  }, [refreshModels]);
   const listRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef<Map<string, string>>(new Map());
 
@@ -56,24 +82,28 @@ export function ChatDock({ sessionId, onClose }: ChatDockProps) {
   }, [messages]);
 
   const send = () => {
-    if (!chat || !sessionId) return;
+    if (!chat || !sessionId || !chatId) return;
     const text = draft.trim();
     if (!text || busy) return;
-    appendChatMessage(sessionId, {
+    appendChatMessage(chatId, {
       id: newId(),
       role: "user",
       text,
       ts: new Date().toISOString(),
     });
-    setChatBusy(sessionId, true);
+    setChatBusy(chatId, true);
     setDraft("");
-    void chat.send(sessionId, text, workspacePath || undefined);
+    void chat.send(chatId, text, {
+      cwd: workspacePath || undefined,
+      baseUrl: chatBaseUrl || undefined,
+      modelId: chatModel || undefined,
+    });
   };
 
   const stop = () => {
-    if (!chat || !sessionId) return;
-    chat.abort(sessionId);
-    setChatBusy(sessionId, false);
+    if (!chat || !chatId) return;
+    chat.abort(chatId);
+    setChatBusy(chatId, false);
   };
 
   // ── Left-edge drag resize (mirrors SidebarResizer's frame lock) ─────
@@ -129,12 +159,50 @@ export function ChatDock({ sessionId, onClose }: ChatDockProps) {
       <div className="ha-chat-dock-header">
         <span className="ha-chat-dock-title">Chat</span>
         <span className="ha-chat-dock-sub">{sessionId ? "direct · in-app" : "no session"}</span>
+        {chat && (
+          <select
+            className="ha-chat-model-select"
+            aria-label="Chat model"
+            title={chatBaseUrl}
+            value={chatModel ?? ""}
+            onChange={(e) => setChatModel(e.target.value || null)}
+          >
+            <option value="">
+              {chatModels.length > 0 ? "endpoint default" : "no models"}
+            </option>
+            {chatModels.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        )}
+        <button
+          type="button"
+          className="ha-chat-dock-clear"
+          title="Refresh model list"
+          aria-label="Refresh model list"
+          onClick={refreshModels}
+          disabled={!chat}
+        >
+          ⟳
+        </button>
+        <button
+          type="button"
+          className="ha-chat-dock-clear"
+          title="Start a new chat (keeps this one’s history)"
+          aria-label="New chat"
+          onClick={() => sessionId && newChatFor(sessionId)}
+          disabled={!sessionId}
+        >
+          ＋
+        </button>
         <button
           type="button"
           className="ha-chat-dock-clear"
           title="Clear this chat"
-          onClick={() => sessionId && clearChat(sessionId)}
-          disabled={!sessionId || messages.length === 0}
+          onClick={() => chatId && clearChat(chatId)}
+          disabled={!chatId || messages.length === 0}
         >
           Clear
         </button>

@@ -205,3 +205,16 @@
   border-radius: 4px;
 }
 .ha-chat-dock-close:hover { color: var(--ha-text-primary, #e6e9ef); background: rgba(255,255,255,0.06); }
+
+.ha-chat-model-select {
+  max-width: 120px;
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid var(--ha-border);
+  border-radius: 5px;
+  background: var(--ha-surface);
+  color: var(--ha-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

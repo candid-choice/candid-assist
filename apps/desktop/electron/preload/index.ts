@@ -54,8 +54,15 @@ export interface DesktopAPI {
   };
   /** Direct chat with the in-process pi agent (Electron only). */
   chat: {
-    send: (sessionId: string, text: string, cwd?: string) => Promise<{ ok: boolean; error?: string }>;
+    send: (
+      sessionId: string,
+      text: string,
+      opts?: { cwd?: string; baseUrl?: string; modelId?: string },
+    ) => Promise<{ ok: boolean; error?: string }>;
     abort: (sessionId: string) => Promise<{ ok: boolean }>;
+    listModels: (
+      baseUrl?: string,
+    ) => Promise<{ ok: boolean; baseUrl: string; models: string[]; error?: string }>;
     onEvent: (callback: (e: { sessionId: string; kind: string; text: string }) => void) => () => void;
   };
   /** Runtime discriminator used by the renderer. */
@@ -82,8 +89,16 @@ const api: DesktopAPI = {
       ipcRenderer.send('desktop:guest:unregister', { surfaceId }),
   },
   chat: {
-    send: (sessionId, text, cwd) => ipcRenderer.invoke('desktop:chat:send', { sessionId, text, cwd }),
+    send: (sessionId, text, opts) =>
+      ipcRenderer.invoke('desktop:chat:send', {
+        sessionId,
+        text,
+        cwd: opts?.cwd,
+        baseUrl: opts?.baseUrl,
+        modelId: opts?.modelId,
+      }),
     abort: (sessionId) => ipcRenderer.invoke('desktop:chat:abort', { sessionId }),
+    listModels: (baseUrl) => ipcRenderer.invoke('desktop:chat:models', { baseUrl }),
     onEvent: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: { sessionId: string; kind: string; text: string }) =>
         callback(payload);
