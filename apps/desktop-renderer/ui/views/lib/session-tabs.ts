@@ -115,6 +115,24 @@ export function surfaceLabel(type: string, payload: unknown): string {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
   const p = (payload ?? {}) as Record<string, unknown>;
+
+  // Recipe surfaces get task-names, not generic 'Browser · host'.
+  if (typeof p["searchQuery"] === "string" && p["searchQuery"]) {
+    const q = (p["searchQuery"] as string).trim();
+    return `Search · ${q.length > 26 ? q.slice(0, 25) + "…" : q}`;
+  }
+  if (typeof p["goal"] === "string" && p["goal"]) {
+    const g = (p["goal"] as string).trim();
+    return `Scrape · ${g.length > 26 ? g.slice(0, 25) + "…" : g}`;
+  }
+  if (p["doc"] === true) {
+    let host = "Drive";
+    try {
+      host = `Drive · ${new URL(String(p.url ?? "")).hostname.replace(/^www\./, "")}`;
+    } catch { /* keep 'Drive' */ }
+    return host;
+  }
+
   let hint = "";
   if (typeof p.url === "string" && p.url) {
     try { hint = new URL(p.url).hostname.replace(/^www\./, ""); } catch { hint = p.url.slice(0, 22); }

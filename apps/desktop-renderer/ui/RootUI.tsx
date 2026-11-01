@@ -26,10 +26,18 @@ import {
 import { setReplayExecutor, onReconnect, queueAction } from "./views/errors/offline-queue";
 import { surfaceLabel } from "./views/lib/session-tabs";
 import { startMcpStatusPolling } from "./views/services/mcp-status";
+import { shouldStartLiveServices } from "./views/services/standalone-guard";
 import { PermissionGate } from "./views/components/PermissionGate";
 
 // ── Live services (module scope — run once, not per StrictMode render) ──
-if (typeof window !== "undefined") {
+if (typeof window !== "undefined" && !shouldStartLiveServices()) {
+  // Plain browser tab: no WS, no IPC polling, no server sync — the
+  // desktop app is the only place agent sessions/surfaces are shown.
+  useStore.getState().setMcpStandalone(true);
+  useStore.getState().setConnectionState("disconnected");
+}
+
+if (typeof window !== "undefined" && shouldStartLiveServices()) {
   // Connect WebSocket for surface events
   wsService.connect();
 

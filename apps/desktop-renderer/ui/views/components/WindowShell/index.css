@@ -8,7 +8,7 @@
   background: var(--ha-bg);
 }
 
-.ha-titlebar {
+.ha-titlebar { /* no underline — the tab strip below is the visual separator */
   display: flex;
   align-items: center;
   height: 40px;
@@ -20,7 +20,6 @@
   -webkit-user-select: none;
   user-select: none;
   flex-shrink: 0;
-  border-bottom: 1px solid oklch(0.371 0 0);
   -webkit-app-region: drag;
   justify-content: center;
 }

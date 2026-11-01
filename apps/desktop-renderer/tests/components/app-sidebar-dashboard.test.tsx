@@ -176,3 +176,26 @@ describe('AppDashboard', () => {
     expect(container.innerHTML).toBe('');
   });
 });
+
+describe('AppSidebar session switching follows content', () => {
+  it('clicking a session selects its last surface or clears the pane', async () => {
+    useStore.getState().setSessions([makeSession('a'), makeSession('b')]);
+    useStore.setState({
+      views: [
+        { id: 'va', label: 'A', type: 'browser', title: 't', payload: {}, source: 'mcp', createdAt: 1, sessionId: 'a' },
+        { id: 'va2', label: 'A2', type: 'browser', title: 't', payload: {}, source: 'mcp', createdAt: 2, sessionId: 'a' },
+      ],
+      activeSurface: null,
+      activeViewId: null,
+    } as never);
+    render(<AppSidebar />);
+
+    fireEvent.click(await screen.findByText('Session a'));
+    expect(useStore.getState().activeSessionId).toBe('a');
+    expect(useStore.getState().activeSurface?.id).toBe('va2'); // last owned view
+
+    fireEvent.click(screen.getByText('Session b'));
+    expect(useStore.getState().activeSessionId).toBe('b');
+    expect(useStore.getState().activeSurface).toBeNull(); // empty session → guide
+  });
+});

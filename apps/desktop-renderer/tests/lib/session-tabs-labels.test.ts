@@ -25,3 +25,13 @@ describe('surfaceLabel / icons / visibility', () => {
     expect(pickVisibleSurface({ id: 's1' }, v1, [])).toBeNull();
   });
 });
+
+describe('recipe task names', () => {
+  it('names search/scrape/drive tabs by task, not generic browser', () => {
+    expect(surfaceLabel('browser', { url: 'https://google.com/search?q=x', searchQuery: 'resin printer' })).toBe('Search · resin printer');
+    expect(surfaceLabel('browser', { url: 'https://acme.dev', goal: 'pricing table' })).toBe('Scrape · pricing table');
+    expect(surfaceLabel('browser', { url: 'https://docs.google.com/x', doc: true })).toBe('Drive · docs.google.com');
+    // plain browser unchanged
+    expect(surfaceLabel('browser', { url: 'https://react.dev' })).toBe('Browser · react.dev');
+  });
+});

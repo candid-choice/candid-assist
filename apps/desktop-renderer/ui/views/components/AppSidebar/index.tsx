@@ -74,10 +74,18 @@ export function AppSidebar({
     y: number;
   } | null>(null);
 
-  const handleSessionClick = useCallback(
-    (id: string) => useStore.getState().setActiveSession(id),
-    [],
-  );
+  const handleSessionClick = useCallback((id: string) => {
+    const st = useStore.getState();
+    st.setActiveSession(id);
+    // Main content follows the session: show its most recent open
+    // surface, or none (which reveals the guide/dashboard).
+    const owned = st.views.filter(
+      (v) => (v as unknown as { sessionId?: string }).sessionId === id,
+    );
+    const last = owned[owned.length - 1];
+    if (last) st.selectView(last.id);
+    else st.cancelSurface();
+  }, []);
 
   const syncOr = (op: string, data: Record<string, unknown>) => {
     void (async () => {

@@ -369,7 +369,7 @@ describe('domain recipes (googleSearch / readGoogleDriveDoc / scrapeSelective)',
       results: [{ title: 'Mount Sinai', link: 'https://www.mountsinai.org' }],
       pageText: 'Mount Sinai is a hospital system…',
     }));
-    const res = await callTool('googleSearch', { query: 'mount sinai' }, 950);
+    const res = await callTool('googleSearch', { query: 'mount sinai', surfaceId: 'surf_recipe' }, 950);
     expect(res.result.tool).toBe('googleSearch');
     expect(res.result.query).toBe('mount sinai');
     expect(res.result.results).toHaveLength(1);
@@ -392,7 +392,7 @@ describe('domain recipes (googleSearch / readGoogleDriveDoc / scrapeSelective)',
       loginRequired: true,
       text: 'Sign in to continue',
     }));
-    const res = await callTool('readGoogleDriveDoc', { url: 'https://docs.google.com/document/d/abc' }, 953);
+    const res = await callTool('readGoogleDriveDoc', { url: 'https://docs.google.com/document/d/abc', surfaceId: 'surf_recipe' }, 953);
     expect(res.result.status).toBe('login-required');
     expect(res.result.handoff).toBe(true);
   });
@@ -411,7 +411,7 @@ describe('domain recipes (googleSearch / readGoogleDriveDoc / scrapeSelective)',
       matched: 2,
       text: 'Starter $10\n---\nPro $30',
     }));
-    const res = await callTool('scrapeSelective', { url: 'https://acme.dev/pricing', selector: '.price-card' }, 955);
+    const res = await callTool('scrapeSelective', { url: 'https://acme.dev/pricing', selector: '.price-card', surfaceId: 'surf_recipe' }, 955);
     expect(res.result.tool).toBe('scrapeSelective');
     expect(res.result.selector).toBe('.price-card');
     expect(res.result.text).toContain('Pro $30');
@@ -442,7 +442,7 @@ describe('googleSearch bot-check handoff', () => {
     const out = await processMcpMessage({
       jsonrpc: '2.0',
       method: 'tools/call',
-      params: { name: 'googleSearch', arguments: { query: 'mount sinai' } },
+      params: { name: 'googleSearch', arguments: { query: 'mount sinai', surfaceId: 'surf_bot' } },
       id: 960,
     } as never);
     const res = (out as { response: Record<string, any> }).response;

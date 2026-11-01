@@ -1191,8 +1191,9 @@ async function agentNavigateAndEval(
   const perm = await permissionBroker.ensure(url, tool);
   if (!perm.allowed) return { ok: false, status: "denied", reason: perm.decision, url };
 
-  // Reuse an already-mounted guest (live tab) when we have one.
-  let surfaceId = listGuestSurfaceIds()[0];
+  // Each task gets its OWN tab: reuse only when the caller explicitly
+  // passes a surfaceId that has a live guest (e.g. continuing a task).
+  let surfaceId = typeof agentArgs["surfaceId"] === "string" ? agentArgs["surfaceId"] : undefined;
   let handle: GuestHandle | undefined;
   if (surfaceId) {
     try {
@@ -1211,6 +1212,9 @@ async function agentNavigateAndEval(
       type: "browser",
       payload: {
         url,
+        ...(typeof agentArgs["query"] === "string" ? { searchQuery: agentArgs["query"] } : {}),
+        ...(typeof agentArgs["goal"] === "string" ? { goal: agentArgs["goal"] } : {}),
+        ...(surfaceId && tool === "readGoogleDriveDoc" ? { doc: true } : {}),
         ...(isLocalhostUrl(url) ? { warning: LOCALHOST_WARNING } : {}),
       },
       createdAt: Date.now(),
@@ -1252,7 +1256,8 @@ async function agentNavigateAndEval(
   }
   await sleep(1_500); // settle
   const value = await handle.executeJavaScript(evalJs);
-  return { ok: true, surfaceId, value };
+  // handle is only set once surfaceId is known (reuse or fresh).
+  return { ok: true, surfaceId: surfaceId ?? "", value };
 }
 
 const SCENE_KINDS = new Set(["box", "sphere", "cylinder", "torus", "plane"]);
