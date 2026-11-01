@@ -135,16 +135,20 @@ function App() {
           <SidebarResizer />
 
           <div className="ha-app-main">
-            {/* ── Chrome bar: address bar ── */}
-            <div className="ha-chrome-bar">
-              <AddressBar
-                tabs={addressBarTabs}
-                activeTabId={visibleSurface?.id ?? null}
-                onTabClick={handleTabClick}
-                onTabClose={closeView}
-              />
-              <div className="ha-chrome-spacer" />
-            </div>
+            {/* ── Chrome bar: only when there are tabs — an empty bar
+                 would float a stray horizontal line beside the sidebar
+                 divider ── */}
+            {addressBarTabs.length > 0 && (
+              <div className="ha-chrome-bar">
+                <AddressBar
+                  tabs={addressBarTabs}
+                  activeTabId={visibleSurface?.id ?? null}
+                  onTabClick={handleTabClick}
+                  onTabClose={closeView}
+                />
+                <div className="ha-chrome-spacer" />
+              </div>
+            )}
 
             {/* ── Content ── */}
             <div className="ha-chrome-content" style={{ overflow: "hidden" }}>
