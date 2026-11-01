@@ -121,20 +121,12 @@ function App() {
       <WindowShell
         title="Human Assist"
         userStatus={
-          <>
-            {getDesktopBridge()?.chat && (
-              <button
-                type="button"
-                className={`ha-chat-toggle${chatOpen ? " ha-chat-toggle--active" : ""}`}
-                title={chatOpen ? "Hide chat" : "Open chat"}
-                aria-pressed={chatOpen}
-                onClick={() => setChatOpen(!chatOpen)}
-              >
-                💬
-              </button>
-            )}
-            <UserMenu onOpenSettings={() => setSettingsOpen(true)} />
-          </>
+          <UserMenu
+            onOpenSettings={() => setSettingsOpen(true)}
+            chatAvailable={!!getDesktopBridge()?.chat}
+            chatOpen={chatOpen}
+            onToggleChat={getDesktopBridge()?.chat ? () => setChatOpen(!chatOpen) : undefined}
+          />
         }
         footer={
           <span className="ha-footer-status">

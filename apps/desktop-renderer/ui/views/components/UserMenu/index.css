@@ -119,3 +119,10 @@
 .ha-usermenu-item--danger {
   color: #c0564f;
 }
+
+.ha-usermenu-item-check {
+  margin-left: auto;
+  color: var(--ha-primary, #6366f8);
+  font-weight: 700;
+  font-size: 12px;
+}

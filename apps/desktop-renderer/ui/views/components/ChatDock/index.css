@@ -162,23 +162,3 @@
 .ha-chat-send--stop {
   background: var(--ha-danger, #c0392b);
 }
-
-/* Titlebar toggle button */
-.ha-chat-toggle {
-  border: none;
-  background: transparent;
-  font-size: 14px;
-  cursor: pointer;
-  padding: 3px 7px;
-  border-radius: 6px;
-  line-height: 1;
-  margin-right: 4px;
-}
-
-.ha-chat-toggle:hover {
-  background: var(--ha-bg-hover, rgba(127, 127, 127, 0.15));
-}
-
-.ha-chat-toggle--active {
-  background: var(--ha-primary, #6366f8);
-}

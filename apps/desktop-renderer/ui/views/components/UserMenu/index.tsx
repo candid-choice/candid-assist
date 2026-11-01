@@ -10,7 +10,7 @@ user menu now.
 */
 
 import { useEffect, useRef } from "react";
-import { IconSettings, IconLogout, IconLogin } from "@tabler/icons-react";
+import { IconSettings, IconLogout, IconLogin, IconMessages } from "@tabler/icons-react";
 import "./index.css";
 
 import { useStore } from "../../store";
@@ -18,9 +18,14 @@ import { clearAuthStorage } from "../../services/auth/auth-storage";
 
 export interface UserMenuProps {
   onOpenSettings: () => void;
+  /** Toggle the direct-chat dock (only rendered when the desktop app
+   * provides the chat bridge). */
+  onToggleChat?: () => void;
+  chatAvailable?: boolean;
+  chatOpen?: boolean;
 }
 
-export function UserMenu({ onOpenSettings }: UserMenuProps) {
+export function UserMenu({ onOpenSettings, onToggleChat, chatAvailable, chatOpen }: UserMenuProps) {
   const authUser = useStore((s) => s.authUser);
   const authToken = useStore((s) => s.authToken);
   const openSignIn = useStore((s) => s.openSignIn);
@@ -90,6 +95,21 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
             <IconSettings size={14} />
             <span>Settings</span>
           </button>
+
+          {chatAvailable && onToggleChat && (
+            <button
+              className="ha-usermenu-item"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onToggleChat();
+              }}
+            >
+              <IconMessages size={14} />
+              <span>Chat</span>
+              {chatOpen && <span className="ha-usermenu-item-check">✓</span>}
+            </button>
+          )}
 
           {!signedIn && (
             <button
