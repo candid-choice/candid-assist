@@ -16,7 +16,43 @@ const BACKEND_URL = import.meta.env?.["VITE_BACKEND_URL"]
   ? import.meta.env.VITE_BACKEND_URL
   : 'http://localhost:3601';
 
-// ── Google Sign-In (backend-mediated OAuth) ─────────────────────────────
+// ── Google Sign-In ────────────────────────────────────────────────────────
+
+/**
+ * Real Firebase web config, supplied via NEXT_PUBLIC_FIREBASE_* env vars.
+ * When present, Google sign-in runs the native Firebase popup flow against
+ * the live project (provider enabled via `firebase deploy --only auth`).
+ */
+function firebaseClientConfig(): Record<string, string | undefined> | null {
+  const env: Record<string, string | undefined> =
+    ((import.meta as unknown as { env?: Record<string, string> }).env ?? {});
+  const apiKey = env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  const projectId = env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const authDomain = env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
+  if (!apiKey || !projectId || !authDomain) return null;
+  if (apiKey === 'AIzaSyC-candidate-test-key') return null; // old placeholder
+  return {
+    apiKey,
+    projectId,
+    authDomain,
+    storageBucket: env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  };
+}
+
+/** Firebase JS SDK popup flow — returns a live-project Firebase ID token. */
+async function signInWithGooglePopup(): Promise<string> {
+  const config = firebaseClientConfig();
+  if (!config) throw { code: 'NO_FIREBASE_CONFIG', message: 'No Firebase client config' } as AuthError;
+  const firebase = await import('firebase/app');
+  const authMod = await import('firebase/auth');
+  const app = firebase.getApps().length > 0 ? firebase.getApp() : firebase.initializeApp(config);
+  const auth = authMod.getAuth(app);
+  const provider = new authMod.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  const result = await authMod.signInWithPopup(auth, provider);
+  return await result.user.getIdToken();
+}
 
 /** Whether the backend has Google OAuth credentials configured. */
 export async function getGoogleStatus(): Promise<{ enabled: boolean }> {
@@ -36,12 +72,23 @@ export async function getGoogleStatus(): Promise<{ enabled: boolean }> {
  * `#ha_auth=<token>#ha_user=<json>` in the URL (see consumeGoogleAuthHash).
  */
 export async function signInWithGoogle(): Promise<string> {
+  // Path 1: real Firebase project configured → native popup, then verify
+  // the token with our backend for the app session (profile upsert).
+  if (firebaseClientConfig()) {
+    const idToken = await signInWithGooglePopup();
+    const { token, user } = await exchangeTokenForSession(idToken);
+    localStorage.setItem('ha_auth_token', token);
+    localStorage.setItem('ha_user', JSON.stringify(user));
+    return token;
+  }
+
+  // Path 2: backend-mediated Google OAuth (GOOGLE_CLIENT_ID/SECRET).
   const { enabled } = await getGoogleStatus();
   if (!enabled) {
     throw {
       code: 'GOOGLE_NOT_CONFIGURED',
       message:
-        'Google sign-in isn’t configured yet — add GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET to apps/backend/.env',
+        'Google sign-in isn’t configured yet — set NEXT_PUBLIC_FIREBASE_* (or GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) and restart',
     } as AuthError;
   }
   window.location.assign(`${BACKEND_URL}/auth/google/start`);
@@ -149,3 +196,12 @@ export const authService = {
     return user ? (JSON.parse(user) as AuthUser) : null;
   },
 };
+
+// Dev-only debugging hook for the Google popup chain (localhost only).
+if (typeof window !== 'undefined' && /localhost/.test(window.location.hostname)) {
+  (window as unknown as Record<string, unknown>).__haGoogleDebug = {
+    config: () => firebaseClientConfig(),
+    popup: () => signInWithGooglePopup(),
+    verify: (t: string) => exchangeTokenForSession(t),
+  };
+}

@@ -72,6 +72,25 @@ if (!app.requestSingleInstanceLock()) {
 
 // ── Window ─────────────────────────────────────────────────────────────
 
+// Allow popups whose host is the Firebase authDomain (Google sign-in flow).
+// Root .env may define FIREBASE_AUTH_DOMAIN; default matches candid-assist.
+for (const file of ['../../.env', '.env']) {
+  try {
+    process.loadEnvFile(file);
+  } catch {
+    /* optional */
+  }
+}
+function haAuthPopupAllowed(rawUrl: string): boolean {
+  try {
+    const host = new URL(rawUrl).hostname;
+    const authDomain = process.env.FIREBASE_AUTH_DOMAIN || 'candid-assist.firebaseapp.com';
+    return host === authDomain;
+  } catch {
+    return false;
+  }
+}
+
 function createWindow(): void {
   win = new BrowserWindow({
     width: 1280,
@@ -117,6 +136,9 @@ function createWindow(): void {
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {
+    // Allow the Firebase Auth popup (accounts flow starts on the project's
+    // authDomain) to open as a real window; Google sign-in needs it.
+    if (haAuthPopupAllowed(url)) return { action: 'allow' };
     void shell.openExternal(url);
     return { action: 'deny' };
   });

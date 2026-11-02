@@ -1,6 +1,16 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
+// Load environment: backend-local .env first (wins), then repo-root .env.
+// (Node >= 20.12 built-in; missing files are ignored.)
+for (const file of ['.env', '../../.env']) {
+  try {
+    process.loadEnvFile(file);
+  } catch {
+    /* optional */
+  }
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   // The desktop renderer (3616) and public site (3600) call this API

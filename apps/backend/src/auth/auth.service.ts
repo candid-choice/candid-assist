@@ -155,19 +155,41 @@ export class AuthService {
   }
 
   /**
-   * Verify a Firebase ID token and return user claims
+   * Verify a Firebase ID token and return user claims.
+   * Primary path: Admin SDK (emulator or real project). Fallback: Identity
+   * Toolkit accounts:lookup with FIREBASE_WEB_API_KEY — this lets the app
+   * accept real-project tokens (e.g. Google popup sign-ins) while the local
+   * Admin SDK is pointed at the auth emulator.
    */
   async verifyIdToken(idToken: string): Promise<admin.auth.DecodedIdToken> {
     const auth = this.firebaseService.getAuth();
-    if (!auth) {
-      throw new UnauthorizedException('Firebase Auth not available');
+    if (auth) {
+      try {
+        return await auth.verifyIdToken(idToken);
+      } catch {
+        /* fall through to Identity Toolkit lookup */
+      }
     }
-    try {
-      const decodedToken = await auth.verifyIdToken(idToken);
-      return decodedToken;
-    } catch (error) {
-      throw new UnauthorizedException('Invalid or expired Firebase ID token');
+
+    const webKey = process.env.FIREBASE_WEB_API_KEY;
+    if (webKey) {
+      const res = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${webKey}`,
+        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idToken }) },
+      );
+      const data: any = await res.json().catch(() => ({}));
+      const u = res.ok && Array.isArray(data?.users) ? data.users[0] : null;
+      if (u?.localId) {
+        return {
+          uid: u.localId,
+          email: u.email ?? undefined,
+          name: u.displayName ?? undefined,
+          picture: u.photoURL ?? undefined,
+        } as unknown as admin.auth.DecodedIdToken;
+      }
     }
+
+    throw new UnauthorizedException('Invalid or expired Firebase ID token');
   }
 
   /**

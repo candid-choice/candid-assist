@@ -19,3 +19,8 @@ auth-debug.log
 functions-debug.log
 hosting-debug.log
 extensions-debug.log
+
+# Scratch output (screenshots, logs)
+tmp/
+.ha-shots/
+.playwright-mcp/

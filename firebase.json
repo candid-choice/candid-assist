@@ -22,5 +22,14 @@
       "enabled": true,
       "port": 3607
     }
+  },
+  "auth": {
+    "providers": {
+      "emailPasswordSignIn": {},
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Human Assist",
+        "supportEmail": "support@candidchoice.ai"
+      }
+    }
   }
 }

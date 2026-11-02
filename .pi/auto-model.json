@@ -1,0 +1,98 @@
+{
+  "_readme": [
+    "Pi Auto Model routing for this workspace's two local servers. First matching rule wins;",
+    "rules are evaluated before scenarios, so scenarios are intentionally absent - a rule",
+    "catch-all already covers every request and dead config is worse than none.",
+    "",
+    "Target IDs match against provider/model OR the bare model id (candidate-resolver",
+    "matchesTarget), which is why the short forms below work. Validate with",
+    "/auto-model models, /auto-model rules and /auto-model doctor.",
+    "",
+    "Thresholds come from measuring this package's own analyzer (src/task/local-analyzer.ts),",
+    "not from guessing. Measured complexity for short prompts:",
+    "  explain what this reducer does .... 0.108 [explain]",
+    "  rename a variable ................. 0.111 [mixed]",
+    "  change a button label ............. 0.111 [code-edit]",
+    "  refactor the auth module .......... 0.117 [refactor]",
+    "  modal shows a stale closure ....... 0.120 [mixed]   <- invisible to complexity",
+    "  fix the typo in the README ........ 0.318 [debug]   <- looks like real debugging",
+    "  fix the race condition ............ 0.323 [debug]",
+    "  debug this error / root cause ..... 0.408 [debug]",
+    "  design + tradeoff + plan steps .... 0.618 [plan,architecture]",
+    "The analyzer is keyword driven (fix|bug|error|exception|stack trace -> debug) so score",
+    "alone ranks 'fix the typo' next to 'debug this error', and misses genuine hard work that",
+    "never says those words. Hence promptMatches rules first, score only as a backstop."
+  ],
+
+  "enabled": true,
+  "policy": "balanced",
+
+  "constraints": {
+    "modelInclude": [
+      "muse/meta/muse-glimmer",
+      "qwen38-next/nvidia/Qwen3.8-Flash-Next-FP4-Local"
+    ]
+  },
+
+  "pricing": {
+    "litellm": { "enabled": false }
+  },
+
+  "failover": { "maxAttempts": 3 },
+
+  "rules": [
+    {
+      "name": "trivial-edit-to-light",
+      "_why": "Before the debug rules: 'fix the typo' scores 0.318 and is tagged debug, which would otherwise escalate a one-word edit to the large model.",
+      "when": {
+        "promptMatches": "\\b(typo|typos|rename|reword|reformat|comment|label|wording|whitespace|formatting|copy text)\\b"
+      },
+      "then": { "only": ["muse/meta/muse-glimmer"] }
+    },
+    {
+      "name": "deep-work-to-heavy",
+      "_why": "The signals that actually predict hard work but are invisible to the keyword analyzer: concurrency, invariants, migrations, trust boundaries, nondeterminism.",
+      "when": {
+        "promptMatches": "race condition|dead ?lock|stale closure|concurren|async race|root cause|diagnose|invariant|state machine|schema|migrat|encrypt|token|session|offline queue|dedup|idempot|backpressure|flaky|intermittent|nondetermin|memory leak|dead code|architect|redesign|trade-?offs?|why (does|is|doesn't|doesn t)|not working|doesn't work"
+      },
+      "then": {
+        "only": ["qwen38-next/nvidia/Qwen3.8-Flash-Next-FP4-Local"],
+        "thinking": "high"
+      }
+    },
+    {
+      "name": "reasoning-kinds-to-heavy",
+      "_why": "Kinds the analyzer does detect reliably, when they imply reasoning rather than production of text.",
+      "when": {
+        "kinds": ["architecture", "plan", "review", "research", "debug"]
+      },
+      "then": {
+        "only": ["qwen38-next/nvidia/Qwen3.8-Flash-Next-FP4-Local"],
+        "thinking": "high"
+      }
+    },
+    {
+      "name": "high-complexity-to-heavy",
+      "_why": "Backstop only. Measured 'debug this error' reaches 0.408 and design+tradeoff 0.618, so 0.35 catches real debugging without promoting routine edits (all <= 0.12).",
+      "when": { "minComplexity": 0.35 },
+      "then": {
+        "only": ["qwen38-next/nvidia/Qwen3.8-Flash-Next-FP4-Local"],
+        "thinking": "high"
+      }
+    },
+    {
+      "name": "production-kinds-to-light",
+      "_why": "Drafting text, tests and scoped edits: the small model is adequate and much faster.",
+      "when": {
+        "kinds": ["code-edit", "generate", "refactor", "test", "explain", "ops"]
+      },
+      "then": { "only": ["muse/meta/muse-glimmer"] }
+    },
+    {
+      "name": "default-to-light",
+      "_why": "Catch-all: escalate on evidence, never by default. maxComplexity 1 always matches because the analyzer clamps to [0,1].",
+      "when": { "maxComplexity": 1 },
+      "then": { "only": ["muse/meta/muse-glimmer"] }
+    }
+  ]
+}
