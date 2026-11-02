@@ -30,6 +30,8 @@ export interface DesktopAPI {
     minimize: () => void;
     maximize: () => void;
     close: () => void;
+    /** Keep the native window background in sync with the app theme. */
+    setBackgroundColor: (color: string) => void;
   };
   view: {
     create: (id: string, url: string, bounds: ViewBounds) => void;
@@ -81,6 +83,7 @@ const api: DesktopAPI = {
     minimize: () => ipcRenderer.send('desktop:window:minimize'),
     maximize: () => ipcRenderer.send('desktop:window:maximize'),
     close: () => ipcRenderer.send('desktop:window:close'),
+    setBackgroundColor: (color) => ipcRenderer.send('desktop:window:set-background', color),
   },
   view: {
     create: (id, url, bounds) =>

@@ -56,9 +56,27 @@ function App() {
     if (authToken && signInOpen) closeSignIn();
   }, [authToken, signInOpen, closeSignIn]);
 
-  // Apply theme to <html data-theme> (CSS variables swap)
+  // Apply theme to <html data-theme> (CSS variables swap), and keep the
+  // native Electron window background matching --ha-bg so fast-resize
+  // reveals don't flash a mismatched band.
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
+    try {
+      const bg = getComputedStyle(document.documentElement).getPropertyValue("--ha-bg").trim();
+      const c = document.createElement("canvas");
+      c.width = c.height = 1;
+      const ctx = c.getContext("2d");
+      if (ctx && bg) {
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+        const hex = "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
+        (window as unknown as { desktop?: { window?: { setBackgroundColor?: (c: string) => void } } })
+          .desktop?.window?.setBackgroundColor?.(hex);
+      }
+    } catch {
+      /* background sync is cosmetic only */
+    }
   }, [theme]);
 
   // ── View state ────────────────────────────────────────────────────────

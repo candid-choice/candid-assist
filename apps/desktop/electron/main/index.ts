@@ -104,9 +104,10 @@ function createWindow(): void {
     titleBarStyle: 'hiddenInset',
     // Vertically center the ~14px traffic lights within the 40px title bar
     trafficLightPosition: { x: 16, y: 13 },
-    // Must match the renderer's --ha-bg (light) so fast-resize exposed areas
-    // blend in instead of flashing a mismatched band.
-    backgroundColor: '#ffffff',
+    // Dark by default (theme-sync IPC corrects it once the renderer boots);
+    // fast-resize reveals are painted with this color, so it must match the
+    // app background the user actually sees.
+    backgroundColor: '#17181c',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -401,6 +402,14 @@ ipcMain.handle('desktop:mcp:set-signed-in', (_event, payload: { signedIn?: unkno
     // persistence is best-effort; in-memory latch already updated
   }
   return { ok: true, signedIn };
+});
+
+// Keep the native window background in sync with the renderer theme, so
+// fast-resize reveals never flash a mismatched color band.
+ipcMain.on('desktop:window:set-background', (_event, color: unknown) => {
+  if (typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color)) {
+    win?.setBackgroundColor(color);
+  }
 });
 
 // ── App lifecycle ──────────────────────────────────────────────────────

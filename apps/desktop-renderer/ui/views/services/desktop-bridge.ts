@@ -20,6 +20,7 @@ export interface DesktopAPI {
     minimize: () => void;
     maximize: () => void;
     close: () => void;
+    setBackgroundColor?: (color: string) => void;
   };
   view: {
     create: (id: string, url: string, bounds: DesktopViewBounds) => void;
