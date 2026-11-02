@@ -124,7 +124,15 @@ function createWindow(): void {
     // used for the web app).
     const baseUrl = process.env.DESKTOP_UI_URL ?? 'http://localhost:3616';
     const sep = baseUrl.includes('?') ? '&' : '?';
-    void win.loadURL(`${baseUrl}${sep}wsPort=${WS_PORT}&mcpPort=${MCP_PORT}`);
+    let url = `${baseUrl}${sep}wsPort=${WS_PORT}&mcpPort=${MCP_PORT}`;
+    // Dev auto-login: same URL-param contract Playwright uses (localhost-only
+    // handling in the renderer). Never applied in packaged builds.
+    if (process.env.HA_DEV_AUTOLOGIN_EMAIL && process.env.HA_DEV_AUTOLOGIN_PASSWORD) {
+      url +=
+        `&ha_dev_email=${encodeURIComponent(process.env.HA_DEV_AUTOLOGIN_EMAIL)}` +
+        `&ha_dev_password=${encodeURIComponent(process.env.HA_DEV_AUTOLOGIN_PASSWORD)}`;
+    }
+    void win.loadURL(url);
 
   // Dev diagnostics: surface renderer lifecycle + console into the dev log.
   win.webContents.on('did-finish-load', () => {
@@ -134,7 +142,8 @@ function createWindow(): void {
     console.error(`[window] did-fail-load ${code} ${desc} ${url}`);
   });
   win.webContents.on('console-message', (_e, level, message) => {
-    if (level >= 2) console.log(`[renderer] ${message}`);
+    // Dev relay: all levels so auth breadcrumbs are visible in pnpm dev log.
+    if (level >= 0) console.log(`[renderer] ${message}`);
   });
   } else {
     // Packaged: the desktop-renderer Next export, copied into the app

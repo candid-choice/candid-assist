@@ -52,7 +52,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Check for existing token on mount
   useEffect(() => {
+    const unauthorizedFallback = async (
+      explicit?: { email: string; password: string } | null,
+    ) => {
+      authService.signOut();
+      const auto = await devAutoLogin(explicit ?? null);
+      if (auto) {
+        // eslint-disable-next-line no-console
+        console.log('[auth] dev auto-login succeeded');
+        setUser(auto.user);
+        storeLogin(auto.token, auto.user);
+        setStatus('authorized');
+        return;
+      }
+      storeLogout();
+      setStatus('unauthorized');
+    };
+
+    // Dev login via URL params (localhost only): ?ha_dev_email=..&ha_dev_password=..
+    // Electron appends these in dev from HA_DEV_AUTOLOGIN_* in the root .env.
+    const readDevLoginParams = (): { email: string; password: string } | null => {
+      if (typeof window === 'undefined' || !/localhost|127\.0\.0\.1/.test(window.location.hostname)) return null;
+      const params = new URLSearchParams(window.location.search);
+      const email = params.get('ha_dev_email');
+      const password = params.get('ha_dev_password');
+      if (!email || !password) return null;
+      params.delete('ha_dev_email');
+      params.delete('ha_dev_password');
+      const qs = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
+      return { email, password };
+    };
+
     const checkAuth = async () => {
+      // eslint-disable-next-line no-console
+      console.log('[auth] checkAuth start');
+      const devParams = readDevLoginParams();
+      if (devParams) {
+        const auto = await devAutoLogin(devParams);
+        if (auto) {
+          // eslint-disable-next-line no-console
+          console.log('[auth] URL dev auto-login succeeded');
+          setUser(auto.user);
+          storeLogin(auto.token, auto.user);
+          setStatus('authorized');
+          setIsLoading(false);
+          return;
+        }
+      }
       try {
         // One-time Google OAuth handoff: backend redirected us back with
         // #ha_auth=<token>&ha_user=<json> — adopt it as the session.
@@ -66,21 +113,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         const token = authService.getStoredToken();
+        // eslint-disable-next-line no-console
+        console.log('[auth] stored token present:', !!token);
         if (!token) {
           // Dev-only: Electron may supply emulator credentials (root .env
-          // HA_DEV_AUTOLOGIN_*) so inner app work skips the login screen.
-          const auto = await devAutoLogin();
-          if (auto) {
-            setUser(auto.user);
-            storeLogin(auto.token, auto.user);
-            setStatus('authorized');
-            setIsLoading(false);
-            return;
-          }
-          // No client-side credential: also drop any stale zustand-persisted
-          // auth (IndexedDB) so the splash can never be skipped.
-          storeLogout();
-          setStatus('unauthorized');
+          // HA_DEV_AUTOLOGIN_*) so inner app work skips the login screen;
+          // otherwise drop stale persisted auth so the splash can't be skipped.
+          await unauthorizedFallback();
           setIsLoading(false);
           return;
         }
@@ -98,15 +137,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           storeLogin(token, data.user as AuthUser);
           setStatus('authorized');
         } else {
-          // Invalid/expired token — clear and show sign-in
-          authService.signOut();
-          storeLogout();
-          setStatus('unauthorized');
+          // Invalid/expired token — fall back to dev auto-login, then sign-in
+          await unauthorizedFallback();
         }
       } catch {
-        authService.signOut();
-        storeLogout();
-        setStatus('unauthorized');
+        await unauthorizedFallback();
       } finally {
         setIsLoading(false);
       }

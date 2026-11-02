@@ -150,15 +150,24 @@ async function emailAuthViaBackend(
  * repo-root .env. Signs in against the backend (emulator), registering the
  * account if the emulator was restarted. Never available in packaged builds.
  */
-export async function devAutoLogin(): Promise<{ token: string; user: AuthUser } | null> {
-  const bridge = (
-    window as unknown as {
-      desktop?: { dev?: { getAutoLogin?: () => Promise<{ email: string; password: string } | null> } };
-    }
-  ).desktop;
-  const creds = await bridge?.dev?.getAutoLogin?.().catch(() => null);
-  if (!creds?.email || !creds?.password) return null;
-  const attempt = async (endpoint: 'login' | 'register'): Promise<{ token: string; user: AuthUser } | null> => {
+export async function devAutoLogin(
+  explicit?: { email: string; password: string } | null,
+): Promise<{ token: string; user: AuthUser } | null> {
+  let creds = explicit ?? null;
+  if (!creds?.email || !creds?.password) {
+    const bridge = (
+      window as unknown as {
+        desktop?: { dev?: { getAutoLogin?: () => Promise<{ email: string; password: string } | null> } };
+      }
+    ).desktop;
+    creds = (await bridge?.dev?.getAutoLogin?.().catch(() => null)) ?? null;
+  }
+  if (!creds?.email || !creds?.password) {
+    // eslint-disable-next-line no-console
+    console.log('[auth] dev auto-login: no credentials provided');
+    return null;
+  }
+  const attempt = async (endpoint: 'login' | 'register'): Promise<{ token: string; user: AuthUser } | 'network' | null> => {
     try {
       const token = await emailAuthViaBackend(endpoint, {
         email: creds.email,
@@ -167,11 +176,37 @@ export async function devAutoLogin(): Promise<{ token: string; user: AuthUser } 
       });
       const user = JSON.parse(localStorage.getItem('ha_user') ?? 'null') as AuthUser | null;
       return user ? { token, user } : null;
-    } catch {
+    } catch (err) {
+      const name = (err as { name?: string })?.name;
+      const code = (err as { code?: string })?.code;
+      // Backend not up yet: emailAuthViaBackend maps transport failures to
+      // AUTH_ERROR / 'Network request failed' — both are retryable. Real
+      // Firebase codes (EMAIL_EXISTS, INVALID_LOGIN_CREDENTIALS, ...) are final.
+      const retryable =
+        (name === 'TypeError' && !code) ||
+        code === 'AUTH_ERROR' ||
+        code === 'Network request failed.';
+      if (retryable) return 'network';
+      // eslint-disable-next-line no-console
+      console.log('[auth] dev auto-login attempt', endpoint, 'failed (final):', code ?? name ?? String(err));
       return null;
     }
   };
-  return (await attempt('login')) ?? (await attempt('register'));
+
+  // Electron boots the renderer before Nest finishes compiling; retry the
+  // login/register pair while the backend is unreachable (dev-only path).
+  for (let i = 0; i < 15; i++) {
+    const login = await attempt('login');
+    if (login !== 'network' && login !== null) return login;
+    const register = await attempt('register');
+    if (register !== 'network' && register !== null) return register;
+    if (login === 'network' || register === 'network') {
+      await new Promise((r) => setTimeout(r, 2000));
+      continue;
+    }
+    return null;
+  }
+  return null;
 }
 
 // ── Backend Auth ────────────────────────────────────────────────────────────
