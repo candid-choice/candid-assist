@@ -13,7 +13,7 @@ get no preload and a host-allowlist navigation policy.
 import { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, webContents as webContentsNS } from 'electron';
 
 import { checkForUpdates as checkAppUpdate, onUpdaterState } from '../../src/updater';
-import { setChatRuntimeFactory, setChatEventListener, sendChat, abortChat } from '../../src/chat-service';
+import { setChatRuntimeFactory, setChatEventListener, sendChat, abortChat, closeChat } from '../../src/chat-service';
 import { createPiChatRuntime, fetchChatModels, CHAT_DEFAULT_BASE_URL } from './chat-runtime';
 import { setUiControlHandlers, getMcpStatus, clearDomainGrants } from '../../src/mcp-server';
 import {
@@ -234,6 +234,12 @@ ipcMain.handle('desktop:chat:models', async (_event, payload: { baseUrl?: unknow
 });
 ipcMain.handle('desktop:chat:abort', (_event, payload: { sessionId?: unknown }) => {
   abortChat(String(payload?.sessionId ?? ''));
+  return { ok: true };
+});
+// Chat is session-owned: when the renderer deletes a session, dispose its
+// runtime (and on-disk history file binding) in the main process.
+ipcMain.handle('desktop:chat:close', (_event, payload: { sessionId?: unknown }) => {
+  closeChat(String(payload?.sessionId ?? ''));
   return { ok: true };
 });
 

@@ -65,6 +65,7 @@ export interface DesktopAPI {
       },
     ) => Promise<{ ok: boolean; error?: string }>;
     abort: (sessionId: string) => Promise<{ ok: boolean }>;
+    close?: (sessionId: string) => Promise<{ ok: boolean }>;
     listModels: (
       baseUrl?: string,
     ) => Promise<{ ok: boolean; baseUrl: string; models: string[]; error?: string }>;
@@ -104,6 +105,7 @@ const api: DesktopAPI = {
         api: opts?.api,
       }),
     abort: (sessionId) => ipcRenderer.invoke('desktop:chat:abort', { sessionId }),
+    close: (sessionId) => ipcRenderer.invoke('desktop:chat:close', { sessionId }),
     listModels: (baseUrl) => ipcRenderer.invoke('desktop:chat:models', { baseUrl }),
     onEvent: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: { sessionId: string; kind: string; text: string }) =>

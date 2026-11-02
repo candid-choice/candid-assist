@@ -184,8 +184,10 @@ interface AppState {
    *  Lets MCP agent actions record into a dedicated sidebar session. */
   agentSessions: Record<string, string>;
   setAgentSession: (agentKey: string, sessionId: string) => void;
-  /** Remove every session (and their bound views/agent maps). */
+  /** Remove every session (and their bound views/agent maps/chat). */
   deleteAllSessions: () => void;
+  /** Move a session's chat binding to another session id. */
+  migrateChatId: (fromSessionId: string, toSessionId: string) => void;
 
   // ── View manager ───────────────────────────────────────────────────────
   settings: AppSettings;
@@ -200,6 +202,8 @@ interface AppState {
 }
 
 export type { AppState };
+
+import { getDesktopBridge } from "../services/desktop-bridge";
 
 const defaultViews: SurfaceConfig<BrowserPayload>[] = [];
 
@@ -456,6 +460,10 @@ export const useStore = create<AppState>()(
           views: [],
           activeViewId: null,
           activeSurface: null,
+          // Chat is session-owned: a session wipe takes its chats with it.
+          chatIds: {},
+          chatBySession: {},
+          chatBusy: {},
         })),
 
       removeSession: (id: string) =>
@@ -481,6 +489,24 @@ export const useStore = create<AppState>()(
             s.activeSurface && removed.has(s.activeSurface.id)
               ? null
               : s.activeSurface;
+          // Chat belongs to the session: delete the conversation with it.
+          const chatIds = { ...s.chatIds };
+          const chatId = chatIds[id];
+          if (chatId) {
+            delete chatIds[id];
+            // Dispose the main-process runtime best-effort.
+            try {
+              void getDesktopBridge()?.chat?.close?.(chatId);
+            } catch {
+              // bridge absent (tests/standalone) — store cleanup suffices
+            }
+          }
+          const chatBySession = chatId
+            ? Object.fromEntries(Object.entries(s.chatBySession).filter(([k]) => k !== chatId))
+            : s.chatBySession;
+          const chatBusy = chatId
+            ? Object.fromEntries(Object.entries(s.chatBusy).filter(([k]) => k !== chatId))
+            : s.chatBusy;
           return {
             sessions: s.sessions.filter((sess) => sess.id !== id),
             agentSessions,
@@ -488,7 +514,21 @@ export const useStore = create<AppState>()(
             views,
             activeViewId,
             activeSurface,
+            chatIds,
+            chatBySession,
+            chatBusy,
           };
+        }),
+
+      /** Re-key a chat binding when an optimistic session id is replaced
+       *  by the backend doc id (add-session sync round-trip). */
+      migrateChatId: (fromSessionId: string, toSessionId: string) =>
+        set((st) => {
+          const chatId = st.chatIds[fromSessionId];
+          if (!chatId || fromSessionId === toSessionId) return {};
+          const chatIds = { ...st.chatIds, [toSessionId]: chatId };
+          delete chatIds[fromSessionId];
+          return { chatIds };
         }),
 
       setActiveSession: (id: string | null) => set({ activeSessionId: id }),

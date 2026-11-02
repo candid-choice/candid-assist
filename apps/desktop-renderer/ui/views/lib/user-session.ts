@@ -42,6 +42,9 @@ export function addUserSession(): string {
     try {
       const doc = await createSession(title, workspacePath);
       const s = useStore.getState();
+      // Keep the conversation: re-key any chat bound to the temp id
+      // BEFORE the temp session is removed (removal would delete its chat).
+      s.migrateChatId(tempId, doc.id);
       s.addSession(doc);
       s.removeSession(tempId);
       if (s.activeSessionId === tempId) s.setActiveSession(doc.id);

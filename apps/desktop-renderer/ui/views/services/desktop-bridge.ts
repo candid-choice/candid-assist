@@ -45,6 +45,7 @@ export interface DesktopAPI {
       },
     ) => Promise<{ ok: boolean; error?: string }>;
     abort: (sessionId: string) => Promise<{ ok: boolean }>;
+    close?: (sessionId: string) => Promise<{ ok: boolean }>;
     listModels?: (
       baseUrl?: string,
     ) => Promise<{ ok: boolean; baseUrl: string; models: string[]; error?: string }>;
