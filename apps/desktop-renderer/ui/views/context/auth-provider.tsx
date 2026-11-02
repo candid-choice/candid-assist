@@ -13,6 +13,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 
 import { useStore } from '../store';
 import { authService } from '../services/auth/auth-api';
+import { syncMcpSignedIn } from '../services/desktop-bridge';
 import type { AuthStatus, AuthUser } from '../services/auth/types';
 
 interface AuthContextValue {
@@ -37,6 +38,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('checking');
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const authToken = useStore((s) => s.authToken);
+  // Signed-out harness owns no user: keep the MCP server locked (zero
+  // agent tools) until somebody signs in.
+  useEffect(() => {
+    syncMcpSignedIn(Boolean(authToken));
+  }, [authToken]);
 
   const storeLogin = useStore((s) => s.login);
   const storeLogout = useStore((s) => s.logout);

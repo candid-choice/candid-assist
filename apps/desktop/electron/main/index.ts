@@ -15,7 +15,7 @@ import { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, webContent
 import { checkForUpdates as checkAppUpdate, onUpdaterState } from '../../src/updater';
 import { setChatRuntimeFactory, setChatEventListener, sendChat, abortChat, closeChat } from '../../src/chat-service';
 import { createPiChatRuntime, fetchChatModels, CHAT_DEFAULT_BASE_URL } from './chat-runtime';
-import { setUiControlHandlers, getMcpStatus, clearDomainGrants } from '../../src/mcp-server';
+import { setUiControlHandlers, getMcpStatus, clearDomainGrants, setMcpSignedIn } from '../../src/mcp-server';
 import {
   registerGuest,
   unregisterGuest,
@@ -23,6 +23,7 @@ import {
   type GuestHandle,
 } from '../../src/guest-registry';
 import path from 'node:path';
+import fs from 'node:fs';
 
 import { startMcpServer } from '../../src/mcp-server';
 import {
@@ -336,10 +337,39 @@ ipcMain.on('desktop:window:maximize', () => {
 });
 ipcMain.on('desktop:window:close', () => win?.close());
 
+// ── MCP signed-out lockdown ──────────────────────────────────────────────
+// The harness has no owner until a user signs in: agents must see zero
+// tools. The renderer reports auth changes; the last state is persisted
+// so a restart starts locked (or unlocked) exactly as the user left it.
+
+const AUTH_STATE_FILE = () => path.join(app.getPath('userData'), 'harness-auth.json');
+
+function loadPersistedSignedIn(): boolean {
+  try {
+    const raw = fs.readFileSync(AUTH_STATE_FILE(), 'utf8');
+    return Boolean(JSON.parse(raw)?.signedIn);
+  } catch {
+    return false; // first run or unreadable → locked
+  }
+}
+
+ipcMain.handle('desktop:mcp:set-signed-in', (_event, payload: { signedIn?: unknown }) => {
+  const signedIn = Boolean(payload?.signedIn);
+  setMcpSignedIn(signedIn);
+  try {
+    fs.writeFileSync(AUTH_STATE_FILE(), JSON.stringify({ signedIn, at: Date.now() }));
+  } catch {
+    // persistence is best-effort; in-memory latch already updated
+  }
+  return { ok: true, signedIn };
+});
+
 // ── App lifecycle ──────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
   createWindow();
+  // Lock MCP to the persisted auth state BEFORE any agent can connect.
+  setMcpSignedIn(loadPersistedSignedIn());
   // MCP (HTTP) + surface events (WS). Ports overridable so Electron and
   // the Electrobun desktop can run side by side during migration.
   startMcpServer(MCP_PORT, WS_PORT);

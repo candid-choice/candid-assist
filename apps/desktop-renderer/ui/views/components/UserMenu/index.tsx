@@ -50,7 +50,11 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
 
   const handleSignOut = () => {
     clearAuthStorage();
-    useStore.getState().logout();
+    // Sessions belong to the signed-in user — sign-out empties the
+    // workspace (MCP lockdown happens via the auth-provider sync).
+    const st = useStore.getState();
+    st.logout();
+    st.deleteAllSessions();
     setOpen(false);
   };
 

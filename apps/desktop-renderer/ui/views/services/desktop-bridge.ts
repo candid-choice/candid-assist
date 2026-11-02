@@ -54,6 +54,7 @@ export interface DesktopAPI {
   mcp?: {
     getStatus: () => Promise<McpStatusPayload>;
     onStatus: (callback: (status: McpStatusPayload) => void) => () => void;
+    setSignedIn?: (signedIn: boolean) => Promise<unknown>;
   };
   system?: {
     pickFolder: () => Promise<string | null>;
@@ -85,4 +86,15 @@ export function getDesktopBridge(): DesktopAPI | undefined {
   // a plain browser must never be able to observe MCP presence or
   // live surfaces. The desktop app is the only runtime that does.
   return api?.runtime === 'electron' ? api : undefined;
+}
+
+/** Tell the Electron main process whether a user is signed in, so the MCP
+ *  server can lock down agent tools while signed out (no owner → no tools).
+ *  No-op outside Electron / on older preload bridges. */
+export function syncMcpSignedIn(signedIn: boolean): void {
+  try {
+    void getDesktopBridge()?.mcp?.setSignedIn?.(signedIn);
+  } catch {
+    // bridge absent (tests/standalone browser) — nothing to sync
+  }
 }

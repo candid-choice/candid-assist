@@ -502,6 +502,17 @@ function handleOpenTerminalOutput(args: unknown): Record<string, unknown> {
 
 // ── Tool Router ───────────────────────────────────────────────────────────
 
+/** Signed-out lockdown state (driven by the renderer via IPC from main).
+ *  Defaults to true so unit tests and non-Electron callers keep working;
+ *  Electron main overrides this at startup from persisted auth state. */
+let mcpSignedIn = true;
+export function setMcpSignedIn(value: boolean): void {
+  mcpSignedIn = value;
+}
+export function isMcpSignedIn(): boolean {
+  return mcpSignedIn;
+}
+
 // MCP tools/list manifest (JSON Schema per tool).
 const TOOL_DEFINITIONS = [
   {
@@ -889,6 +900,31 @@ export async function processMcpMessage(
 
   if (method === "ping") {
     return { response: { jsonrpc: "2.0", result: {}, id } };
+  }
+
+  // ── Signed-out lockdown ──────────────────────────────────────────────
+  // Until a user signs in, the harness has no owner: agents get no tools
+  // and tool calls are refused (connections may stay open — the handshake
+  // and ping must keep working so clients don't mark the server broken).
+  if (!mcpSignedIn && (method === "tools/list" || method === "tools/call")) {
+    if (method === "tools/list") {
+      return { response: { jsonrpc: "2.0", result: { tools: [] }, id } };
+    }
+    return {
+      response: {
+        jsonrpc: "2.0",
+        result: {
+          content: [
+            {
+              type: "text",
+              text: "Signed out: the Human Assist user must sign in before agents can use tools. Ask the human to sign in from the desktop app.",
+            },
+          ],
+          isError: true,
+        },
+        id,
+      },
+    };
   }
 
   if (method === "tools/list") {

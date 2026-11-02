@@ -51,6 +51,7 @@ export interface DesktopAPI {
   mcp: {
     getStatus: () => Promise<McpStatusPayload>;
     onStatus: (callback: (status: McpStatusPayload) => void) => () => void;
+    setSignedIn: (signedIn: boolean) => Promise<{ ok: boolean; signedIn: boolean }>;
   };
   /** Direct chat with the in-process pi agent (Electron only). */
   chat: {
@@ -116,6 +117,7 @@ const api: DesktopAPI = {
   },
   mcp: {
     getStatus: () => ipcRenderer.invoke('desktop:mcp:status'),
+    setSignedIn: (signedIn: boolean) => ipcRenderer.invoke('desktop:mcp:set-signed-in', { signedIn }),
     onStatus: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, status: McpStatusPayload) =>
         callback(status);
