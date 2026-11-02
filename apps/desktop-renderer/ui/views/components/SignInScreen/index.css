@@ -10,6 +10,8 @@
   justify-content: center;
   padding: 24px;
   overflow: auto;
+  /* No WindowShell while signed out — the backdrop itself drags the window */
+  -webkit-app-region: drag;
   background:
     radial-gradient(1200px 600px at 20% -10%, rgba(99, 102, 248, 0.18), transparent 60%),
     radial-gradient(900px 500px at 90% 110%, rgba(99, 102, 248, 0.12), transparent 60%),
@@ -23,6 +25,8 @@
   flex-direction: column;
   gap: 14px;
   padding: 32px 28px;
+  /* Interactive card must stay clickable inside the draggable backdrop */
+  -webkit-app-region: no-drag;
   background: #1b1e26;
   border: 1px solid #2c313d;
   border-radius: 16px;
