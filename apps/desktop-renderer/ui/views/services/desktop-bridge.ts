@@ -57,6 +57,9 @@ export interface DesktopAPI {
     onStatus: (callback: (status: McpStatusPayload) => void) => () => void;
     setSignedIn?: (signedIn: boolean) => Promise<unknown>;
   };
+  dev?: {
+    getAutoLogin: () => Promise<{ email: string; password: string } | null>;
+  };
   system?: {
     pickFolder: () => Promise<string | null>;
     checkForUpdates: () => Promise<{ phase: string; version?: string; error?: string }>;

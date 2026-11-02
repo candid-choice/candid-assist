@@ -412,6 +412,15 @@ ipcMain.on('desktop:window:set-background', (_event, color: unknown) => {
   }
 });
 
+// Dev-only auto-login credentials for the emulator (root .env HA_DEV_AUTOLOGIN_*).
+// Strictly dev: packaged builds never expose these.
+ipcMain.handle('desktop:dev:auto-login', () => {
+  if (app.isPackaged) return null;
+  const email = process.env.HA_DEV_AUTOLOGIN_EMAIL;
+  const password = process.env.HA_DEV_AUTOLOGIN_PASSWORD;
+  return email && password ? { email, password } : null;
+});
+
 // ── App lifecycle ──────────────────────────────────────────────────────
 
 app.whenReady().then(() => {

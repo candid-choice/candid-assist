@@ -12,7 +12,7 @@ Usage:
 import { createContext, useContext, useEffect, useState } from 'react';
 
 import { useStore } from '../store';
-import { authService, consumeGoogleAuthHash } from '../services/auth/auth-api';
+import { authService, consumeGoogleAuthHash, devAutoLogin } from '../services/auth/auth-api';
 import { syncMcpSignedIn } from '../services/desktop-bridge';
 import type { AuthStatus, AuthUser } from '../services/auth/types';
 
@@ -67,6 +67,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const token = authService.getStoredToken();
         if (!token) {
+          // Dev-only: Electron may supply emulator credentials (root .env
+          // HA_DEV_AUTOLOGIN_*) so inner app work skips the login screen.
+          const auto = await devAutoLogin();
+          if (auto) {
+            setUser(auto.user);
+            storeLogin(auto.token, auto.user);
+            setStatus('authorized');
+            setIsLoading(false);
+            return;
+          }
           // No client-side credential: also drop any stale zustand-persisted
           // auth (IndexedDB) so the splash can never be skipped.
           storeLogout();

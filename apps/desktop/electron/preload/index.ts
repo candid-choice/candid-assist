@@ -43,6 +43,10 @@ export interface DesktopAPI {
     unregisterGuest: (surfaceId: string) => void;
   };
   /** OS integrations (workspace folder picker etc.). */
+  /** Dev-only helpers (main returns null in packaged builds). */
+  dev?: {
+    getAutoLogin: () => Promise<{ email: string; password: string } | null>;
+  };
   system: {
     pickFolder: () => Promise<string | null>;
     checkForUpdates: () => Promise<{ phase: string; version?: string; error?: string }>;
@@ -129,6 +133,9 @@ const api: DesktopAPI = {
         ipcRenderer.removeListener('desktop:mcp:status', listener);
       };
     },
+  },
+  dev: {
+    getAutoLogin: () => ipcRenderer.invoke('desktop:dev:auto-login'),
   },
   system: {
     pickFolder: () => ipcRenderer.invoke('desktop:workspace:pick'),

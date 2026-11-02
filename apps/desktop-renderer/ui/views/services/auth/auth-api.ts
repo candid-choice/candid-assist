@@ -144,6 +144,36 @@ async function emailAuthViaBackend(
   return token;
 }
 
+/**
+ * Dev-only auto-login (Electron): the main process exposes emulator
+ * credentials from HA_DEV_AUTOLOGIN_EMAIL / HA_DEV_AUTOLOGIN_PASSWORD in the
+ * repo-root .env. Signs in against the backend (emulator), registering the
+ * account if the emulator was restarted. Never available in packaged builds.
+ */
+export async function devAutoLogin(): Promise<{ token: string; user: AuthUser } | null> {
+  const bridge = (
+    window as unknown as {
+      desktop?: { dev?: { getAutoLogin?: () => Promise<{ email: string; password: string } | null> } };
+    }
+  ).desktop;
+  const creds = await bridge?.dev?.getAutoLogin?.().catch(() => null);
+  if (!creds?.email || !creds?.password) return null;
+  const attempt = async (endpoint: 'login' | 'register'): Promise<{ token: string; user: AuthUser } | null> => {
+    try {
+      const token = await emailAuthViaBackend(endpoint, {
+        email: creds.email,
+        password: creds.password,
+        ...(endpoint === 'register' ? { displayName: 'Dev User' } : {}),
+      });
+      const user = JSON.parse(localStorage.getItem('ha_user') ?? 'null') as AuthUser | null;
+      return user ? { token, user } : null;
+    } catch {
+      return null;
+    }
+  };
+  return (await attempt('login')) ?? (await attempt('register'));
+}
+
 // ── Backend Auth ────────────────────────────────────────────────────────────
 
 /**
