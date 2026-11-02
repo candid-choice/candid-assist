@@ -64,6 +64,96 @@ export class AuthService {
     return { token: data.idToken, user };
   }
 
+  // ── Google OAuth (backend-mediated authorization-code flow) ─────────────
+  //
+  // Configure GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (and optionally
+  // GOOGLE_REDIRECT_URI / GOOGLE_RENDERER_URL) in the backend environment.
+  // The Google ID token is federated into Firebase via
+  // accounts:signInWithIdp, so Google sign-ins end up as regular Firebase
+  // Auth users and share the exact same /auth/verify session shape as
+  // email sign-ins.
+
+  private googleRedirectUri(): string {
+    return (
+      process.env.GOOGLE_REDIRECT_URI ||
+      'http://localhost:3601/auth/google/callback'
+    );
+  }
+
+  googleAuthConfigured(): boolean {
+    return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  }
+
+  googleAuthorizeUrl(state: string): string {
+    const params = new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID || '',
+      redirect_uri: this.googleRedirectUri(),
+      response_type: 'code',
+      scope: 'openid email profile',
+      state,
+      access_type: 'online',
+      prompt: 'select_account',
+    });
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
+
+  /**
+   * Complete the OAuth flow: exchange the code for Google tokens, federate
+   * the ID token into Firebase Auth, and return the app session shape.
+   */
+  async googleAuth(code: string): Promise<{ token: string; user: UserProfile }> {
+    if (!this.googleAuthConfigured()) {
+      throw new UnauthorizedException(
+        'Google sign-in is not configured (set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)',
+      );
+    }
+
+    // 1. Code → tokens
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: process.env.GOOGLE_CLIENT_ID || '',
+        client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+        redirect_uri: this.googleRedirectUri(),
+        grant_type: 'authorization_code',
+      }).toString(),
+    });
+    const tokens: any = await tokenRes.json().catch(() => ({}));
+    if (!tokenRes.ok || !tokens?.id_token) {
+      throw new UnauthorizedException(
+        tokens?.error_description || 'Google token exchange failed',
+      );
+    }
+
+    // 2. Google ID token → Firebase Auth user (signInWithIdp)
+    const key = process.env.FIREBASE_WEB_API_KEY || 'local';
+    const idpRes = await fetch(
+      `${this.identityToolkitBase()}/accounts:signInWithIdp?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          requestUri: tokens.id_token,
+          returnIdpCredential: true,
+          oauthIdpClientId: process.env.GOOGLE_CLIENT_ID,
+        }),
+      },
+    );
+    const idpData: any = await idpRes.json().catch(() => ({}));
+    if (!idpRes.ok || !idpData?.idToken) {
+      throw new UnauthorizedException(
+        idpData?.error?.message || 'Google account could not be linked to Firebase',
+      );
+    }
+
+    // 3. Same session shape as email auth
+    const decoded = await this.verifyIdToken(idpData.idToken);
+    const user = await this.getOrCreateUser(decoded);
+    return { token: idpData.idToken, user };
+  }
+
   /**
    * Verify a Firebase ID token and return user claims
    */

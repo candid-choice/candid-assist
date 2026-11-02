@@ -78,6 +78,15 @@
   background: #f0f0f2;
 }
 
+.ha-google-icon {
+  flex: none;
+}
+
+.ha-btn--google:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .ha-btn-icon {
   display: inline-flex;
   align-items: center;
@@ -196,6 +205,23 @@
   color: rgba(203, 210, 221, 0.75);
   margin-top: 10px;
   text-align: center;
+}
+
+/* "or" divider */
+.ha-signin-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(203, 210, 221, 0.55);
+  font-size: 12px;
+}
+
+.ha-signin-divider::before,
+.ha-signin-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #2c313d;
 }
 
 /* Mode tabs */

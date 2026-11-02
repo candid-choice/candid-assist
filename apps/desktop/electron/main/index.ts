@@ -99,6 +99,17 @@ function createWindow(): void {
     const baseUrl = process.env.DESKTOP_UI_URL ?? 'http://localhost:3616';
     const sep = baseUrl.includes('?') ? '&' : '?';
     void win.loadURL(`${baseUrl}${sep}wsPort=${WS_PORT}&mcpPort=${MCP_PORT}`);
+
+  // Dev diagnostics: surface renderer lifecycle + console into the dev log.
+  win.webContents.on('did-finish-load', () => {
+    console.log(`[window] did-finish-load ${win?.webContents.getURL()}`);
+  });
+  win.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    console.error(`[window] did-fail-load ${code} ${desc} ${url}`);
+  });
+  win.webContents.on('console-message', (_e, level, message) => {
+    if (level >= 2) console.log(`[renderer] ${message}`);
+  });
   } else {
     // Packaged: the desktop-renderer Next export, copied into the app
     // as resources/renderer by electron-builder (configured in P6).

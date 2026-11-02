@@ -12,7 +12,7 @@ Usage:
 import { createContext, useContext, useEffect, useState } from 'react';
 
 import { useStore } from '../store';
-import { authService } from '../services/auth/auth-api';
+import { authService, consumeGoogleAuthHash } from '../services/auth/auth-api';
 import { syncMcpSignedIn } from '../services/desktop-bridge';
 import type { AuthStatus, AuthUser } from '../services/auth/types';
 
@@ -54,6 +54,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        // One-time Google OAuth handoff: backend redirected us back with
+        // #ha_auth=<token>&ha_user=<json> — adopt it as the session.
+        const googleHandoff = consumeGoogleAuthHash();
+        if (googleHandoff) {
+          setUser(googleHandoff.user);
+          storeLogin(googleHandoff.token, googleHandoff.user);
+          setStatus('authorized');
+          setIsLoading(false);
+          return;
+        }
+
         const token = authService.getStoredToken();
         if (!token) {
           // No client-side credential: also drop any stale zustand-persisted

@@ -15,7 +15,6 @@ import {
   SettingsScreen,
   TaskComposer,
   SignInScreen,
-  SplashScreen,
   ToastContainer,
   SessionHarnessBadge,
 } from "./components";
@@ -121,7 +120,7 @@ function App() {
   // Nothing in the workspace (sessions, surfaces, chat, MCP tools) exists
   // before a signed-in user: show the splash → sign-in/registration card.
   if (!authToken) {
-    return signInOpen ? <SignInScreen /> : <SplashScreen />;
+    return <SignInScreen />;
   }
 
   return (

@@ -16,29 +16,60 @@ const BACKEND_URL = import.meta.env?.["VITE_BACKEND_URL"]
   ? import.meta.env.VITE_BACKEND_URL
   : 'http://localhost:3601';
 
-// ── Google Sign-In ────────────────────────────────────────────────────────
+// ── Google Sign-In (backend-mediated OAuth) ─────────────────────────────
+
+/** Whether the backend has Google OAuth credentials configured. */
+export async function getGoogleStatus(): Promise<{ enabled: boolean }> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/auth/google/status`);
+    if (!res.ok) return { enabled: false };
+    const data = await res.json();
+    return { enabled: Boolean(data?.enabled) };
+  } catch {
+    return { enabled: false };
+  }
+}
 
 /**
- * Signs in with Google via Firebase Auth popup.
- * Returns the Firebase ID token.
+ * Starts the Google OAuth flow by navigating to the backend's /auth/google/start
+ * endpoint. On success the backend redirects back to this app with
+ * `#ha_auth=<token>#ha_user=<json>` in the URL (see consumeGoogleAuthHash).
  */
 export async function signInWithGoogle(): Promise<string> {
-  const firebase = await import('firebase/app');
-  const auth = await import('firebase/auth');
+  const { enabled } = await getGoogleStatus();
+  if (!enabled) {
+    throw {
+      code: 'GOOGLE_NOT_CONFIGURED',
+      message:
+        'Google sign-in isn’t configured yet — add GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET to apps/backend/.env',
+    } as AuthError;
+  }
+  window.location.assign(`${BACKEND_URL}/auth/google/start`);
+  // Page is navigating away; keep the caller's loading state until then.
+  return new Promise<string>(() => {});
+}
 
-  const app = firebase.initializeApp({
-    apiKey: 'AIzaSyC-candidate-test-key', // Test key — use env in production
-    projectId: 'human-assist-test',
-    authDomain: 'human-assist-test.firebaseapp.com',
-  });
-
-  const firebaseAuth = auth.getAuth(app);
-  const provider = new auth.GoogleAuthProvider();
-
-  const result = await auth.signInWithPopup(firebaseAuth, provider);
-  const token = await result.user.getIdToken();
-
-  return token;
+/**
+ * Reads the one-time auth handoff the Google callback leaves in the URL
+ * hash, persists it, and cleans the URL so a refresh doesn't re-read it.
+ */
+export function consumeGoogleAuthHash(): { token: string; user: AuthUser } | null {
+  if (typeof window === 'undefined' || !window.location.hash.startsWith('#ha_auth=')) {
+    return null;
+  }
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const token = params.get('ha_auth');
+  const userJson = params.get('ha_user');
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  if (!token || !userJson) return null;
+  try {
+    const user = JSON.parse(userJson) as AuthUser;
+    localStorage.setItem('ha_auth_token', token);
+    localStorage.setItem('ha_user', userJson);
+    return { token, user };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -94,11 +125,7 @@ export async function exchangeTokenForSession(firebaseToken: string): Promise<{
 
 export const authService = {
   async signInWithGoogle(): Promise<string> {
-    const token = await signInWithGoogle();
-    const { token: sessionToken, user } = await exchangeTokenForSession(token);
-    localStorage.setItem('ha_auth_token', sessionToken);
-    localStorage.setItem('ha_user', JSON.stringify(user));
-    return sessionToken;
+    return signInWithGoogle();
   },
 
   async signInWithEmail(email: string, password: string): Promise<string> {

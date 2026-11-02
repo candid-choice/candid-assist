@@ -52,10 +52,12 @@ beforeEach(() => {
 // ── SignInScreen ───────────────────────────────────────────────────────────
 
 describe('SignInScreen', () => {
-  it('renders Google sign-in and email toggle', () => {
+  it('renders Google sign-in and the email form together (splash is the login screen)', () => {
     render(<SignInScreen />);
     expect(screen.getByText('Sign in with Google')).toBeDefined();
-    expect(screen.getByText('Sign in with email')).toBeDefined();
+    expect(screen.getByPlaceholderText('you@example.com')).toBeDefined();
+    expect(screen.getByPlaceholderText('••••••••')).toBeDefined();
+    expect(screen.getByText('Human Assist')).toBeDefined();
   });
 
   it('Google button invokes signInWithGoogle', () => {
@@ -65,9 +67,8 @@ describe('SignInScreen', () => {
     expect(mockSignInWithGoogle).toHaveBeenCalled();
   });
 
-  it('email mode validates empty fields', async () => {
+  it('email sign-in validates empty fields', async () => {
     render(<SignInScreen />);
-    fireEvent.click(screen.getByText('Sign in with email'));
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
     await waitFor(() => {
@@ -76,11 +77,10 @@ describe('SignInScreen', () => {
     expect(mockSignInWithEmail).not.toHaveBeenCalled();
   });
 
-  it('email mode submits credentials', async () => {
+  it('email sign-in submits credentials', async () => {
     mockSignInWithEmail.mockResolvedValue(undefined);
     render(<SignInScreen />);
 
-    fireEvent.click(screen.getByText('Sign in with email'));
     fireEvent.change(screen.getByPlaceholderText('you@example.com'), {
       target: { value: 'jane@example.com' },
     });
@@ -95,6 +95,21 @@ describe('SignInScreen', () => {
         'secret123',
       );
     });
+  });
+
+  it('register mode also offers Google sign-up', () => {
+    useStore.setState({ signInMode: 'register' });
+    render(<SignInScreen />);
+    expect(screen.getByText('Sign up with Google')).toBeDefined();
+  });
+
+  it('renders the official four-color Google mark', () => {
+    render(<SignInScreen />);
+    const svg = document.querySelector('svg.ha-google-icon');
+    expect(svg).not.toBeNull();
+    const fills = [...(svg as Element).querySelectorAll('path[fill]')].map((p) => p.getAttribute('fill'));
+    expect(fills).toContain('#4285F4');
+    expect(fills).toContain('#EA4335');
   });
 
   it('has no dismiss affordance (auth is mandatory) and exposes mode tabs', () => {
