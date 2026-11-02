@@ -8,6 +8,22 @@
   "storage": {
     "rules": "storage.rules"
   },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "region": "us-central1",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ],
+      "predeploy": [
+        "pnpm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ],
   "emulators": {
     "auth": {
       "port": 3602
@@ -17,6 +33,9 @@
     },
     "storage": {
       "port": 3604
+    },
+    "functions": {
+      "port": 3620
     },
     "ui": {
       "enabled": true,
