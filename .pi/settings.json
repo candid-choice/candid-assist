@@ -4,15 +4,10 @@
   "_defaultModel_note": "Routes between muse/meta/muse-glimmer (light) and qwen38-next/nvidia/Qwen3.8-Flash-Next-FP4-Local (heavy) using pi-auto-model; rules live in .pi/auto-model.json. To pin one model instead, set defaultProvider/defaultModel to it, e.g. qwen38-next + nvidia/Qwen3.8-Flash-Next-FP4-Local, or pass --model for a single run.",
   "lastChangelogVersion": "1.2.0",
   "packages": [
-    "@anthropics/frontend-design",
-    "@anthropics/code-review",
-    "@anthropics/playwright",
-    "@anthropics/github",
-    "@anthropics/typescript-lsp",
     "npm:@0xkobold/pi-kobold",
     "npm:@0xkobold/pi-mcp",
     "npm:pi-playwright",
-    "npm:pi-auto-model"
+    "npm:@sentiolabs/pi-frontend-design"
   ],
   "permissions": {
     "deny": ["WebSearch"]

@@ -94,15 +94,19 @@ function haAuthPopupAllowed(rawUrl: string): boolean {
 function createWindow(): void {
   win = new BrowserWindow({
     width: 1280,
-    height: 800,
+    height: 840,
     // Never smaller than the auth screens (register card measures ~683px +
     // padding/error chip); measured via Playwright on 2026-11-02.
+    // NOTE: default height sits ABOVE minHeight on purpose — a window born
+    // at its own constraint rubber-bands and glitches on every drag.
     minWidth: 900,
     minHeight: 800,
     titleBarStyle: 'hiddenInset',
     // Vertically center the ~14px traffic lights within the 40px title bar
     trafficLightPosition: { x: 16, y: 13 },
-    backgroundColor: '#faf7f2',
+    // Must match the renderer's --ha-bg (light) so fast-resize exposed areas
+    // blend in instead of flashing a mismatched band.
+    backgroundColor: '#ffffff',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
