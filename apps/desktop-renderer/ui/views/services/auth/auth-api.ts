@@ -24,19 +24,18 @@ const BACKEND_URL = import.meta.env?.["VITE_BACKEND_URL"]
  * the live project (provider enabled via `firebase deploy --only auth`).
  */
 function firebaseClientConfig(): Record<string, string | undefined> | null {
-  const env: Record<string, string | undefined> =
-    ((import.meta as unknown as { env?: Record<string, string> }).env ?? {});
-  const apiKey = env.NEXT_PUBLIC_FIREBASE_API_KEY;
-  const projectId = env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-  const authDomain = env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
+  // Next.js inlines only literal process.env.NEXT_PUBLIC_* references.
+  const apiKey = typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_API_KEY : undefined;
+  const projectId = typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID : undefined;
+  const authDomain = typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN : undefined;
   if (!apiKey || !projectId || !authDomain) return null;
   if (apiKey === 'AIzaSyC-candidate-test-key') return null; // old placeholder
   return {
     apiKey,
     projectId,
     authDomain,
-    storageBucket: env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    storageBucket: typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET : undefined,
+    messagingSenderId: typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID : undefined,
   };
 }
 
