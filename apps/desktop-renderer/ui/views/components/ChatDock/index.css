@@ -5,7 +5,7 @@
   flex-direction: column;
   width: 320px;
   min-width: 240px;
-  max-width: 480px;
+  max-width: 560px;
   height: 100%;
   border-left: 1px solid var(--ha-border);
   background: var(--ha-surface);
@@ -161,4 +161,123 @@
 
 .ha-chat-send--stop {
   background: var(--ha-danger, #c0392b);
+}
+
+/* ── Left-edge resize handle (mirrors SidebarResizer) ─────────────── */
+.ha-chat-dock { position: relative; }
+.ha-chat-resizer {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ha-chat-resizer::after {
+  content: "";
+  width: 2px;
+  height: 28px;
+  border-radius: 2px;
+  background: var(--ha-border, #333a45);
+}
+.ha-chat-resizer:hover::after,
+.ha-chat-resizer--active::after {
+  background: var(--ha-primary, #6366f8);
+}
+.ha-chat-resize-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  cursor: col-resize;
+  background: transparent;
+}
+.ha-chat-dock-close {
+  border: none;
+  background: transparent;
+  color: var(--ha-text-secondary, #8891a0);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.ha-chat-dock-close:hover { color: var(--ha-text-primary, #e6e9ef); background: rgba(255,255,255,0.06); }
+
+.ha-chat-model-select {
+  max-width: 120px;
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid var(--ha-border);
+  border-radius: 5px;
+  background: var(--ha-surface);
+  color: var(--ha-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ha-chat-dock-spacer {
+  flex: 1;
+}
+
+/* Second row: endpoint model + protocol pickers */
+.ha-chat-model-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ha-border);
+}
+.ha-chat-model-bar .ha-chat-model-select {
+  flex: 1;
+  max-width: none;
+  min-width: 0;
+}
+.ha-chat-api-select {
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid var(--ha-border);
+  border-radius: 5px;
+  background: var(--ha-surface);
+  color: var(--ha-text-secondary);
+}
+
+/* Endpoint footer: pi agent core · model @ uri */
+.ha-chat-footer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-top: 1px solid var(--ha-border);
+  font-size: 10px;
+  color: var(--ha-text-secondary);
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.ha-chat-footer-core {
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+.ha-chat-footer-sep {
+  flex: 0 0 auto;
+  opacity: 0.6;
+}
+.ha-chat-footer-model {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ha-chat-footer-uri {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--ha-font-mono, monospace);
+  opacity: 0.8;
 }

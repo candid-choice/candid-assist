@@ -10,7 +10,8 @@ user menu now.
 */
 
 import { useEffect, useRef } from "react";
-import { IconSettings, IconLogout, IconLogin, IconMessages } from "@tabler/icons-react";
+import { IconSettings, IconLogout, IconLogin, IconTrash } from "@tabler/icons-react";
+import { deleteSession } from "../../services/sync/sync-service";
 import "./index.css";
 
 import { useStore } from "../../store";
@@ -18,18 +19,14 @@ import { clearAuthStorage } from "../../services/auth/auth-storage";
 
 export interface UserMenuProps {
   onOpenSettings: () => void;
-  /** Toggle the direct-chat dock (only rendered when the desktop app
-   * provides the chat bridge). */
-  onToggleChat?: () => void;
-  chatAvailable?: boolean;
-  chatOpen?: boolean;
 }
 
-export function UserMenu({ onOpenSettings, onToggleChat, chatAvailable, chatOpen }: UserMenuProps) {
+export function UserMenu({ onOpenSettings }: UserMenuProps) {
   const authUser = useStore((s) => s.authUser);
   const authToken = useStore((s) => s.authToken);
   const openSignIn = useStore((s) => s.openSignIn);
   const open = useStore((s) => s.userMenuOpen);
+  const sessionCount = useStore((s) => s.sessions.length);
   const setOpen = useStore((s) => s.setUserMenuOpen);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -96,20 +93,25 @@ export function UserMenu({ onOpenSettings, onToggleChat, chatAvailable, chatOpen
             <span>Settings</span>
           </button>
 
-          {chatAvailable && onToggleChat && (
+          {sessionCount > 0 && (
             <button
-              className="ha-usermenu-item"
+              className="ha-usermenu-item ha-usermenu-item--danger"
               role="menuitem"
               onClick={() => {
                 setOpen(false);
-                onToggleChat();
+                if (!window.confirm("Delete ALL sessions? This cannot be undone.")) return;
+                const st = useStore.getState();
+                for (const sess of st.sessions) {
+                  void deleteSession(sess.id).catch(() => {});
+                }
+                st.deleteAllSessions();
               }}
             >
-              <IconMessages size={14} />
-              <span>Chat</span>
-              {chatOpen && <span className="ha-usermenu-item-check">✓</span>}
+              <IconTrash size={14} />
+              <span>Clear all sessions</span>
             </button>
           )}
+
 
           {!signedIn && (
             <button

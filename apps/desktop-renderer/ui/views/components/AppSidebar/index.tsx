@@ -11,6 +11,7 @@ import { useCallback, useState } from "react";
 import { Sidebar, type SidebarSession } from "../Sidebar";
 import { SidebarContextMenu } from "../SidebarContextMenu";
 import { useStore } from "../../store";
+import { addUserSession } from "../../lib/user-session";
 import {
   updateSessionStatus,
   deleteSession,
@@ -121,18 +122,13 @@ export function AppSidebar({
     setMenu(null);
   }, []);
 
-  const handleClearAll = useCallback(() => {
-    for (const sess of useStore.getState().sessions) {
-      syncOr("delete", { sessionId: sess.id });
-    }
-    useStore.getState().deleteAllSessions();
-  }, []);
-
   return (
     <>
       <Sidebar
         open={open}
         width={width}
+        onBackgroundClick={() => useStore.getState().setActiveSession(null)}
+        onAddSession={() => addUserSession()}
         onToggle={onToggle ?? (() => {})}
         sessions={sessions.map((sess) =>
           toSidebarSession(
@@ -143,7 +139,6 @@ export function AppSidebar({
         onSessionClick={handleSessionClick}
         onItemDelete={(id) => handleDelete(id)}
         onItemContextMenu={(session, x, y) => setMenu({ session, x, y })}
-        onClearAll={handleClearAll}
         activeSessionId={activeSessionId}
       />
       {menu && (

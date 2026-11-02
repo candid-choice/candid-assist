@@ -10,7 +10,6 @@ import {
   ConnectionIndicator,
   AppSidebar,
   SidebarResizer,
-  AppDashboard,
   AppSessionDetail,
   UserMenu,
   SettingsScreen,
@@ -22,6 +21,7 @@ import {
 import { useStoreSelector, useStore } from "./store";
 import { deriveSessionTabs, reopenRecordedSurface, pickVisibleSurface } from "./lib/session-tabs";
 import { SessionEmptyGuide } from "./components/SessionEmptyGuide";
+import { isChatCapableSession } from "./lib/user-session";
 import { deriveTaskTitle, useCreateSession } from "./hooks/use-create-session";
 import { useHideNativeViews } from "./hooks/use-hide-native-views";
 import { ChatDock } from "./components/ChatDock";
@@ -38,8 +38,6 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const sidebarWidth = useStore((s) => s.sidebarWidth);
   const settingsOpen = useStoreSelector((s) => s.settingsOpen);
-  const chatOpen = useStoreSelector((s) => s.chatOpen);
-  const setChatOpen = useStoreSelector((s) => s.setChatOpen);
   const setSettingsOpen = useStoreSelector((s) => s.setSettingsOpen);
   const theme = useStoreSelector((s) => s.settings.theme);
   const composerOpen = useStoreSelector((s) => s.composerOpen);
@@ -66,7 +64,6 @@ function App() {
   // ── View state ────────────────────────────────────────────────────────
   const activeViewId = useStoreSelector((s) => s.activeViewId);
   const views = useStoreSelector((s) => s.views);
-  const setActiveView = useStoreSelector((s) => s.setActiveView);
   const closeView = useStoreSelector((s) => s.closeView);
 
   // ── Render ────────────────────────────────────────────────────────────
@@ -75,6 +72,9 @@ function App() {
       ? (s.sessions.find((x) => x.id === s.activeSessionId) ?? null)
       : null,
   );
+
+  // Chat for user-added sessions is PINNED: the dock renders whenever a
+  // chat-capable session is active (no collapse, no close).
 
   // Chrome tabs: surfaces belonging to the ACTIVE session — open views
   // plus recorded surfaces the session opened (click to re-open).
@@ -121,12 +121,7 @@ function App() {
       <WindowShell
         title="Human Assist"
         userStatus={
-          <UserMenu
-            onOpenSettings={() => setSettingsOpen(true)}
-            chatAvailable={!!getDesktopBridge()?.chat}
-            chatOpen={chatOpen}
-            onToggleChat={getDesktopBridge()?.chat ? () => setChatOpen(!chatOpen) : undefined}
-          />
+          <UserMenu onOpenSettings={() => setSettingsOpen(true)} />
         }
         footer={
           <span className="ha-footer-status">
@@ -167,28 +162,30 @@ function App() {
                 <SettingsScreen onBack={() => setSettingsOpen(false)} />
               ) : signInOpen ? (
                 <SignInScreen onDismiss={closeSignIn} />
+              ) : !activeSessionId ? (
+                <SessionEmptyGuide session={null} />
               ) : activeSession && sessionTabs.length === 0 ? (
                 <SessionEmptyGuide session={activeSession} />
-              ) : visibleSurface ? (
-                <SurfaceHost config={visibleSurface} isViewActive />
-              ) : activeSessionId ? (
-                <AppSessionDetail />
               ) : (
-                <AppDashboard active />
+                <>
+                  {sessionOpenViews.map((view) => (
+                    <SurfaceHost
+                      key={view.id}
+                      config={view}
+                      isViewActive={view.id === (visibleSurface?.id ?? activeViewId)}
+                    />
+                  ))}
+                  {sessionOpenViews.length === 0 && <AppSessionDetail />}
+                </>
               )}
-              {views.map((view) => (
-                <SurfaceHost
-                  key={view.id}
-                  config={view}
-                  isViewActive={view.id === activeViewId}
-                />
-              ))}
             </div>
           </div>
 
           {/* ── Direct chat (Electron only, togglable from the titlebar) ── */}
-          {getDesktopBridge()?.chat && chatOpen && (
-            <ChatDock sessionId={activeSession?.id ?? null} />
+          {getDesktopBridge()?.chat &&
+            activeSession &&
+            isChatCapableSession(activeSession) && (
+            <ChatDock sessionId={activeSession.id} />
           )}
         </div>
       </WindowShell>

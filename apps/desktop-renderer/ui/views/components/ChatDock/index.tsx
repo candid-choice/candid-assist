@@ -4,7 +4,8 @@
  * are kept per harness session in the persisted store.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import "./index.css";
 import { useStore, type ChatMessage } from "../../store";
 import { getDesktopBridge } from "../../services/desktop-bridge";
@@ -20,18 +21,63 @@ export interface ChatDockProps {
   sessionId: string | null;
 }
 
+/**
+ * Direct chat for user-owned sessions. The dock is PINNED while such a
+ * session is selected — chat is part of what a manual session is, so
+ * there is no collapse/close control.
+ */
 export function ChatDock({ sessionId }: ChatDockProps) {
   const bridge = getDesktopBridge();
   const chat = bridge?.chat;
+  // Chat owns its conversation id (independent of the harness session id)
+  // plus the endpoint/model it talks to.
+  const chatId = useStore((s) => (sessionId ? s.chatIds[sessionId] ?? null : null));
+  const chatModel = useStore((s) => s.chatModel);
+  const setChatModel = useStore((s) => s.setChatModel);
+  const chatModels = useStore((s) => s.chatModels);
+  const setChatModels = useStore((s) => s.setChatModels);
+  const chatBaseUrl = useStore((s) => s.chatBaseUrl);
   const messages = useStore((s) =>
-    (sessionId ? s.chatBySession[sessionId] : undefined) ?? NO_MESSAGES
+    (chatId ? s.chatBySession[chatId] : undefined) ?? NO_MESSAGES
   );
-  const busy = useStore((s) => (sessionId ? s.chatBusy[sessionId] === true : false));
+  const busy = useStore((s) => (chatId ? s.chatBusy[chatId] === true : false));
   const appendChatMessage = useStore((s) => s.appendChatMessage);
   const setChatBusy = useStore((s) => s.setChatBusy);
   const clearChat = useStore((s) => s.clearChat);
   const workspacePath = useStore((s) => s.settings.workspacePath);
+  const chatWidth = useStore((s) => s.chatWidth);
+  const setChatWidth = useStore((s) => s.setChatWidth);
   const [draft, setDraft] = useState("");
+
+  // One chat per session: mint its conversation id once and keep it.
+  useEffect(() => {
+    if (sessionId && !chatId) {
+      useStore.getState().newChatFor(sessionId);
+    }
+  }, [sessionId, chatId]);
+
+  // Discover which models the endpoint is currently serving.
+  const refreshModels = useCallback(() => {
+    if (!chat?.listModels) return;
+    void chat
+      .listModels(chatBaseUrl || undefined)
+      .then((res) => {
+        const models = res.models ?? [];
+        setChatModels(models);
+        // Always show/serve a concrete model: keep a still-served pick,
+        // otherwise default to the first model the endpoint is serving.
+        const st = useStore.getState();
+        if (models.length === 0) st.setChatModel(null);
+        else if (!st.chatModel || !models.includes(st.chatModel)) st.setChatModel(models[0]);
+      })
+      .catch(() => {
+        setChatModels([]);
+        useStore.getState().setChatModel(null);
+      });
+  }, [chat, chatBaseUrl, setChatModels]);
+  useEffect(() => {
+    refreshModels();
+  }, [refreshModels]);
   const listRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef<Map<string, string>>(new Map());
 
@@ -51,41 +97,112 @@ export function ChatDock({ sessionId }: ChatDockProps) {
   }, [messages]);
 
   const send = () => {
-    if (!chat || !sessionId) return;
+    if (!chat || !sessionId || !chatId) return;
     const text = draft.trim();
     if (!text || busy) return;
-    appendChatMessage(sessionId, {
+    appendChatMessage(chatId, {
       id: newId(),
       role: "user",
       text,
       ts: new Date().toISOString(),
     });
-    setChatBusy(sessionId, true);
+    setChatBusy(chatId, true);
     setDraft("");
-    void chat.send(sessionId, text, workspacePath || undefined);
+    void chat.send(chatId, text, {
+      cwd: workspacePath || undefined,
+      baseUrl: chatBaseUrl || undefined,
+      modelId: chatModel || undefined,
+    });
   };
 
   const stop = () => {
-    if (!chat || !sessionId) return;
-    chat.abort(sessionId);
-    setChatBusy(sessionId, false);
+    if (!chat || !chatId) return;
+    chat.abort(chatId);
+    setChatBusy(chatId, false);
   };
 
+  // ── Left-edge drag resize (mirrors SidebarResizer's frame lock) ─────
+  const [chatDragging, setChatDragging] = useState(false);
+  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const onChatResizeStart = useCallback((e: ReactMouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    resizeRef.current = {
+      startX: e.clientX,
+      startWidth: useStore.getState().chatWidth,
+    };
+    setChatDragging(true);
+  }, []);
+  useEffect(() => {
+    if (!chatDragging) return;
+    const onMove = (e: MouseEvent) => {
+      const d = resizeRef.current;
+      if (!d) return;
+      setChatWidth(d.startWidth + (d.startX - e.clientX)); // right column: drag left = wider
+    };
+    const onUp = () => {
+      resizeRef.current = null;
+      setChatDragging(false);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.body.classList.add("ha-resizing-sidebar");
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.classList.remove("ha-resizing-sidebar");
+    };
+  }, [chatDragging, setChatWidth]);
+
   return (
-    <div className="ha-chat-dock" role="complementary" aria-label="Chat">
+    <div
+      className="ha-chat-dock"
+      role="complementary"
+      aria-label="Chat"
+      style={{ width: chatWidth }}
+    >
+      {chatDragging && <div className="ha-chat-resize-overlay" data-testid="chat-resize-overlay" />}
+      <div
+        className={`ha-chat-resizer${chatDragging ? " ha-chat-resizer--active" : ""}`}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize chat"
+        title="Drag to resize · double-click to reset"
+        onMouseDown={onChatResizeStart}
+        onDoubleClick={() => setChatWidth(320)}
+      />
       <div className="ha-chat-dock-header">
-        <span className="ha-chat-dock-title">💬 Chat</span>
-        <span className="ha-chat-dock-sub">{sessionId ? "direct · in-app" : "no session"}</span>
+        <span className="ha-chat-dock-title">Chat</span>
+        <span className="ha-chat-dock-spacer" />
         <button
           type="button"
           className="ha-chat-dock-clear"
           title="Clear this chat"
-          onClick={() => sessionId && clearChat(sessionId)}
-          disabled={!sessionId || messages.length === 0}
+          onClick={() => chatId && clearChat(chatId)}
+          disabled={!chatId || messages.length === 0}
         >
           Clear
         </button>
       </div>
+
+      {chat && (
+        <div className="ha-chat-model-bar">
+          <select
+            className="ha-chat-model-select"
+            aria-label="Chat model"
+            title={chatBaseUrl}
+            value={chatModel ?? ""}
+            onChange={(e) => setChatModel(e.target.value || null)}
+          >
+            {chatModels.length === 0 && <option value="">no models</option>}
+            {chatModels.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="ha-chat-dock-list" ref={listRef}>
         {messages.length === 0 && (
@@ -136,6 +253,21 @@ export function ChatDock({ sessionId }: ChatDockProps) {
             ➤
           </button>
         )}
+      </div>
+
+      {/* What's actually answering: pi agent core → model @ endpoint */}
+      <div className="ha-chat-footer" role="note">
+        <span className="ha-chat-footer-core" title="Agentic backend: in-process pi agent core (createAgentSession)">
+          pi agent core
+        </span>
+        <span className="ha-chat-footer-sep">·</span>
+        <span className="ha-chat-footer-model" title={chatModel ?? undefined}>
+          {chatModel || (chatModels.length > 0 ? chatModels[0] : "no model")}
+        </span>
+        <span className="ha-chat-footer-sep">@</span>
+        <span className="ha-chat-footer-uri" title={chatBaseUrl}>
+          {chatBaseUrl}
+        </span>
       </div>
     </div>
   );

@@ -40,11 +40,17 @@ function firePresence(): void {
   }
 }
 
-/** Live initialized agents, with their bound harness identity (ctx). */
+/** Live initialized agents, with their bound harness identity (ctx).
+ * Deduped by bound agentSessionId — one agent may hold several sockets
+ * (e.g. pi-mcp transport + the extension's presence hello channel). */
 export function getLiveAgentInfos(): Array<{ client: string; agentSessionId: string | null }> {
   const out: Array<{ client: string; agentSessionId: string | null }> = [];
+  const seen = new Set<string>();
   for (const c of connections.values()) {
     if (c.initialized && c.socket.readyState === WebSocket.OPEN) {
+      const key = c.ctx?.agentSessionId ?? `conn:${c.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       out.push({
         client: c.ctx?.agentClient ?? "agent",
         agentSessionId: c.ctx?.agentSessionId ?? null,
@@ -94,6 +100,26 @@ export function startMcpWebSocketServer(opts: WsMcpStartOptions = {}): void {
         return;
       }
       const p = (parsed ?? {}) as Record<string, unknown>;
+      // Presence hello: lightweight identity announce from an agent that has
+      // not made an MCP call yet (pi extension at session_start). Counts the
+      // socket as an initialized agent so the sidebar row appears on connect.
+      if (p["type"] === "agent:hello") {
+        const sid = p["agentSessionId"];
+        if (typeof sid === "string" && sid.length > 0 && sid.length <= 200) {
+          ctx.agentSessionId = sid;
+          const ac = p["agentClient"];
+          ctx.agentClient = typeof ac === "string" && ac ? ac.slice(0, 60) : "pi";
+          if (!conn.initialized) {
+            conn.initialized = true;
+            firePresence();
+          }
+          console.log(`[mcp-ws] ${id}: hello bound agentSessionId=${sid}`);
+        }
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: "agent:hello:ack" }));
+        }
+        return;
+      }
       if (p["jsonrpc"] === "2.0" && p["method"] === "initialize") {
         conn.initialized = true;
         firePresence();
@@ -151,11 +177,15 @@ export function startMcpWebSocketServer(opts: WsMcpStartOptions = {}): void {
   // /status agent presence = live initialized WS connections.
   setWsAgentsProvider(() => getLiveAgentInfos());
   setWsPresenceProvider(() => {
-    let n = 0;
+    // Deduped agent count: multiple sockets sharing one bound harness id
+    // (transport + presence channel) count once.
+    const keys = new Set<string>();
     for (const c of connections.values()) {
-      if (c.initialized && c.isAlive && c.socket.readyState === WebSocket.OPEN) n++;
+      if (c.initialized && c.isAlive && c.socket.readyState === WebSocket.OPEN) {
+        keys.add(c.ctx?.agentSessionId ?? `conn:${c.id}`);
+      }
     }
-    return n;
+    return keys.size;
   });
 }
 

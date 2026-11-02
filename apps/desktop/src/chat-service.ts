@@ -18,7 +18,21 @@ export interface ChatRuntime {
   dispose(): void;
 }
 
-export type RuntimeFactory = (opts: { cwd?: string }) => Promise<ChatRuntime>;
+export type ChatApiMode = 'auto' | 'openai-completions' | 'anthropic-messages';
+
+export interface ChatRunOptions {
+  cwd?: string;
+  /** OpenAI-compatible endpoint base URL (predefined default). */
+  baseUrl?: string;
+  /** Model id the endpoint is currently serving. */
+  modelId?: string;
+  /** Wire protocol; 'auto' probes the endpoint. */
+  api?: ChatApiMode;
+}
+
+export type RuntimeFactory = (
+  opts: ChatRunOptions & { chatSessionId?: string },
+) => Promise<ChatRuntime>;
 
 type Listener = (chatSessionId: string, event: ChatEvent) => void;
 
@@ -67,7 +81,11 @@ export function isChatBusy(chatSessionId: string): boolean {
  * Concurrent sends for the SAME session are rejected (the UI shows a
  * busy state); different sessions run independently.
  */
-export async function sendChat(chatSessionId: string, text: string, cwd?: string): Promise<void> {
+export async function sendChat(
+  chatSessionId: string,
+  text: string,
+  optsOrCwd?: string | ChatRunOptions,
+): Promise<void> {
   if (!factory) {
     emit(chatSessionId, { kind: "error", text: "CHAT_001: chat runtime not configured" });
     return;
@@ -84,9 +102,16 @@ export async function sendChat(chatSessionId: string, text: string, cwd?: string
   const run: ActiveRun = { runtime: undefined, aborted: false };
   active.set(chatSessionId, run);
   try {
+    const opts: ChatRunOptions =
+      typeof optsOrCwd === 'string' ? { cwd: optsOrCwd } : (optsOrCwd ?? {});
     let runtime = runtimes.get(chatSessionId);
     if (!runtime) {
-      runtime = await factory({ cwd: cwd ?? defaultCwd });
+      runtime = await factory({
+        cwd: opts.cwd ?? defaultCwd,
+        baseUrl: opts.baseUrl,
+        modelId: opts.modelId,
+        chatSessionId,
+      });
       runtimes.set(chatSessionId, runtime);
     }
     run.runtime = runtime;

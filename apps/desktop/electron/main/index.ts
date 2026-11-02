@@ -14,7 +14,7 @@ import { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, webContent
 
 import { checkForUpdates as checkAppUpdate, onUpdaterState } from '../../src/updater';
 import { setChatRuntimeFactory, setChatEventListener, sendChat, abortChat } from '../../src/chat-service';
-import { createPiChatRuntime } from './chat-runtime';
+import { createPiChatRuntime, fetchChatModels, CHAT_DEFAULT_BASE_URL } from './chat-runtime';
 import { setUiControlHandlers, getMcpStatus, clearDomainGrants } from '../../src/mcp-server';
 import {
   registerGuest,
@@ -194,13 +194,43 @@ ipcMain.handle('desktop:mcp:status', (event) => {
 });
 
 // --- Direct chat (in-process pi agent; MCP stays untouched) -----------
-ipcMain.handle('desktop:chat:send', (_event, payload: { sessionId?: unknown; text?: unknown; cwd?: unknown }) => {
-  const sessionId = String(payload?.sessionId ?? '');
-  const text = String(payload?.text ?? '');
-  const cwd = typeof payload?.cwd === 'string' ? payload.cwd : undefined;
-  if (!sessionId || !text) return { ok: false, error: 'sessionId and text required' };
-  void sendChat(sessionId, text, cwd);
-  return { ok: true };
+ipcMain.handle(
+  'desktop:chat:send',
+  (
+    _event,
+    payload: {
+      sessionId?: unknown;
+      text?: unknown;
+      cwd?: unknown;
+      baseUrl?: unknown;
+      modelId?: unknown;
+      api?: unknown;
+    },
+  ) => {
+    const sessionId = String(payload?.sessionId ?? '');
+    const text = String(payload?.text ?? '');
+    if (!sessionId || !text) return { ok: false, error: 'sessionId and text required' };
+    void sendChat(sessionId, text, {
+      cwd: typeof payload?.cwd === 'string' ? payload.cwd : undefined,
+      baseUrl: typeof payload?.baseUrl === 'string' && payload.baseUrl ? payload.baseUrl : undefined,
+      modelId: typeof payload?.modelId === 'string' && payload.modelId ? payload.modelId : undefined,
+      api:
+        payload?.api === 'openai-completions' || payload?.api === 'anthropic-messages' || payload?.api === 'auto'
+          ? payload.api
+          : undefined,
+    });
+    return { ok: true };
+  },
+);
+// Models currently served by the chat endpoint (for the model picker).
+ipcMain.handle('desktop:chat:models', async (_event, payload: { baseUrl?: unknown }) => {
+  const baseUrl = typeof payload?.baseUrl === 'string' && payload.baseUrl ? payload.baseUrl : CHAT_DEFAULT_BASE_URL;
+  try {
+    const models = await fetchChatModels(baseUrl);
+    return { ok: true, baseUrl, models };
+  } catch (e) {
+    return { ok: false, baseUrl, models: [] as string[], error: (e as Error).message };
+  }
 });
 ipcMain.handle('desktop:chat:abort', (_event, payload: { sessionId?: unknown }) => {
   abortChat(String(payload?.sessionId ?? ''));
@@ -315,7 +345,9 @@ app.whenReady().then(() => {
   });
 });
 
-setChatRuntimeFactory(createPiChatRuntime);
+setChatRuntimeFactory((opts) =>
+  createPiChatRuntime({ ...opts, dataDir: app.getPath('userData') }),
+);
 setChatEventListener((sessionId, event) => {
   win?.webContents.send('desktop:chat:event', { sessionId, ...event });
 });

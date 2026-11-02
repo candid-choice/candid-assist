@@ -118,11 +118,30 @@ interface AppState {
   /** Direct-chat transcripts keyed by harness session id. */
   chatBySession: Record<string, ChatMessage[]>;
   chatOpen: boolean;
+  chatWidth: number;
+  /** Chat-owned session ids: user session → its current chat conversation id. */
+  chatIds: Record<string, string>;
+  /** Model selected for direct chat (null = endpoint default / first served). */
+  chatModel: string | null;
+  /** Model ids currently served by the chat endpoint. */
+  chatModels: string[];
+  /** Predefined OpenAI-compatible chat endpoint. */
+  chatBaseUrl: string;
+  /** Wire protocol for the chat endpoint (endpoint serves both). */
+  chatApi: 'auto' | 'openai-completions' | 'anthropic-messages';
   chatBusy: Record<string, boolean>;
   setChatOpen: (open: boolean) => void;
+  setChatWidth: (width: number) => void;
   appendChatMessage: (sessionId: string, msg: ChatMessage) => void;
   setChatBusy: (sessionId: string, busy: boolean) => void;
   clearChat: (sessionId: string) => void;
+  setChatId: (sessionId: string, chatId: string) => void;
+  /** Start a fresh conversation for a user session; returns the new chat id. */
+  newChatFor: (sessionId: string) => string;
+  setChatModel: (model: string | null) => void;
+  setChatModels: (models: string[]) => void;
+  setChatBaseUrl: (url: string) => void;
+  setChatApi: (api: 'auto' | 'openai-completions' | 'anthropic-messages') => void;
   /** Domains the human granted "always" for agent web access. */
   browserGrants: string[];
   addBrowserGrant: (domain: string) => void;
@@ -204,6 +223,12 @@ function persistableSlice(state: AppState) {
     browserGrants: state.browserGrants,
     chatBySession: state.chatBySession,
     chatOpen: state.chatOpen,
+    chatWidth: state.chatWidth,
+    chatIds: state.chatIds,
+    chatModel: state.chatModel,
+    chatModels: state.chatModels,
+    chatBaseUrl: state.chatBaseUrl,
+    chatApi: state.chatApi,
   };
 }
 
@@ -312,8 +337,27 @@ export const useStore = create<AppState>()(
 
       chatBySession: {},
       chatOpen: false,
+      chatWidth: 320,
+      chatIds: {},
+      chatModel: null,
+      chatModels: [],
+      chatBaseUrl: 'http://100.83.1.126:1234/v1',
+      chatApi: 'auto',
       chatBusy: {},
       setChatOpen: (open) => set({ chatOpen: open }),
+      setChatWidth: (width: number) =>
+        set({ chatWidth: Math.min(560, Math.max(240, Math.round(width))) }),
+      setChatId: (sessionId, chatId) =>
+        set((state) => ({ chatIds: { ...state.chatIds, [sessionId]: chatId } })),
+      newChatFor: (sessionId) => {
+        const id = `chat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+        set((state) => ({ chatIds: { ...state.chatIds, [sessionId]: id } }));
+        return id;
+      },
+      setChatModel: (model) => set({ chatModel: model }),
+      setChatModels: (models) => set({ chatModels: models }),
+      setChatBaseUrl: (url) => set({ chatBaseUrl: url.trim() }),
+      setChatApi: (api) => set({ chatApi: api }),
       appendChatMessage: (sessionId, msg) =>
         set((st) => ({
           chatBySession: {

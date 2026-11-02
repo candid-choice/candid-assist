@@ -39,6 +39,7 @@ export function ThreeSurface({ config }: ThreeSurfaceProps) {
 
     let cancelled = false;
     let renderer: import("three").WebGLRenderer | null = null;
+    let ro: ResizeObserver | undefined;
 
     (async () => {
       try {
@@ -63,6 +64,18 @@ export function ThreeSurface({ config }: ThreeSurfaceProps) {
         renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
         mount.innerHTML = "";
         mount.appendChild(renderer.domElement);
+
+        // Follow container resizes (sidebar drag, window resize, dock toggle) —
+        // otherwise the canvas keeps its initial size like a stuck browser pane.
+        ro = new ResizeObserver(() => {
+          if (!renderer || cancelled) return;
+          const w = mount.clientWidth || 640;
+          const h = mount.clientHeight || 420;
+          renderer.setSize(w, h);
+          camera.aspect = Math.max(1, w) / Math.max(1, h);
+          camera.updateProjectionMatrix();
+        });
+        ro.observe(mount);
 
         scene.add(new THREE.AmbientLight(0xffffff, 0.55));
         const key = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -125,6 +138,7 @@ export function ThreeSurface({ config }: ThreeSurfaceProps) {
 
     return () => {
       cancelled = true;
+      ro?.disconnect();
       renderer?.dispose();
     };
     // Rebuild scene whenever the agent pushes new payload.

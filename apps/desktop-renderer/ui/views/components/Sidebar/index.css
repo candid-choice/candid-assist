@@ -71,15 +71,24 @@
 
 /* ── Search ─────────────────────────────────────────────────────────── */
 
+.ha-sidebar-search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 8px;
+}
+
 .ha-sidebar-search {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
   padding: 6px 12px;
   background: var(--ha-surface);
   border: 1px solid var(--ha-border);
   border-radius: 6px;
-  margin: 0 8px;
+  margin: 0;
 }
 
 .ha-sidebar-search-icon {
@@ -273,4 +282,29 @@
 }
 .ha-sidebar-item--offline .ha-sidebar-item-title {
   font-style: italic;
+}
+
+/* ＋ add-session affordance at the right end of the search row */
+.ha-sidebar-search-add {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  align-self: stretch; /* match the search box height exactly */
+  min-height: 26px;
+  padding: 0;
+  border: 1px solid var(--ha-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ha-text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.ha-sidebar-search-add:hover {
+  color: #fff;
+  background: var(--ha-primary, #6366f8);
+  border-color: var(--ha-primary, #6366f8);
 }

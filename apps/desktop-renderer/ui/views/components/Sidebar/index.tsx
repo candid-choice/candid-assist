@@ -26,9 +26,12 @@ export interface SidebarProps {
   onToggle: () => void;
   sessions: SidebarSession[];
   onSessionClick: (id: string) => void;
+  /** Click on empty sidebar background → clear the session selection. */
+  onBackgroundClick?: () => void;
+  /** Create a user-owned (chat-capable) session. */
+  onAddSession?: () => void;
   onItemDelete?: (id: string) => void;
   onItemContextMenu?: (session: SidebarSession, x: number, y: number) => void;
-  onClearAll?: () => void;
   activeSessionId: string | null;
 }
 
@@ -64,9 +67,10 @@ function Sidebar({
   onToggle,
   sessions,
   onSessionClick,
+  onBackgroundClick,
+  onAddSession,
   onItemDelete,
   onItemContextMenu,
-  onClearAll,
   activeSessionId,
 }: SidebarProps) {
   const [search, setSearch] = useState("");
@@ -76,12 +80,19 @@ function Sidebar({
   );
 
   return (
-    <div className={`ha-sidebar ${open ? "open" : ""}`} style={{ width: open ? `${width}px` : "0px" }}>
+    <div
+      className={`ha-sidebar ${open ? "open" : ""}`}
+      style={{ width: open ? `${width}px` : "0px" }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onBackgroundClick?.();
+      }}
+    >
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="ha-sidebar-header">
       </div>
 
       {/* ── Search ─────────────────────────────────────────────── */}
+      <div className="ha-sidebar-search-row">
       <div className="ha-sidebar-search">
         <IconSearch size={14} className="ha-sidebar-search-icon" />
         <input
@@ -91,9 +102,26 @@ function Sidebar({
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
+      {onAddSession && (
+        <button
+          type="button"
+          className="ha-sidebar-search-add"
+          onClick={onAddSession}
+          title="Add a session you own (with direct chat)"
+          aria-label="Add session"
+        >
+          ＋
+        </button>
+      )}
+      </div>
 
       {/* ── Session List ───────────────────────────────────────── */}
-      <div className="ha-sidebar-list">
+      <div
+        className="ha-sidebar-list"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onBackgroundClick?.();
+        }}
+      >
         {filtered.length === 0 && (
           <div className="ha-sidebar-empty">
             <IconClock size={24} className="ha-sidebar-empty-icon" />
@@ -136,17 +164,6 @@ function Sidebar({
             )}
           </div>
         ))}
-        {onClearAll && sessions.length > 0 && (
-          <button
-            type="button"
-            className="ha-sidebar-clear-all"
-            onClick={() => {
-              if (window.confirm("Delete ALL sessions? This cannot be undone.")) onClearAll();
-            }}
-          >
-            Clear all sessions
-          </button>
-        )}
       </div>
 
     </div>
