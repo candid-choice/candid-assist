@@ -55,7 +55,7 @@ describe('ChatDock (chat owns its session id, model, endpoint)', () => {
       settings: { ...useStore.getState().settings, workspacePath: '/repo' },
     });
     render(<ChatDock sessionId="s1" />);
-    // chat owns its id: one is minted for the session
+    // chat owns its id: one is minted for the session (ONE chat per session)
     await waitFor(() => expect(useStore.getState().chatIds.s1).toMatch(/^chat-/));
     const chatId = useStore.getState().chatIds.s1;
     expect(chatId).not.toBe('s1');
@@ -94,20 +94,6 @@ describe('ChatDock (chat owns its session id, model, endpoint)', () => {
     });
   });
 
-  it('“＋ New chat” rotates the chat id and keeps old history', async () => {
-    installChat();
-    useStore.setState({
-      chatIds: { s5: 'chat-old' },
-      chatBySession: { 'chat-old': [{ id: 'm1', role: 'user', text: 'keep me', ts: 't' }] },
-    });
-    render(<ChatDock sessionId="s5" />);
-    await waitFor(() => expect(screen.getByText('keep me')).toBeTruthy());
-    fireEvent.click(screen.getByLabelText('New chat'));
-    await waitFor(() => expect(useStore.getState().chatIds.s5).not.toBe('chat-old'));
-    // old transcript still stored under the old chat id
-    expect(useStore.getState().chatBySession['chat-old']).toHaveLength(1);
-  });
-
   it('streams deltas under the chat id into one assistant bubble', async () => {
     const chat = installChat();
     useStore.setState({ chatIds: { s2: 'chat-2' } });
@@ -133,6 +119,21 @@ describe('ChatDock (chat owns its session id, model, endpoint)', () => {
     render(<ChatDock sessionId="s3" />);
     fireEvent.click(screen.getByText('■'));
     expect(chat.abort).toHaveBeenCalledWith('chat-3');
+  });
+
+  it('footer shows pi agent core · model @ endpoint uri', async () => {
+    installChat(['qwen/qwen3.8-27b']);
+    render(<ChatDock sessionId="s-f" />);
+    await waitFor(() =>
+      expect(screen.getByText('http://100.83.1.126:1234/v1')).toBeTruthy(),
+    );
+    expect(screen.getByText('pi agent core')).toBeTruthy();
+    // no explicit pick → footer shows the endpoint's current default
+    await waitFor(() =>
+      expect(
+        document.querySelector('.ha-chat-footer-model')?.textContent,
+      ).toBe('qwen/qwen3.8-27b'),
+    );
   });
 
   it('without a session, composer is disabled', () => {

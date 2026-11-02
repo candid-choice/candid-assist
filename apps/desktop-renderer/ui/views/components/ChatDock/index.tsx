@@ -32,7 +32,6 @@ export function ChatDock({ sessionId }: ChatDockProps) {
   // Chat owns its conversation id (independent of the harness session id)
   // plus the endpoint/model it talks to.
   const chatId = useStore((s) => (sessionId ? s.chatIds[sessionId] ?? null : null));
-  const newChatFor = useStore((s) => s.newChatFor);
   const chatModel = useStore((s) => s.chatModel);
   const setChatModel = useStore((s) => s.setChatModel);
   const chatModels = useStore((s) => s.chatModels);
@@ -52,10 +51,12 @@ export function ChatDock({ sessionId }: ChatDockProps) {
   const setChatWidth = useStore((s) => s.setChatWidth);
   const [draft, setDraft] = useState("");
 
-  // Ensure this user session has a chat conversation id of its own.
+  // One chat per session: mint its conversation id once and keep it.
   useEffect(() => {
-    if (sessionId && !chatId) newChatFor(sessionId);
-  }, [sessionId, chatId, newChatFor]);
+    if (sessionId && !chatId) {
+      useStore.getState().newChatFor(sessionId);
+    }
+  }, [sessionId, chatId]);
 
   // Discover which models the endpoint is currently serving.
   const refreshModels = useCallback(() => {
@@ -168,16 +169,6 @@ export function ChatDock({ sessionId }: ChatDockProps) {
         <button
           type="button"
           className="ha-chat-dock-clear"
-          title="Start a new chat (keeps this one’s history)"
-          aria-label="New chat"
-          onClick={() => sessionId && newChatFor(sessionId)}
-          disabled={!sessionId}
-        >
-          ＋ New
-        </button>
-        <button
-          type="button"
-          className="ha-chat-dock-clear"
           title="Clear this chat"
           onClick={() => chatId && clearChat(chatId)}
           disabled={!chatId || messages.length === 0}
@@ -276,6 +267,21 @@ export function ChatDock({ sessionId }: ChatDockProps) {
             ➤
           </button>
         )}
+      </div>
+
+      {/* What's actually answering: pi agent core → model @ endpoint */}
+      <div className="ha-chat-footer" role="note">
+        <span className="ha-chat-footer-core" title="Agentic backend: in-process pi agent core (createAgentSession)">
+          pi agent core
+        </span>
+        <span className="ha-chat-footer-sep">·</span>
+        <span className="ha-chat-footer-model" title={chatModel ?? undefined}>
+          {chatModel || (chatModels.length > 0 ? chatModels[0] : "no model")}
+        </span>
+        <span className="ha-chat-footer-sep">@</span>
+        <span className="ha-chat-footer-uri" title={chatBaseUrl}>
+          {chatBaseUrl}
+        </span>
       </div>
     </div>
   );

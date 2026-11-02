@@ -245,3 +245,39 @@
   background: var(--ha-surface);
   color: var(--ha-text-secondary);
 }
+
+/* Endpoint footer: pi agent core · model @ uri */
+.ha-chat-footer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-top: 1px solid var(--ha-border);
+  font-size: 10px;
+  color: var(--ha-text-secondary);
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.ha-chat-footer-core {
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+.ha-chat-footer-sep {
+  flex: 0 0 auto;
+  opacity: 0.6;
+}
+.ha-chat-footer-model {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ha-chat-footer-uri {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--ha-font-mono, monospace);
+  opacity: 0.8;
+}

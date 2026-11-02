@@ -32,7 +32,6 @@ export interface SidebarProps {
   onAddSession?: () => void;
   onItemDelete?: (id: string) => void;
   onItemContextMenu?: (session: SidebarSession, x: number, y: number) => void;
-  onClearAll?: () => void;
   activeSessionId: string | null;
 }
 
@@ -72,7 +71,6 @@ function Sidebar({
   onAddSession,
   onItemDelete,
   onItemContextMenu,
-  onClearAll,
   activeSessionId,
 }: SidebarProps) {
   const [search, setSearch] = useState("");
@@ -166,17 +164,6 @@ function Sidebar({
             )}
           </div>
         ))}
-        {onClearAll && sessions.length > 0 && (
-          <button
-            type="button"
-            className="ha-sidebar-clear-all"
-            onClick={() => {
-              if (window.confirm("Delete ALL sessions? This cannot be undone.")) onClearAll();
-            }}
-          >
-            Clear all sessions
-          </button>
-        )}
       </div>
 
     </div>

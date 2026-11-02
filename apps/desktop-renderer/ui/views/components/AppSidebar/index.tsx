@@ -122,13 +122,6 @@ export function AppSidebar({
     setMenu(null);
   }, []);
 
-  const handleClearAll = useCallback(() => {
-    for (const sess of useStore.getState().sessions) {
-      syncOr("delete", { sessionId: sess.id });
-    }
-    useStore.getState().deleteAllSessions();
-  }, []);
-
   return (
     <>
       <Sidebar
@@ -146,7 +139,6 @@ export function AppSidebar({
         onSessionClick={handleSessionClick}
         onItemDelete={(id) => handleDelete(id)}
         onItemContextMenu={(session, x, y) => setMenu({ session, x, y })}
-        onClearAll={handleClearAll}
         activeSessionId={activeSessionId}
       />
       {menu && (
