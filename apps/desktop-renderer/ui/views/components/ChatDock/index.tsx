@@ -37,8 +37,6 @@ export function ChatDock({ sessionId }: ChatDockProps) {
   const chatModels = useStore((s) => s.chatModels);
   const setChatModels = useStore((s) => s.setChatModels);
   const chatBaseUrl = useStore((s) => s.chatBaseUrl);
-  const chatApi = useStore((s) => s.chatApi);
-  const setChatApi = useStore((s) => s.setChatApi);
   const messages = useStore((s) =>
     (chatId ? s.chatBySession[chatId] : undefined) ?? NO_MESSAGES
   );
@@ -103,7 +101,6 @@ export function ChatDock({ sessionId }: ChatDockProps) {
       cwd: workspacePath || undefined,
       baseUrl: chatBaseUrl || undefined,
       modelId: chatModel || undefined,
-      api: chatApi,
     });
   };
 
@@ -195,26 +192,6 @@ export function ChatDock({ sessionId }: ChatDockProps) {
               </option>
             ))}
           </select>
-          <select
-            className="ha-chat-api-select"
-            aria-label="Chat API"
-            title="Endpoint wire protocol"
-            value={chatApi}
-            onChange={(e) => setChatApi(e.target.value as "auto" | "openai-completions" | "anthropic-messages")}
-          >
-            <option value="auto">auto</option>
-            <option value="openai-completions">openai</option>
-            <option value="anthropic-messages">anthropic</option>
-          </select>
-          <button
-            type="button"
-            className="ha-chat-dock-clear"
-            title="Refresh model list"
-            aria-label="Refresh model list"
-            onClick={refreshModels}
-          >
-            ⟳
-          </button>
         </div>
       )}
 

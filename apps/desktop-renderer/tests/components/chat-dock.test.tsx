@@ -70,7 +70,6 @@ describe('ChatDock (chat owns its session id, model, endpoint)', () => {
         cwd: '/repo',
         baseUrl: 'http://100.83.1.126:1234/v1',
         modelId: undefined,
-        api: 'auto',
       }),
     );
   });
