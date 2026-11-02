@@ -56,6 +56,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const token = authService.getStoredToken();
         if (!token) {
+          // No client-side credential: also drop any stale zustand-persisted
+          // auth (IndexedDB) so the splash can never be skipped.
+          storeLogout();
           setStatus('unauthorized');
           setIsLoading(false);
           return;

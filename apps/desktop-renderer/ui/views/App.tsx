@@ -117,6 +117,13 @@ function App() {
     [closeHelpPalette],
   );
 
+  // ── Auth gate ──────────────────────────────────────────────────────────
+  // Nothing in the workspace (sessions, surfaces, chat, MCP tools) exists
+  // before a signed-in user: show the splash → sign-in/registration card.
+  if (!authToken) {
+    return signInOpen ? <SignInScreen /> : <SplashScreen />;
+  }
+
   return (
     <div className="human-assist-app h-full w-full">
       <WindowShell
