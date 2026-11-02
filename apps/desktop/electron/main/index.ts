@@ -95,8 +95,10 @@ function createWindow(): void {
   win = new BrowserWindow({
     width: 1280,
     height: 800,
-    minWidth: 720,
-    minHeight: 480,
+    // Never smaller than the auth screens (register card measures ~683px +
+    // padding/error chip); measured via Playwright on 2026-11-02.
+    minWidth: 900,
+    minHeight: 800,
     titleBarStyle: 'hiddenInset',
     // Vertically center the ~14px traffic lights within the 40px title bar
     trafficLightPosition: { x: 16, y: 13 },
