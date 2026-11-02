@@ -14,6 +14,57 @@ export class AuthService {
   constructor(private readonly firebaseService: FirebaseService) {}
 
   /**
+   * Email/password sign-up & sign-in via the Firebase Identity Toolkit
+   * REST API. Against the local emulator (dev) no web API key is needed;
+   * production requires FIREBASE_WEB_API_KEY.
+   */
+  private identityToolkitBase(): string {
+    const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    if (emulatorHost) {
+      return `http://${emulatorHost}/identitytoolkit.googleapis.com/v1`;
+    }
+    if (process.env.FIREBASE_WEB_API_KEY) {
+      return 'https://identitytoolkit.googleapis.com/v1';
+    }
+    throw new UnauthorizedException(
+      'Email auth is unavailable: start the Firebase emulator or set FIREBASE_WEB_API_KEY',
+    );
+  }
+
+  async emailAuth(
+    mode: 'register' | 'login',
+    email: string,
+    password: string,
+    displayName?: string,
+  ): Promise<{ token: string; user: UserProfile }> {
+    const endpoint =
+      mode === 'register' ? 'accounts:signUp' : 'accounts:signInWithPassword';
+    const key = process.env.FIREBASE_WEB_API_KEY || 'local';
+    const body: Record<string, unknown> = { email, password, returnSecureToken: true };
+    if (mode === 'register' && displayName) body.displayName = displayName;
+
+    const res = await fetch(`${this.identityToolkitBase()}/${endpoint}?key=${key}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data: any = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.idToken) {
+      const msg =
+        data?.error?.message === 'EMAIL_EXISTS'
+          ? 'An account with this email already exists'
+          : data?.error?.message === 'INVALID_PASSWORD' || data?.error?.message === 'USER_NOT_FOUND'
+            ? 'Invalid email or password'
+            : data?.error?.message || 'Authentication failed';
+      throw new UnauthorizedException(msg);
+    }
+
+    const decoded = await this.verifyIdToken(data.idToken);
+    const user = await this.getOrCreateUser(decoded);
+    return { token: data.idToken, user };
+  }
+
+  /**
    * Verify a Firebase ID token and return user claims
    */
   async verifyIdToken(idToken: string): Promise<admin.auth.DecodedIdToken> {

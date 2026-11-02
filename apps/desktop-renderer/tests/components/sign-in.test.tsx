@@ -11,12 +11,14 @@ import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/re
 
 const mockSignInWithGoogle = vi.fn();
 const mockSignInWithEmail = vi.fn();
+const mockRegisterWithEmail = vi.fn();
 const mockAuth = {
   status: 'unauthorized' as const,
   user: null,
   isLoading: false,
   signInWithGoogle: mockSignInWithGoogle,
   signInWithEmail: mockSignInWithEmail,
+  registerWithEmail: mockRegisterWithEmail,
   signOut: vi.fn(),
 };
 
@@ -36,6 +38,7 @@ beforeEach(() => {
     authUser: null,
     authToken: null,
     signInOpen: false,
+    signInMode: 'signin' as const,
     userMenuOpen: false,
     settings: {
       theme: 'light',
@@ -65,7 +68,7 @@ describe('SignInScreen', () => {
   it('email mode validates empty fields', async () => {
     render(<SignInScreen />);
     fireEvent.click(screen.getByText('Sign in with email'));
-    fireEvent.click(screen.getByText('Sign in'));
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
     await waitFor(() => {
       expect(screen.getByText('Please enter email and password')).toBeDefined();
@@ -84,7 +87,7 @@ describe('SignInScreen', () => {
     fireEvent.change(screen.getByPlaceholderText('••••••••'), {
       target: { value: 'secret123' },
     });
-    fireEvent.click(screen.getByText('Sign in'));
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
     await waitFor(() => {
       expect(mockSignInWithEmail).toHaveBeenCalledWith(
@@ -94,11 +97,29 @@ describe('SignInScreen', () => {
     });
   });
 
-  it('shows dismiss button when onDismiss provided', () => {
-    const onDismiss = vi.fn();
-    render(<SignInScreen onDismiss={onDismiss} />);
-    fireEvent.click(screen.getByLabelText('Continue without account'));
-    expect(onDismiss).toHaveBeenCalled();
+  it('has no dismiss affordance (auth is mandatory) and exposes mode tabs', () => {
+    render(<SignInScreen />);
+    expect(screen.queryByLabelText('Continue without account')).toBeNull();
+    expect(screen.queryByText('✕')).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Sign in' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Create account' })).toBeTruthy();
+  });
+
+  it('register mode validates and calls registerWithEmail', async () => {
+    useStore.setState({ signInMode: 'register' });
+    mockRegisterWithEmail.mockResolvedValue('tok');
+    render(<SignInScreen />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(screen.getByText('Name')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    await waitFor(() => expect(mockRegisterWithEmail).not.toHaveBeenCalled());
+    // now fill fields and submit
+    fireEvent.change(screen.getByPlaceholderText('you@example.com'), { target: { value: 'a@b.co' } });
+    fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'secret1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    await waitFor(() =>
+      expect(mockRegisterWithEmail).toHaveBeenCalledWith('a@b.co', 'secret1', undefined),
+    );
   });
 
   it('shows error when sign-in rejects', async () => {
@@ -119,7 +140,7 @@ describe('sign-in entry points', () => {
     render(<UserMenu onOpenSettings={() => {}} />);
     fireEvent.click(screen.getByLabelText('Account menu'));
 
-    fireEvent.click(screen.getByText('Sign in'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign in' }));
     expect(useStore.getState().signInOpen).toBe(true);
   });
 

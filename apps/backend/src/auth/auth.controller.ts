@@ -15,6 +15,36 @@ export class AuthController {
   }
 
   /**
+   * Create an email/password account (public endpoint). Returns the same
+   * shape as /auth/verify so the desktop can treat it as a session.
+   */
+  @Post('register')
+  async register(
+    @Body('email') email: string,
+    @Body('password') password: string,
+    @Body('displayName') displayName?: string,
+  ) {
+    if (!email || !password) {
+      throw new BadRequestException('email and password are required');
+    }
+    if (password.length < 6) {
+      throw new BadRequestException('password must be at least 6 characters');
+    }
+    return this.authService.emailAuth('register', email, password, displayName);
+  }
+
+  /**
+   * Email/password sign-in (public endpoint).
+   */
+  @Post('login')
+  async login(@Body('email') email: string, @Body('password') password: string) {
+    if (!email || !password) {
+      throw new BadRequestException('email and password are required');
+    }
+    return this.authService.emailAuth('login', email, password);
+  }
+
+  /**
    * Verify a Firebase ID token (public endpoint).
    * Desktop signs in via Firebase client SDK, then exchanges the ID
    * token here for the user profile. Returns the same token back so

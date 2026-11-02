@@ -15,6 +15,7 @@ import {
   SettingsScreen,
   TaskComposer,
   SignInScreen,
+  SplashScreen,
   ToastContainer,
   SessionHarnessBadge,
 } from "./components";
@@ -160,8 +161,6 @@ function App() {
             <div className="ha-chrome-content" style={{ overflow: "hidden" }}>
               {settingsOpen ? (
                 <SettingsScreen onBack={() => setSettingsOpen(false)} />
-              ) : signInOpen ? (
-                <SignInScreen onDismiss={closeSignIn} />
               ) : !activeSessionId ? (
                 <SessionEmptyGuide session={null} />
               ) : activeSession && sessionTabs.length === 0 ? (

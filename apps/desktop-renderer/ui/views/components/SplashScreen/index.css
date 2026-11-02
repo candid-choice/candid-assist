@@ -1,0 +1,65 @@
+.ha-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(99, 102, 248, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 90% 110%, rgba(99, 102, 248, 0.12), transparent 60%),
+    var(--ha-bg-primary, #12141a);
+}
+
+.ha-splash-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 420px;
+  padding: 48px 40px;
+  background: var(--ha-bg-secondary, #1b1e26);
+  border: 1px solid var(--ha-border, #2a2f3a);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.ha-splash-logo {
+  font-size: 40px;
+  line-height: 1;
+  color: var(--ha-primary, #6366f8);
+  margin-bottom: 14px;
+}
+
+.ha-splash-title {
+  font-size: 26px;
+  font-weight: 650;
+  margin: 0 0 8px;
+  color: var(--ha-text, #e6e9ef);
+}
+
+.ha-splash-tagline {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ha-text-secondary, #8891a0);
+  margin: 0 0 28px;
+}
+
+.ha-splash-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.ha-splash-btn {
+  width: 100%;
+  padding: 10px 0;
+  font-size: 14px;
+}
+
+.ha-splash-foot {
+  margin: 24px 0 0;
+  font-size: 12px;
+  color: var(--ha-text-tertiary, #6b7280);
+}

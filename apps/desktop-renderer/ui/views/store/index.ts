@@ -82,11 +82,13 @@ interface AppState {
   // ── UI overlays (transient, not persisted) ────────────────────────────
   composerOpen: boolean;
   signInOpen: boolean;
+  signInMode: 'signin' | 'register';
   userMenuOpen: boolean;
   settingsOpen: boolean;
   openComposer: () => void;
   closeComposer: () => void;
-  openSignIn: () => void;
+  openSignIn: (mode?: 'signin' | 'register') => void;
+  setSignInMode: (mode: 'signin' | 'register') => void;
   closeSignIn: () => void;
   setUserMenuOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -302,12 +304,15 @@ export const useStore = create<AppState>()(
 
       composerOpen: false,
       signInOpen: false,
+      signInMode: 'signin' as 'signin' | 'register',
       userMenuOpen: false,
       settingsOpen: false,
 
       openComposer: () => set({ composerOpen: true }),
       closeComposer: () => set({ composerOpen: false }),
-      openSignIn: () => set({ signInOpen: true }),
+      openSignIn: (mode?: 'signin' | 'register') =>
+        set({ signInOpen: true, signInMode: mode ?? 'signin' }),
+      setSignInMode: (mode: 'signin' | 'register') => set({ signInMode: mode }),
       closeSignIn: () => set({ signInOpen: false }),
       setUserMenuOpen: (open: boolean) => set({ userMenuOpen: open }),
       setSettingsOpen: (open: boolean) => set({ settingsOpen: open }),

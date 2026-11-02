@@ -173,3 +173,36 @@
   opacity: 0.6;
   cursor: wait;
 }
+
+/* Mode tabs */
+.ha-signin-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  margin-bottom: 16px;
+  background: var(--ha-bg-secondary, #1b1e26);
+  border: 1px solid var(--ha-border, #2a2f3a);
+  border-radius: 8px;
+}
+.ha-signin-tab {
+  flex: 1;
+  padding: 7px 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ha-text-secondary, #8891a0);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.ha-signin-tab:hover {
+  color: var(--ha-text, #e6e9ef);
+}
+.ha-signin-tab--active {
+  background: var(--ha-primary, #6366f8);
+  color: #fff;
+}
+.ha-signin-tab--active:hover {
+  color: #fff;
+}

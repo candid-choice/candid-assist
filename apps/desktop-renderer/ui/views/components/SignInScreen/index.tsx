@@ -1,17 +1,29 @@
-/** Sign-In Screen — first screen after app launch (no auth). */
+/** Sign-In Screen — the only way into the workspace.
+ *
+ * There is deliberately NO dismiss/close affordance: sessions, surfaces,
+ * and chat all belong to a signed-in user, so the app gates on auth.
+ * Modes (sign in / create account) come from the store so the splash
+ * screen can deep-link straight into registration.
+ */
 
 import { useState } from "react";
 
 import { useAuth } from "../../context/auth-provider";
+import { useStore } from "../../store";
 
 import "./index.css";
 
-export function SignInScreen({ onDismiss }: { onDismiss?: () => void }) {
-  const { signInWithGoogle, signInWithEmail, isLoading } = useAuth();
+export function SignInScreen(_props: { onDismiss?: () => void }) {
+  const { signInWithGoogle, signInWithEmail, registerWithEmail, isLoading } = useAuth();
+  const mode = useStore((s) => s.signInMode);
+  const setMode = useStore((s) => s.setSignInMode);
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [emailMode, setEmailMode] = useState(false);
+  const [emailMode, setEmailMode] = useState(mode === "register");
+
+  const register = mode === "register";
 
   const handleGoogleSignIn = () => {
     setError("");
@@ -20,65 +32,103 @@ export function SignInScreen({ onDismiss }: { onDismiss?: () => void }) {
     });
   };
 
-  const handleEmailSignIn = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!email || !password) {
       setError("Please enter email and password");
       return;
     }
-    signInWithEmail(email, password).catch(() => {
-      setError("Invalid email or password");
+    if (register && password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+    const run = register
+      ? registerWithEmail(email, password, name || undefined)
+      : signInWithEmail(email, password);
+    run.catch((err: any) => {
+      setError(err?.message || (register ? "Registration failed" : "Invalid email or password"));
     });
+  };
+
+  const switchMode = (next: "signin" | "register") => {
+    setMode(next);
+    setError("");
+    if (next === "register") setEmailMode(true);
   };
 
   return (
     <div className="ha-signin-screen">
-      {onDismiss && (
-        <button
-          className="ha-signin-dismiss"
-          onClick={onDismiss}
-          title="Continue without account"
-          aria-label="Continue without account"
-        >
-          ✕
-        </button>
-      )}
       <div className="ha-signin-card">
         {/* Logo & title */}
         <div className="ha-signin-header">
           <span className="ha-signin-logo">✦</span>
-          <h1 className="ha-signin-title">Human Assist</h1>
+          <h1 className="ha-signin-title">
+            {register ? "Create your account" : "Welcome back"}
+          </h1>
           <p className="ha-signin-subtitle">
-            Your shared workspace with Claude Code
+            {register
+              ? "Your sessions, surfaces, and chats live with your account"
+              : "Sign in to open your workspace"}
           </p>
+        </div>
+
+        {/* Mode tabs */}
+        <div className="ha-signin-tabs" role="tablist">
+          <button
+            role="tab"
+            aria-selected={!register}
+            className={`ha-signin-tab${!register ? " ha-signin-tab--active" : ""}`}
+            onClick={() => switchMode("signin")}
+          >
+            Sign in
+          </button>
+          <button
+            role="tab"
+            aria-selected={register}
+            className={`ha-signin-tab${register ? " ha-signin-tab--active" : ""}`}
+            onClick={() => switchMode("register")}
+          >
+            Create account
+          </button>
         </div>
 
         {/* Error (both modes) */}
         {error && <div className="ha-signin-error">{error}</div>}
 
-        {/* Google Sign In */}
-        {!emailMode && (
-          <button
-            className="ha-btn ha-btn--google"
-            onClick={handleGoogleSignIn}
-            disabled={isLoading}
-          >
-            <span className="ha-btn-icon">G</span>
-            Sign in with Google
-          </button>
+        {/* Google Sign In — sign-in mode only */}
+        {!register && !emailMode && (
+          <>
+            <button
+              className="ha-btn ha-btn--google"
+              onClick={handleGoogleSignIn}
+              disabled={isLoading}
+            >
+              <span className="ha-btn-icon">G</span>
+              Sign in with Google
+            </button>
+            <button className="ha-signin-toggle" onClick={() => setEmailMode(true)}>
+              Sign in with email
+            </button>
+          </>
         )}
 
-        {/* Email form toggle */}
-        {!emailMode && (
-          <button className="ha-signin-toggle" onClick={() => setEmailMode(true)}>
-            Sign in with email
-          </button>
-        )}
-
-        {/* Email password form */}
-        {emailMode && (
-          <form className="ha-signin-form" onSubmit={handleEmailSignIn}>
+        {/* Email form */}
+        {(emailMode || register) && (
+          <form className="ha-signin-form" onSubmit={handleSubmit}>
+            {register && (
+              <div className="ha-signin-field">
+                <label>Name</label>
+                <input
+                  className="ha-signin-input"
+                  type="text"
+                  placeholder="Your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoComplete="name"
+                />
+              </div>
+            )}
             <div className="ha-signin-field">
               <label>Email</label>
               <input
@@ -98,23 +148,34 @@ export function SignInScreen({ onDismiss }: { onDismiss?: () => void }) {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
+                autoComplete={register ? "new-password" : "current-password"}
               />
             </div>
             <div className="ha-signin-actions">
               <button type="submit" className="ha-btn ha-btn--primary" disabled={isLoading}>
-                {isLoading ? "Signing in…" : "Sign in"}
+                {isLoading ? "Please wait…" : register ? "Create account" : "Sign in"}
               </button>
-              <button type="button" className="ha-btn" onClick={() => { setEmailMode(false); setError(""); }}>
-                Back
-              </button>
+              {!register && (
+                <button
+                  type="button"
+                  className="ha-btn"
+                  onClick={() => {
+                    setEmailMode(false);
+                    setError("");
+                  }}
+                >
+                  Back
+                </button>
+              )}
             </div>
           </form>
         )}
 
         {/* System requirements */}
-        <p className="ha-signin-reqs">Requires macOS 13+ and Claude Code 0.4+</p>
+        <p className="ha-signin-reqs">Requires macOS 13+ · backend at localhost:3601</p>
       </div>
     </div>
   );
 }
+
+export default SignInScreen;

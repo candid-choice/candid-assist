@@ -21,6 +21,7 @@ interface AuthContextValue {
   isLoading: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
+  registerWithEmail: (email: string, password: string, displayName?: string) => Promise<void>;
   signOut: () => void;
 }
 
@@ -118,6 +119,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const registerWithEmail = async (email: string, password: string, displayName?: string) => {
+    setIsLoading(true);
+    try {
+      const token = await authService.registerWithEmail(email, password, displayName);
+      const user = authService.getUser();
+      if (user) {
+        setUser(user);
+      }
+      storeLogin(token, user ?? undefined);
+      setStatus('authorized');
+    } catch (err: any) {
+      setAuthError(err.message || 'Registration failed');
+      setStatus('unauthorized');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const signOut = () => {
     authService.signOut();
     storeLogout();
@@ -127,7 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ status, user, isLoading, signInWithGoogle, signInWithEmail, signOut }}
+      value={{ status, user, isLoading, signInWithGoogle, signInWithEmail, registerWithEmail, signOut }}
     >
       {children}
     </AuthContext.Provider>

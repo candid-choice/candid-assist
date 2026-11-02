@@ -42,23 +42,28 @@ export async function signInWithGoogle(): Promise<string> {
 }
 
 /**
- * Signs in with email and password via Firebase Auth.
- * Returns the Firebase ID token.
+ * Email/password via the backend (Firebase Identity Toolkit proxy).
+ * Works against the local Firebase emulator with no client API key.
  */
-export async function signInWithEmail(email: string, password: string): Promise<string> {
-  const firebase = await import('firebase/app');
-  const auth = await import('firebase/auth');
-
-  const app = firebase.initializeApp({
-    apiKey: 'AIzaSyC-candidate-test-key',
-    projectId: 'human-assist-test',
-    authDomain: 'human-assist-test.firebaseapp.com',
+async function emailAuthViaBackend(
+  endpoint: 'login' | 'register',
+  body: { email: string; password: string; displayName?: string },
+): Promise<string> {
+  const response = await fetch(`${BACKEND_URL}/auth/${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
-
-  const firebaseAuth = auth.getAuth(app);
-  const result = await auth.signInWithEmailAndPassword(firebaseAuth, email, password);
-  const token = await result.user.getIdToken();
-
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw {
+      code: error.code || 'AUTH_ERROR',
+      message: error.message || (endpoint === 'register' ? 'Registration failed' : 'Authentication failed'),
+    } as AuthError;
+  }
+  const { token, user } = (await response.json()) as { token: string; user: AuthUser };
+  localStorage.setItem('ha_auth_token', token);
+  localStorage.setItem('ha_user', JSON.stringify(user));
   return token;
 }
 
@@ -97,11 +102,11 @@ export const authService = {
   },
 
   async signInWithEmail(email: string, password: string): Promise<string> {
-    const token = await signInWithEmail(email, password);
-    const { token: sessionToken, user } = await exchangeTokenForSession(token);
-    localStorage.setItem('ha_auth_token', sessionToken);
-    localStorage.setItem('ha_user', JSON.stringify(user));
-    return sessionToken;
+    return emailAuthViaBackend('login', { email, password });
+  },
+
+  async registerWithEmail(email: string, password: string, displayName?: string): Promise<string> {
+    return emailAuthViaBackend('register', { email, password, displayName });
   },
 
   signOut(): void {
