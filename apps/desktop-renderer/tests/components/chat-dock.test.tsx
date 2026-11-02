@@ -66,11 +66,14 @@ describe('ChatDock (chat owns its session id, model, endpoint)', () => {
     fireEvent.click(screen.getByText('➤'));
     expect(screen.getByText('hello agent')).toBeTruthy();
     await waitFor(() =>
-      expect(chat.send).toHaveBeenCalledWith(chatId, 'hello agent', {
-        cwd: '/repo',
-        baseUrl: 'http://100.83.1.126:1234/v1',
-        modelId: undefined,
-      }),
+      expect(chat.send).toHaveBeenCalledWith(
+        chatId,
+        'hello agent',
+        expect.objectContaining({
+          cwd: '/repo',
+          baseUrl: 'http://100.83.1.126:1234/v1',
+        }),
+      ),
     );
   });
 

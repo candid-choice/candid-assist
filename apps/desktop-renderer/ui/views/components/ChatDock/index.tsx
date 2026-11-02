@@ -61,8 +61,19 @@ export function ChatDock({ sessionId }: ChatDockProps) {
     if (!chat?.listModels) return;
     void chat
       .listModels(chatBaseUrl || undefined)
-      .then((res) => setChatModels(res.models ?? []))
-      .catch(() => setChatModels([]));
+      .then((res) => {
+        const models = res.models ?? [];
+        setChatModels(models);
+        // Always show/serve a concrete model: keep a still-served pick,
+        // otherwise default to the first model the endpoint is serving.
+        const st = useStore.getState();
+        if (models.length === 0) st.setChatModel(null);
+        else if (!st.chatModel || !models.includes(st.chatModel)) st.setChatModel(models[0]);
+      })
+      .catch(() => {
+        setChatModels([]);
+        useStore.getState().setChatModel(null);
+      });
   }, [chat, chatBaseUrl, setChatModels]);
   useEffect(() => {
     refreshModels();
@@ -183,9 +194,7 @@ export function ChatDock({ sessionId }: ChatDockProps) {
             value={chatModel ?? ""}
             onChange={(e) => setChatModel(e.target.value || null)}
           >
-            <option value="">
-              {chatModels.length > 0 ? "endpoint default" : "no models"}
-            </option>
+            {chatModels.length === 0 && <option value="">no models</option>}
             {chatModels.map((m) => (
               <option key={m} value={m}>
                 {m}
