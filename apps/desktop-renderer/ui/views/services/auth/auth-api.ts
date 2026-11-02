@@ -170,17 +170,73 @@ export async function exchangeTokenForSession(firebaseToken: string): Promise<{
 
 // ── Auth State ──────────────────────────────────────────────────────────────
 
+/** Map Firebase client-SDK auth error codes to friendly messages. */
+function friendlyFirebaseAuthError(err: unknown): AuthError {
+  const e = err as { code?: string; message?: string };
+  const code = e?.code ?? 'auth/unknown';
+  const map: Record<string, string> = {
+    'auth/invalid-credential': 'Invalid email or password',
+    'auth/wrong-password': 'Invalid email or password',
+    'auth/user-not-found': 'Invalid email or password',
+    'auth/email-already-in-use': 'An account with this email already exists',
+    'auth/weak-password': 'Password should be at least 6 characters',
+    'auth/invalid-email': 'That email address looks invalid',
+    'auth/too-many-requests': 'Too many attempts — try again in a few minutes',
+    'auth/network-request-failed': 'Cannot reach Firebase — check your connection',
+  };
+  return {
+    code,
+    message: map[code] ?? e?.message ?? 'Authentication failed',
+    retryable: code === 'auth/network-request-failed' || code === 'auth/too-many-requests',
+  };
+}
+
+/** Firebase client-SDK email flow against the real project (when configured). */
+async function emailAuthViaFirebase(
+  mode: 'login' | 'register',
+  email: string,
+  password: string,
+  displayName?: string,
+): Promise<string> {
+  const config = firebaseClientConfig();
+  if (!config) throw { code: 'NO_FIREBASE_CONFIG', message: 'No Firebase client config' } as AuthError;
+  const firebase = await import('firebase/app');
+  const authMod = await import('firebase/auth');
+  const app = firebase.getApps().length > 0 ? firebase.getApp() : firebase.initializeApp(config);
+  const auth = authMod.getAuth(app);
+  try {
+    const cred =
+      mode === 'register'
+        ? await authMod.createUserWithEmailAndPassword(auth, email, password)
+        : await authMod.signInWithEmailAndPassword(auth, email, password);
+    if (mode === 'register' && displayName) {
+      await authMod.updateProfile(cred.user, { displayName }).catch(() => undefined);
+    }
+    const idToken = await cred.user.getIdToken();
+    const { token, user } = await exchangeTokenForSession(idToken);
+    localStorage.setItem('ha_auth_token', token);
+    localStorage.setItem('ha_user', JSON.stringify(user));
+    return token;
+  } catch (err) {
+    throw friendlyFirebaseAuthError(err);
+  }
+}
+
 export const authService = {
   async signInWithGoogle(): Promise<string> {
     return signInWithGoogle();
   },
 
   async signInWithEmail(email: string, password: string): Promise<string> {
-    return emailAuthViaBackend('login', { email, password });
+    return firebaseClientConfig()
+      ? emailAuthViaFirebase('login', email, password)
+      : emailAuthViaBackend('login', { email, password });
   },
 
   async registerWithEmail(email: string, password: string, displayName?: string): Promise<string> {
-    return emailAuthViaBackend('register', { email, password, displayName });
+    return firebaseClientConfig()
+      ? emailAuthViaFirebase('register', email, password, displayName)
+      : emailAuthViaBackend('register', { email, password, displayName });
   },
 
   signOut(): void {
