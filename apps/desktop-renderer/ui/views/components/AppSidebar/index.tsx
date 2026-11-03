@@ -172,32 +172,19 @@ export function AppSidebar({
         activeSessionId={activeSessionId}
       />
       {menu && (
-        <div
-          style={{
-            position: "fixed",
-            left: menu.x,
-            top: menu.y,
-            zIndex: 3000,
-            background: "var(--ha-surface, #fff)",
-            border: "1px solid var(--ha-border, #ddd)",
-            borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
-            padding: "4px 0",
+        <SidebarContextMenu
+          session={menu.session}
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          onCopyId={() => {
+            void navigator.clipboard?.writeText(menu.session.id);
+            setMenu(null);
           }}
-          onMouseLeave={() => setMenu(null)}
-        >
-          <SidebarContextMenu
-            session={menu.session}
-            onClose={() => setMenu(null)}
-            onCopyId={() => {
-              void navigator.clipboard?.writeText(menu.session.id);
-              setMenu(null);
-            }}
-            onArchive={handleArchive}
-            onMarkDead={handleMarkDead}
-            onDelete={handleDelete}
-          />
-        </div>
+          onArchive={handleArchive}
+          onMarkDead={handleMarkDead}
+          onDelete={handleDelete}
+        />
       )}
       {projectPanel && (
         <ProjectAccessPanel project={projectPanel} onClose={() => setProjectPanel(null)} />
