@@ -12,7 +12,14 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
-const HUMAN_ASSIST_TOOL = /^mcp[._]+human[._]assist[._]/i;
+// Tool names arrive as `mcp_human-assist_<tool>` (hyphens preserved by the
+// MCP client) but may also appear dot- or underscore-separated depending on
+// transport — normalize the separators before matching. (A stricter earlier
+// regex missed the hyphen in `human-assist`, so identity injection silently
+// never fired and sessions rendered as "0xKobold · anonymous".)
+function isHumanAssistTool(name: string): boolean {
+  return /^mcp[._-]?human[-._]?assist[._-]/i.test(name);
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const presenceSockets: any[] = [];
@@ -84,7 +91,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("tool_call", async (event, ctx) => {
     const name = (event as { toolName?: unknown }).toolName;
-    if (typeof name !== "string" || !HUMAN_ASSIST_TOOL.test(name)) return;
+    if (typeof name !== "string" || !isHumanAssistTool(name)) return;
 
     let harnessId: string | undefined;
     try {
