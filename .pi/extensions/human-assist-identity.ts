@@ -70,21 +70,32 @@ async function announcePresence(ctx: any): Promise<void> {
   if (!harnessId) harnessId = `pi-pid-${process.pid}`;
   try {
     if (typeof WebSocket !== "function") return; // ancient node guard
-    const ws = new WebSocket(url);
-    presenceSockets.push(ws);
-    ws.onopen = () => {
-      ws.send(
-        JSON.stringify({
-          type: "agent:hello",
-          agentSessionId: harnessId,
-          agentClient: "pi",
-          project: resolveProject(),
-        }),
-      );
+    const open = () => {
+      const ws = new WebSocket(url);
+      presenceSockets.push(ws);
+      ws.onopen = () => {
+        ws.send(
+          JSON.stringify({
+            type: "agent:hello",
+            agentSessionId: harnessId,
+            agentClient: "pi",
+            project: resolveProject(),
+          }),
+        );
+      };
+      ws.onerror = () => {
+        /* desktop app not running — stay silent */
+      };
+      // Re-announce if the desktop app restarts while this pi session
+      // lives on: without this, the presence hello (and the sidebar row
+      // it creates) is lost until pi itself restarts.
+      ws.onclose = () => {
+        const i = presenceSockets.indexOf(ws);
+        if (i >= 0) presenceSockets.splice(i, 1);
+        setTimeout(open, 10_000);
+      };
     };
-    ws.onerror = () => {
-      /* desktop app not running — stay silent */
-    };
+    open();
   } catch {
     /* never break a pi session over a presence channel */
   }

@@ -11,6 +11,7 @@ Usage:
 
 import type { AuthError, AuthUser } from './types';
 import { clearAuthStorage } from './auth-storage';
+import { getStoredRefreshToken, storeRefreshToken } from './auth-storage';
 
 const BACKEND_URL = import.meta.env?.["VITE_BACKEND_URL"]
   ? import.meta.env.VITE_BACKEND_URL
@@ -138,10 +139,47 @@ async function emailAuthViaBackend(
       message: error.message || (endpoint === 'register' ? 'Registration failed' : 'Authentication failed'),
     } as AuthError;
   }
-  const { token, user } = (await response.json()) as { token: string; user: AuthUser };
+  const { token, user, refreshToken } = (await response.json()) as {
+    token: string;
+    user: AuthUser;
+    refreshToken?: string;
+  };
   localStorage.setItem('ha_auth_token', token);
   localStorage.setItem('ha_user', JSON.stringify(user));
+  if (refreshToken) storeRefreshToken(refreshToken);
   return token;
+}
+
+/**
+ * Silent session refresh: re-mint the (1h-expiry) Firebase ID token via
+ * the backend using the persisted refresh token. Returns null when no
+ * refresh token exists or it was rejected (then the caller falls back to
+ * the sign-in screen).
+ */
+export async function refreshAuthToken(): Promise<{ token: string; user: AuthUser } | null> {
+  const refreshToken = getStoredRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const response = await fetch(`${BACKEND_URL}/auth/refresh-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!response.ok) {
+      // Rotated/revoked refresh token — don't retry it every boot.
+      clearAuthStorage();
+      return null;
+    }
+    const data = (await response.json()) as { token: string; user: AuthUser; refreshToken?: string };
+    localStorage.setItem('ha_auth_token', data.token);
+    localStorage.setItem('ha_user', JSON.stringify(data.user));
+    if (data.refreshToken) storeRefreshToken(data.refreshToken);
+    // eslint-disable-next-line no-console
+    console.log('[auth] silent token refresh succeeded');
+    return { token: data.token, user: data.user };
+  } catch {
+    return null;
+  }
 }
 
 /**

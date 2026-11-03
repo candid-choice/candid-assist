@@ -17,6 +17,7 @@ import "./views/index.css";
 
 import { wsService } from "./views/services/ws-service";
 import { ensureAgentSessionFor } from "./views/lib/agent-session";
+import { addUserSession } from "./views/lib/user-session";
 import { useStore } from "./views/store";
 import { AuthProvider } from "./views/context/auth-provider";
 import {
@@ -177,6 +178,9 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
       if (!agentSession && target && useStore.getState().sessions.some((s) => s.id === target)) {
         sessionId = target;
       }
+      // Surfaces are always session-scoped — if nobody is looking at a
+      // session yet, create one so the tab has an owner.
+      if (!sessionId) sessionId = addUserSession();
 
       useStore.getState().openSurface({
         id: surfaceId,
@@ -190,6 +194,14 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
         // response round-trips into that session's history.
         sessionId,
       });
+      // Make the surface mountable: a <webview> only attaches while its
+      // session's tabs are on screen, so agent-driven flows (googleSearch,
+      // scrapeSelective, agentNavigateAndEval) require the owning session
+      // to be the visible one — otherwise the guest never registers and
+      // the agent gets a false “no-guest”.
+      if (useStore.getState().activeSessionId !== sessionId) {
+        useStore.getState().setActiveSession(sessionId ?? null);
+      }
     }
   });
 

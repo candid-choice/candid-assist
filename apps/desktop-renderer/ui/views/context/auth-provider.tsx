@@ -12,7 +12,7 @@ Usage:
 import { createContext, useContext, useEffect, useState } from 'react';
 
 import { useStore } from '../store';
-import { authService, consumeGoogleAuthHash, devAutoLogin } from '../services/auth/auth-api';
+import { authService, consumeGoogleAuthHash, devAutoLogin, refreshAuthToken } from '../services/auth/auth-api';
 import { syncMcpSignedIn } from '../services/desktop-bridge';
 import type { AuthStatus, AuthUser } from '../services/auth/types';
 
@@ -137,17 +137,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           storeLogin(token, data.user as AuthUser);
           setStatus('authorized');
         } else {
+          // ID token expired (1h TTL) or invalid — try the silent refresh
+          // once before giving up. Without this, reloading the window an
+          // hour after sign-in logs the user out AND locks the harness
+          // (agent tools are gated on the renderer's reported auth state).
+          const refreshed = await refreshAuthToken();
+          if (refreshed) {
+            setUser(refreshed.user);
+            storeLogin(refreshed.token, refreshed.user);
+            setStatus('authorized');
+            return;
+          }
           // Invalid/expired token — fall back to dev auto-login, then sign-in
           await unauthorizedFallback();
         }
       } catch {
-        await unauthorizedFallback();
+        // Transient backend outage (restart, network blip): do NOT punish an
+        // existing session — a stored token stays trusted until the backend
+        // explicitly rejects it; the periodic recheck will retry verification.
+        if (!authService.getStoredToken()) {
+          await unauthorizedFallback();
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
     checkAuth();
+    // Self-healing recheck: recovers without user action after a backend
+    // (re)start, a crashed-then-restored watch build, or a reload that
+    // landed while Nest was mid-compile.
+    const recheck = setInterval(() => void checkAuth(), 60_000);
+    return () => clearInterval(recheck);
   }, []);
 
   const signInWithGoogle = async () => {

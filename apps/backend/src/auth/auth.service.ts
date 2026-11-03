@@ -36,7 +36,7 @@ export class AuthService {
     email: string,
     password: string,
     displayName?: string,
-  ): Promise<{ token: string; user: UserProfile }> {
+  ): Promise<{ token: string; refreshToken?: string; user: UserProfile }> {
     const endpoint =
       mode === 'register' ? 'accounts:signUp' : 'accounts:signInWithPassword';
     const key = process.env.FIREBASE_WEB_API_KEY || 'local';
@@ -61,7 +61,39 @@ export class AuthService {
 
     const decoded = await this.verifyIdToken(data.idToken);
     const user = await this.getOrCreateUser(decoded);
-    return { token: data.idToken, user };
+    return { token: data.idToken, refreshToken: data.refreshToken, user };
+  }
+
+  /**
+   * Re-mint an expired ID token from a persisted Firebase refresh token
+   * (Identity Toolkit token?grant_type=refresh_token). Called by clients
+   * when /auth/verify rejects their ID token — a 1h-expired token must
+   * not cost the user their session (nor lock the agent out).
+   */
+  async refreshIdToken(
+    refreshToken: string,
+  ): Promise<{ token: string; refreshToken?: string; user: UserProfile }> {
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      throw new UnauthorizedException('Missing refresh token');
+    }
+    const key = process.env.FIREBASE_WEB_API_KEY || 'local';
+    const res = await fetch(`${this.identityToolkitBase()}/token?key=${key}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ grantType: 'refresh_token', refreshToken }),
+    });
+    const data: any = await res.json().catch(() => ({}));
+    const idToken = data?.id_token ?? data?.idToken;
+    if (!res.ok || !idToken) {
+      throw new UnauthorizedException('Session expired — sign in again');
+    }
+    const decoded = await this.verifyIdToken(idToken);
+    const user = await this.getOrCreateUser(decoded);
+    return {
+      token: idToken,
+      refreshToken: data?.refresh_token ?? data?.refreshToken ?? refreshToken,
+      user,
+    };
   }
 
   // ── Google OAuth (backend-mediated authorization-code flow) ─────────────
@@ -101,7 +133,7 @@ export class AuthService {
    * Complete the OAuth flow: exchange the code for Google tokens, federate
    * the ID token into Firebase Auth, and return the app session shape.
    */
-  async googleAuth(code: string): Promise<{ token: string; user: UserProfile }> {
+  async googleAuth(code: string): Promise<{ token: string; refreshToken?: string; user: UserProfile }> {
     if (!this.googleAuthConfigured()) {
       throw new UnauthorizedException(
         'Google sign-in is not configured (set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)',
@@ -151,7 +183,7 @@ export class AuthService {
     // 3. Same session shape as email auth
     const decoded = await this.verifyIdToken(idpData.idToken);
     const user = await this.getOrCreateUser(decoded);
-    return { token: idpData.idToken, user };
+    return { token: idpData.idToken, refreshToken: idpData.refreshToken, user };
   }
 
   /**

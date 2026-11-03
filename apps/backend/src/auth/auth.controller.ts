@@ -109,6 +109,13 @@ export class AuthController {
    * token here for the user profile. Returns the same token back so
    * the renderer can use it as its Bearer credential.
    */
+  /** Silent re-mint of an expired (1h) Firebase ID token. Public (no auth
+   * header): the caller's ID token is exactly what expired. */
+  @Post('refresh-token')
+  async refreshToken(@Body('refreshToken') refreshToken: string) {
+    return this.authService.refreshIdToken(refreshToken);
+  }
+
   @Post('verify')
   async verifyToken(@Body('token') token: string) {
     if (!token) {
