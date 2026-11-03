@@ -1940,6 +1940,12 @@ async function handleDelegateTask(
   });
   if (dbg) console.log("[debug] delegateTask plan: " + JSON.stringify(plan).slice(0, 2000));
 
+  // Soft steps: a small local model often writes best-effort waitFor /
+  // extract steps; their failure must never abandon the whole goal.
+  plan.actions = plan.actions.map((a) =>
+    a["action"] === "waitFor" || a["action"] === "extract" ? { ...a, optional: true } : a,
+  );
+
   // Surface: explicit > any open+attached browser page > a fresh one
   // seeded at the plan's first navigate target (the sequence re-navigates
   // anyway; seeding just satisfies the http(s) requirement).
