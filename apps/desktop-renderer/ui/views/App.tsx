@@ -215,6 +215,15 @@ function App() {
                       isViewActive={view.id === (visibleSurface?.id ?? activeViewId)}
                     />
                   ))}
+                  {/* Off-screen (100vh) retention for OTHER sessions' live
+                      surfaces: <webview> guests die on unmount, so hidden
+                      tabs would never be drivable again until re-visited —
+                      agent flows raced the human switching sessions. */}
+                  {(views as unknown as Array<{ id: string }>)
+                    .filter((v) => !sessionOpenViews.some((s) => s.id === v.id))
+                    .map((view) => (
+                      <SurfaceHost key={view.id} config={view as never} isViewActive={false} />
+                    ))}
                   {sessionOpenViews.length === 0 && <AppSessionDetail />}
                 </>
               )}
