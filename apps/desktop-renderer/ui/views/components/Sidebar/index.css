@@ -308,3 +308,135 @@
   background: var(--ha-primary, #6366f8);
   border-color: var(--ha-primary, #6366f8);
 }
+
+/* ── Project label (session row) ──────────────────────────────────────── */
+.ha-sidebar-project-chip {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ha-primary, #6366f8);
+  background: color-mix(in srgb, var(--ha-primary, #6366f8) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ha-primary, #6366f8) 30%, transparent);
+  border-radius: 999px;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: pointer;
+}
+.ha-sidebar-project-chip:hover {
+  background: color-mix(in srgb, var(--ha-primary, #6366f8) 22%, transparent);
+}
+
+/* ── Project access panel ─────────────────────────────────────────────── */
+.ha-project-panel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2600;
+  background: rgba(0, 0, 0, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.ha-project-panel {
+  width: 100%;
+  max-width: 440px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--ha-surface, #fff);
+  border: 1px solid var(--ha-border, #ddd);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
+  padding: 18px 18px 16px;
+}
+.ha-project-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ha-project-panel-kicker {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #888);
+}
+.ha-project-panel-title {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text, #111);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ha-project-panel-close {
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #888);
+  font-size: 15px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px;
+}
+.ha-project-panel-help {
+  margin: 10px 0 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted, #666);
+}
+.ha-project-panel-empty {
+  font-size: 13px;
+  color: var(--text-muted, #666);
+  padding: 16px 0;
+  text-align: center;
+}
+.ha-project-panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ha-project-panel-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 8px;
+}
+.ha-project-panel-domain {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #111);
+}
+.ha-project-panel-meta {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted, #888);
+}
+.ha-project-panel-revoke,
+.ha-project-panel-revoke-all {
+  border: 1px solid var(--ha-danger, #e5484d);
+  color: var(--ha-danger, #e5484d);
+  background: transparent;
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ha-project-panel-revoke:hover,
+.ha-project-panel-revoke-all:hover {
+  background: color-mix(in srgb, var(--ha-danger, #e5484d) 12%, transparent);
+}
+.ha-project-panel-foot {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}

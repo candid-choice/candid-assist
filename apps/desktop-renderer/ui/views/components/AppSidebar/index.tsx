@@ -18,6 +18,7 @@ import {
   archiveSession,
 } from "../../services/sync/sync-service";
 import { queueAction } from "../../errors/offline-queue";
+import { wsService } from "../../services/ws-service";
 import type { SessionDoc } from "../../services/sync/types";
 
 // ── Mapping ────────────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ export function toSidebarSession(
     connected,
     updatedAt: doc.updatedAt,
     surfaceCount: liveSurfaceCount ?? doc.surfaces?.length ?? 0,
+    project: doc.agentProject,
   };
 }
 
@@ -99,6 +101,7 @@ export function AppSidebar({
     x: number;
     y: number;
   } | null>(null);
+  const [projectPanel, setProjectPanel] = useState<string | null>(null);
 
   const handleSessionClick = useCallback((id: string) => {
     const st = useStore.getState();
@@ -165,6 +168,7 @@ export function AppSidebar({
         onSessionClick={handleSessionClick}
         onItemDelete={(id) => handleDelete(id)}
         onItemContextMenu={(session, x, y) => setMenu({ session, x, y })}
+        onProjectClick={(project) => setProjectPanel(project)}
         activeSessionId={activeSessionId}
       />
       {menu && (
@@ -195,7 +199,117 @@ export function AppSidebar({
           />
         </div>
       )}
+      {projectPanel && (
+        <ProjectAccessPanel project={projectPanel} onClose={() => setProjectPanel(null)} />
+      )}
     </>
+  );
+}
+
+// ── Project access panel ─────────────────────────────────────────────────
+// Opened by clicking a session's project label. Shows every domain the
+// human granted to THIS project (never another) with the audit trail of
+// which agent/tool asked, and lets them revoke — per domain or all at once.
+
+function ProjectAccessPanel({
+  project,
+  onClose,
+}: {
+  project: string;
+  onClose: () => void;
+}) {
+  const domains = useStore((s) => s.grantsByProject[project]) ?? [];
+  const consentLog = useStore((s) => s.consentLog);
+  const revokeProjectGrant = useStore((s) => s.revokeProjectGrant);
+  const revokeProjectAll = useStore((s) => s.revokeProjectAll);
+
+  const syncNow = () =>
+    wsService.send({ type: "permission:sync", grants: useStore.getState().grantsByProject });
+
+  const auditFor = (domain: string) => {
+    let found: (typeof consentLog)[number] | undefined;
+    for (const c of consentLog) if (c.project === project && c.domain === domain) found = c;
+    return found;
+  };
+
+  const label = project === "(unassigned)" ? "General" : project;
+
+  return (
+    <div
+      className="ha-project-panel-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Web access for ${label}`}
+      onClick={onClose}
+    >
+      <div className="ha-project-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="ha-project-panel-head">
+          <div>
+            <div className="ha-project-panel-kicker">Project web access</div>
+            <h2 className="ha-project-panel-title" title={project}>{label}</h2>
+          </div>
+          <button type="button" className="ha-project-panel-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+
+        <p className="ha-project-panel-help">
+          Domains this project was allowed to visit. Grants are isolated per
+          project — allowing a domain here does not authorize any other project.
+        </p>
+
+        {domains.length === 0 ? (
+          <div className="ha-project-panel-empty">
+            No domains granted to “{label}” yet. It will ask the first time it
+            wants to visit a site.
+          </div>
+        ) : (
+          <ul className="ha-project-panel-list">
+            {domains.map((d) => {
+              const a = auditFor(d);
+              return (
+                <li key={d} className="ha-project-panel-item">
+                  <code className="ha-project-panel-domain">{d}</code>
+                  <span className="ha-project-panel-meta">
+                    {a?.agentClient ? `via ${a.agentClient}` : "manual"}
+                    {a?.tool ? ` · ${a.tool}` : ""}
+                    {a?.grantedAt
+                      ? ` · ${new Date(a.grantedAt).toLocaleDateString()}`
+                      : ""}
+                  </span>
+                  <button
+                    type="button"
+                    className="ha-project-panel-revoke"
+                    aria-label={`Revoke ${d} for ${label}`}
+                    onClick={() => {
+                      revokeProjectGrant(project, d);
+                      syncNow();
+                    }}
+                  >
+                    Revoke
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {domains.length > 0 && (
+          <div className="ha-project-panel-foot">
+            <button
+              type="button"
+              className="ha-project-panel-revoke-all"
+              onClick={() => {
+                revokeProjectAll(project);
+                syncNow();
+              }}
+            >
+              Revoke all for “{label}”
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

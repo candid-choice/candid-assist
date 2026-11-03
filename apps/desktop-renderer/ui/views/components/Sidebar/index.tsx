@@ -18,6 +18,9 @@ export interface SidebarSession {
   surfaceCount: number;
   /** False when the owning agent's WebSocket MCP connection is gone. */
   connected?: boolean;
+  /** Repo-root project this agent session originated from. Clicking the
+   * label opens the project's web-access panel (all granted permissions). */
+  project?: string;
 }
 
 export interface SidebarProps {
@@ -32,6 +35,8 @@ export interface SidebarProps {
   onAddSession?: () => void;
   onItemDelete?: (id: string) => void;
   onItemContextMenu?: (session: SidebarSession, x: number, y: number) => void;
+  /** Click a session's project label → open that project's access panel. */
+  onProjectClick?: (project: string) => void;
   activeSessionId: string | null;
 }
 
@@ -71,6 +76,7 @@ function Sidebar({
   onAddSession,
   onItemDelete,
   onItemContextMenu,
+  onProjectClick,
   activeSessionId,
 }: SidebarProps) {
   const [search, setSearch] = useState("");
@@ -144,6 +150,20 @@ function Sidebar({
               <div className="ha-sidebar-item-title">{session.title}</div>
               <div className="ha-sidebar-item-meta">
                 {formatTimeAgo(session.updatedAt)} · {session.surfaceCount} surface{session.surfaceCount !== 1 ? "s" : ""}
+                {session.project && onProjectClick ? (
+                  <button
+                    type="button"
+                    className="ha-sidebar-project-chip"
+                    aria-label={`Project ${session.project} — view web access`}
+                    title={`Web access granted to “${session.project}”`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onProjectClick(session.project as string);
+                    }}
+                  >
+                    {session.project}
+                  </button>
+                ) : null}
               </div>
             </div>
             {onItemDelete && (
