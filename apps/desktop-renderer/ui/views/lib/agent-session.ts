@@ -16,8 +16,15 @@ export function ensureAgentSessionFor(agent: {
   if (!agent?.client) return undefined;
   const agentSessionId = agent.agentSessionId || "anonymous";
   const key = `${agent.client}::${agentSessionId}`;
-  const mapped = useStore.getState().agentSessions[key];
-  if (mapped) return mapped;
+  const st = useStore.getState();
+  const mapped = st.agentSessions[key];
+  if (mapped && st.sessions.some((s) => s.id === mapped)) return mapped;
+  if (mapped) {
+    // Stale mapping (persisted across a restart, or the temp row was
+    // dropped when the backend re-key failed / sync replaced the list).
+    // Re-materialize below instead of binding surfaces to a phantom id.
+    st.setAgentSession(key, "");
+  }
 
   const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const title = `${agent.client} · ${agentSessionId.slice(0, 6)} · ${time}`;

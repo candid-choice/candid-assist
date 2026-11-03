@@ -675,7 +675,14 @@ export const useStore = create<AppState>()(
       agentSessions: {},
 
       setAgentSession: (agentKey: string, sessionId: string) =>
-        set((s) => ({ agentSessions: { ...s.agentSessions, [agentKey]: sessionId } })),
+        set((s) => {
+          if (!sessionId) {
+            const next = { ...s.agentSessions };
+            delete next[agentKey];
+            return { agentSessions: next };
+          }
+          return { agentSessions: { ...s.agentSessions, [agentKey]: sessionId } };
+        }),
 
       // ── View manager ───────────────────────────────────────────────────
       activeViewId: null,
