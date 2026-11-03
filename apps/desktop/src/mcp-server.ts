@@ -1250,6 +1250,22 @@ function sendToWsClients(eventObj: Record<string, unknown>): void {
   for (const client of wsClients) {
     if (client.readyState === WebSocket.OPEN) client.send(payload);
   }
+  // A consent prompt the human never sees is a denied prompt: bring the
+  // window forward the moment one is issued so it can actually be answered.
+  if (eventObj["event"] === "permission:request") {
+    try {
+      // Lazy require keeps this module importable from non-Electron tests.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const electron = require("electron") as { BrowserWindow?: { getAllWindows(): Array<{ show(): void; focus(): void; isMinimized(): boolean }> } };
+      for (const win of electron.BrowserWindow?.getAllWindows() ?? []) {
+        if (win.isMinimized()) win.show();
+        win.show();
+        win.focus();
+      }
+    } catch {
+      // non-Electron (tests) — no windows to raise
+    }
+  }
 }
 
 /** Exported for tests + potential UI-side introspection. */
