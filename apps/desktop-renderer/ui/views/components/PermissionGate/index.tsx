@@ -18,12 +18,26 @@ import "./index.css";
 export function PermissionGate() {
   const pending = useStore((s) => s.pendingPermission);
   const setPending = useStore((s) => s.setPendingPermission);
-  const addGrant = useStore((s) => s.addBrowserGrant);
 
   const respond = useCallback(
     (decision: "once" | "always" | "deny") => {
       if (!pending) return;
-      if (decision === "always") addGrant(pending.host);
+      if (decision === "always") {
+        // Record under the requesting project so one project's "always
+        // allow" never authorizes another; falls back to unassigned when
+        // the agent declared no project.
+        useStore
+          .getState()
+          .grantForProject(
+            pending.agentProject || "(unassigned)",
+            pending.host,
+            {
+              tool: pending.tool,
+              agentClient: pending.agentClient,
+              agentSessionId: pending.agentSessionId,
+            },
+          );
+      }
       // Approving means "go ahead AND watch": jump to the requesting
       // agent's session so the surface it opens is visible immediately.
       if (decision !== "deny" && pending.agentClient) {
@@ -35,6 +49,7 @@ export function PermissionGate() {
           ensureAgentSessionFor({
             client: pending.agentClient,
             agentSessionId: pending.agentSessionId,
+            agentProject: pending.agentProject,
           });
         if (sid) st.setActiveSession(sid);
       }
@@ -45,7 +60,7 @@ export function PermissionGate() {
       });
       setPending(null);
     },
-    [pending, addGrant, setPending],
+    [pending, setPending],
   );
 
   if (!pending) return null;

@@ -10,7 +10,11 @@ describe('Settings ▸ Web Access', () => {
     cleanup();
     delete (window as unknown as { desktop?: unknown }).desktop;
     act(() => {
-      useStore.setState({ browserGrants: [] } as never);
+      useStore.setState({
+        browserGrants: [],
+        grantsByProject: {},
+        consentLog: [],
+      } as never);
     });
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -35,7 +39,7 @@ describe('Settings ▸ Web Access', () => {
     expect(useStore.getState().browserGrants).toEqual(['docs.google.com']);
     expect(send).toHaveBeenCalledWith({
       type: 'permission:sync',
-      domains: ['docs.google.com'],
+      grants: { '(unassigned)': ['docs.google.com'] },
     });
   });
 

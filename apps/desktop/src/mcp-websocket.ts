@@ -43,8 +43,8 @@ function firePresence(): void {
 /** Live initialized agents, with their bound harness identity (ctx).
  * Deduped by bound agentSessionId — one agent may hold several sockets
  * (e.g. pi-mcp transport + the extension's presence hello channel). */
-export function getLiveAgentInfos(): Array<{ client: string; agentSessionId: string | null }> {
-  const out: Array<{ client: string; agentSessionId: string | null }> = [];
+export function getLiveAgentInfos(): Array<{ client: string; agentSessionId: string | null; project?: string | null }> {
+  const out: Array<{ client: string; agentSessionId: string | null; project?: string | null }> = [];
   const seen = new Set<string>();
   for (const c of connections.values()) {
     if (c.initialized && c.socket.readyState === WebSocket.OPEN) {
@@ -54,6 +54,7 @@ export function getLiveAgentInfos(): Array<{ client: string; agentSessionId: str
       out.push({
         client: c.ctx?.agentClient ?? "agent",
         agentSessionId: c.ctx?.agentSessionId ?? null,
+        project: c.ctx?.agentProject ?? null,
       });
     }
   }

@@ -364,18 +364,39 @@ function mcpHttpUrl(): string {
 }
 
 function WebAccessSettings() {
-  const grants = useStore((s) => s.browserGrants);
-  const removeGrant = useStore((s) => s.removeBrowserGrant);
+  const grantsByProject = useStore((s) => s.grantsByProject);
+  const consentLog = useStore((s) => s.consentLog);
+  const totalGrants = useStore((s) => s.browserGrants);
+  const revokeProjectGrant = useStore((s) => s.revokeProjectGrant);
+  const revokeProjectAll = useStore((s) => s.revokeProjectAll);
   const clearGrants = useStore((s) => s.clearBrowserGrants);
   const toast = useStore((s) => s.pushUiMessage);
   const [site, setSite] = useState("");
 
-  const syncToServer = (domains: string[]) =>
-    wsService.send({ type: "permission:sync", domains });
+  // Projects that actually hold at least one grant, alphabetical.
+  const projects = Object.keys(grantsByProject)
+    .filter((p) => (grantsByProject[p] ?? []).length > 0)
+    .sort();
 
-  const revoke = (domain: string) => {
-    removeGrant(domain);
-    syncToServer(useStore.getState().browserGrants);
+  // Latest audit entry for a (project, domain) — to show who was allowed.
+  const auditFor = (project: string, domain: string) => {
+    let found: (typeof consentLog)[number] | undefined;
+    for (const c of consentLog) {
+      if (c.project === project && c.domain === domain) found = c;
+    }
+    return found;
+  };
+
+  const syncToServer = (map: Record<string, string[]>) =>
+    wsService.send({ type: "permission:sync", grants: map });
+
+  const revoke = (project: string, domain: string) => {
+    revokeProjectGrant(project, domain);
+    syncToServer(useStore.getState().grantsByProject);
+  };
+  const revokeAll = (project: string) => {
+    revokeProjectAll(project);
+    syncToServer(useStore.getState().grantsByProject);
   };
 
   const openSignIn = async () => {
@@ -426,7 +447,7 @@ function WebAccessSettings() {
       toast({ message: "Saved sign-ins and grants cleared.", type: "success", title: "Web Access" });
     } else {
       clearGrants();
-      syncToServer([]);
+      syncToServer({});
       toast({ message: "Grants cleared (no desktop bridge — profile not wiped).", type: "warning", title: "Web Access" });
     }
   };
@@ -446,27 +467,53 @@ function WebAccessSettings() {
 
       <div className="ha-settings-row">
         <label className="ha-settings-label">
-          <span>Allowed domains ({grants.length})</span>
-          {grants.length === 0 ? (
+          <span>Allowed domains ({totalGrants.length})</span>
+          {projects.length === 0 ? (
             <span className="ha-settings-help">
               No domains granted yet — the agent will ask you the first time
               it wants to visit one.
             </span>
           ) : (
             <span className="ha-web-grants">
-              {grants.map((d) => (
-                <span key={d} className="ha-web-grant-chip">
-                  <code>{d}</code>
-                  <button
-                    type="button"
-                    className="ha-web-grant-revoke"
-                    aria-label={`Revoke ${d}`}
-                    title="Revoke"
-                    onClick={() => revoke(d)}
-                  >
-                    ✕
-                  </button>
-                </span>
+              {projects.map((project) => (
+                <div key={project} className="ha-web-project-group">
+                  <div className="ha-web-project-head">
+                    <span className="ha-web-project-name" title={`Grants for project ${project}`}>
+                      {project === "(unassigned)" ? "General" : project}
+                    </span>
+                    <button
+                      type="button"
+                      className="ha-web-project-revoke-all"
+                      onClick={() => revokeAll(project)}
+                    >
+                      Revoke all
+                    </button>
+                  </div>
+                  <span className="ha-web-grants">
+                    {(grantsByProject[project] ?? []).map((d) => {
+                      const audit = auditFor(project, d);
+                      return (
+                        <span key={`${project}::${d}`} className="ha-web-grant-chip">
+                          <code>{d}</code>
+                          {audit?.agentClient ? (
+                            <span className="ha-web-grant-via" title={`Granted for ${audit.agentClient}${audit.tool ? ` via ${audit.tool}` : ""}`}>
+                              {audit.agentClient}
+                            </span>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="ha-web-grant-revoke"
+                            aria-label={`Revoke ${d}`}
+                            title="Revoke"
+                            onClick={() => revoke(project, d)}
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </span>
+                </div>
               ))}
             </span>
           )}

@@ -51,7 +51,7 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
       // Re-share the human's "always allow" domain grants with the server
       wsService.send({
         type: "permission:sync",
-        domains: useStore.getState().browserGrants,
+        grants: useStore.getState().grantsByProject,
       });
     }
   });
@@ -72,12 +72,12 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
   // Push grant changes to the server the moment they happen (the
   // connect-time sync alone leaves a window where an 'always allow'
   // click isn't yet known server-side).
-  let lastGrantsJson = JSON.stringify(useStore.getState().browserGrants);
+  let lastGrantsJson = JSON.stringify(useStore.getState().grantsByProject);
   useStore.subscribe((state) => {
-    const g = JSON.stringify(state.browserGrants);
+    const g = JSON.stringify(state.grantsByProject);
     if (g !== lastGrantsJson) {
       lastGrantsJson = g;
-      wsService.send({ type: "permission:sync", domains: state.browserGrants });
+      wsService.send({ type: "permission:sync", grants: state.grantsByProject });
     }
   });
 
@@ -94,13 +94,13 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
     }
     if (event.event === "agent:presence") {
       // Live WS MCP agent set changed (connected / bound / disconnected).
-      const d = event.data as { agents?: Array<{ client: string; agentSessionId: string | null }> };
+      const d = event.data as { agents?: Array<{ client: string; agentSessionId: string | null; project?: string | null }> };
       const agents = d?.agents ?? [];
       useStore.getState().setMcpAgents(agents);
       // A bound agent means "a new session connected": materialize its
       // sidebar row immediately instead of waiting for a surface push.
       for (const a of agents) {
-        if (a.agentSessionId) ensureAgentSessionFor({ client: a.client, agentSessionId: a.agentSessionId });
+        if (a.agentSessionId) ensureAgentSessionFor({ client: a.client, agentSessionId: a.agentSessionId, agentProject: a.project });
       }
       return;
     }
@@ -126,6 +126,7 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
           tool: d.tool ?? "browser",
           agentClient: (d as { agentClient?: string }).agentClient,
           agentSessionId: (d as { agentSessionId?: string | null }).agentSessionId,
+          agentProject: (d as { agentProject?: string | null }).agentProject,
         });
         // Make it noticeable even when the pane is scrolled/busy.
         useStore.getState().pushUiMessage({

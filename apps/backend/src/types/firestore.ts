@@ -135,6 +135,9 @@ export interface SessionDoc {
    *  MCP agent action, e.g. a pi or Claude Code session). */
   agentSessionId?: string;
   agentClient?: string;
+  /** Repo-root project the agent session originated from. Web-access
+   *  grants are isolated per project and reviewable under this label. */
+  agentProject?: string;
 }
 
 // ──────────────────────────────────────────────

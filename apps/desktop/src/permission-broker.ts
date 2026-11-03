@@ -24,11 +24,17 @@ export interface PermissionRequest {
    * so the human approves AND watches in the right place. */
   agentClient?: string;
   agentSessionId?: string | null;
+  /** Project (repo root name) the agent asked on behalf of — grants are
+   * isolated per project, and the renderer records the grant under it. */
+  agentProject?: string | null;
 }
 
 export interface PermissionAgentContext {
   agentClient?: string;
   agentSessionId?: string | null;
+  /** Project the agent works in (repo root name). Grants are isolated
+   * per project: project A having google.com does NOT authorize B. */
+  agentProject?: string | null;
 }
 
 export interface PermissionOutcome {
@@ -44,9 +50,13 @@ interface Pending {
   timer: ReturnType<typeof setTimeout>;
 }
 
+/** Bucket key for agents without a declared project. */
+const NO_PROJECT = "(unassigned)";
+
 export class PermissionBroker {
-  private grants = new Set<string>();
-  private pending = new Map<string, Pending>();
+  /** project → set of granted hosts. Hard-isolated per project. */
+  private grants = new Map<string, Set<string>>();
+  private pending = new Map<string, Pending & { agent?: PermissionAgentContext }>();
   private seq = 0;
 
   constructor(
@@ -54,24 +64,48 @@ export class PermissionBroker {
     private timeoutMs = 120_000,
   ) {}
 
-  /** Renderer (re)sync — replaces server-side view of granted domains. */
-  syncGrants(domains: string[]): void {
-    this.grants = new Set(
-      domains.filter((d) => typeof d === "string" && d.length > 0).map(normalizeHost),
-    );
+  /** Renderer (re)sync — replaces the server-side view of grants.
+   * Accepts the new per-project map shape { [project]: domains[] } or
+   * (for old renderers) a flat array which lands in the unassigned bucket. */
+  syncGrants(payload: Record<string, string[]> | string[]): void {
+    this.grants = new Map();
+    const put = (project: string, domains: string[]) => {
+      const bucket = this.grants.get(project) ?? new Set<string>();
+      for (const d of domains) {
+        if (typeof d === "string" && d.length > 0) bucket.add(normalizeHost(d));
+      }
+      if (bucket.size) this.grants.set(project, bucket);
+    };
+    if (Array.isArray(payload)) {
+      put(NO_PROJECT, payload);
+      return;
+    }
+    for (const [project, domains] of Object.entries(payload)) {
+      if (Array.isArray(domains)) put(project || NO_PROJECT, domains);
+    }
   }
 
-  hasGrant(url: string): boolean {
+  hasGrant(url: string, project?: string | null): boolean {
     try {
       const host = normalizeHost(new URL(url).hostname);
-      return this.grants.has(host);
+      return this.grants.get(project || NO_PROJECT)?.has(host) === true;
     } catch {
       return false;
     }
   }
 
-  grantDomain(domain: string): void {
-    this.grants.add(normalizeHost(domain));
+  grantDomain(domain: string, project?: string | null): void {
+    const key = project || NO_PROJECT;
+    const bucket = this.grants.get(key) ?? new Set<string>();
+    bucket.add(normalizeHost(domain));
+    this.grants.set(key, bucket);
+  }
+
+  /** All grants, serialized for renderer sync (per-project). */
+  exportGrants(): Record<string, string[]> {
+    const out: Record<string, string[]> = {};
+    for (const [project, hosts] of this.grants) out[project] = [...hosts];
+    return out;
   }
 
   /** Ask (or auto-allow) before letting the agent use a domain. */
@@ -80,7 +114,7 @@ export class PermissionBroker {
     tool: string,
     agent?: PermissionAgentContext,
   ): Promise<PermissionOutcome> {
-    if (this.hasGrant(url)) return { allowed: true, decision: "always" };
+    if (this.hasGrant(url, agent?.agentProject)) return { allowed: true, decision: "always" };
 
     let host = url;
     try {
@@ -97,6 +131,7 @@ export class PermissionBroker {
       tool,
       agentClient: agent?.agentClient,
       agentSessionId: agent?.agentSessionId,
+      agentProject: agent?.agentProject,
     };
 
     return new Promise<PermissionOutcome>((resolve) => {
@@ -113,7 +148,7 @@ export class PermissionBroker {
         resolve({ allowed: false, decision: "timeout" });
       }, this.timeoutMs);
 
-      this.pending.set(id, { host, resolve, timer });
+      this.pending.set(id, { host, resolve, timer, agent });
 
       console.log(
         `[perm] request ${id} host=${host} tool=${tool}` +
@@ -136,7 +171,7 @@ export class PermissionBroker {
     }
     clearTimeout(p.timer);
     this.pending.delete(id);
-    if (decision === "always") this.grants.add(normalizeHost(p.host));
+    if (decision === "always") this.grantDomain(p.host, p.agent?.agentProject);
     p.resolve({ allowed: decision !== "deny", decision });
     // Any other window still showing this prompt should dismiss it.
     this.broadcast({

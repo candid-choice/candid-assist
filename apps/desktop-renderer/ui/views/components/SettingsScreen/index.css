@@ -223,6 +223,44 @@
 
 /* Web Access grants chips */
 .ha-web-grants { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ha-web-project-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--ha-border, #e2e5ea);
+  border-radius: 10px;
+  background: var(--ha-bg-secondary, #fafbfc);
+}
+.ha-web-project-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ha-web-project-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ha-text);
+  font-family: var(--ha-font-mono, ui-monospace, monospace);
+}
+.ha-web-project-revoke-all {
+  border: none;
+  background: none;
+  color: var(--ha-text-muted, #6b7280);
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.ha-web-project-revoke-all:hover { color: var(--ha-danger, #b42318); }
+.ha-web-grant-via {
+  font-size: 10px;
+  color: var(--ha-text-muted, #6b7280);
+  background: var(--ha-bg-tertiary, #eef0f3);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
 .ha-web-grant-chip {
   display: inline-flex;
   align-items: center;

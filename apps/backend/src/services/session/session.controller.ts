@@ -71,6 +71,7 @@ export class SessionController {
     @Body('workspacePath') workspacePath: string,
     @Body('agentSessionId') agentSessionId?: string,
     @Body('agentClient') agentClient?: string,
+    @Body('agentProject') agentProject?: string,
   ) {
     if (!title || !workspacePath) {
       throw new BadRequestException('Title and workspace path are required');
@@ -79,6 +80,7 @@ export class SessionController {
     return this.sessionService.createSession(this.uid(req), title, {
       agentSessionId,
       agentClient,
+      agentProject,
     });
   }
 

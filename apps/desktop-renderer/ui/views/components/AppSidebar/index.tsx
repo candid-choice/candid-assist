@@ -6,7 +6,7 @@ Connects the presentational Sidebar to the Zustand store:
   - session click → setActiveSession
 */
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { Sidebar, type SidebarSession } from "../Sidebar";
 import { SidebarContextMenu } from "../SidebarContextMenu";
@@ -22,10 +22,15 @@ import type { SessionDoc } from "../../services/sync/types";
 
 // ── Mapping ────────────────────────────────────────────────────────────────
 
-/** Map backend session status → sidebar status vocabulary. */
+/** Map backend session status → sidebar status vocabulary.
+ * surfaceCount prefers the LIVE open-tab count from the renderer store
+ * (views with this sessionId) — the backend doc's surfaces array is only
+ * filled by a fire-and-forget POST that never reloads the local doc, so
+ * it is stale. Falls back to doc.surfaces for legacy/server-only rows. */
 export function toSidebarSession(
   doc: SessionDoc,
   liveAgentIds?: Set<string>,
+  liveSurfaceCount?: number,
 ): SidebarSession {
   const status: SidebarSession["status"] =
     doc.status === "dead"
@@ -49,7 +54,7 @@ export function toSidebarSession(
     status,
     connected,
     updatedAt: doc.updatedAt,
-    surfaceCount: doc.surfaces?.length ?? 0,
+    surfaceCount: liveSurfaceCount ?? doc.surfaces?.length ?? 0,
   };
 }
 
@@ -69,6 +74,26 @@ export function AppSidebar({
   const sessions = useStore((s) => s.sessions);
   const activeSessionId = useStore((s) => s.activeSessionId);
   const mcpAgents = useStore((s) => s.mcpAgents);
+  const views = useStore((s) => s.views);
+
+  // Per-session surface badge = LIVE open tabs (store views) ∪ persisted
+  // history (doc.surfaces), deduped by surfaceId — matches what the
+  // session detail lists, so the badge is never stale (the backend doc's
+  // surfaces array is only filled by a fire-and-forget POST that never
+  // reloads the local doc).
+  const surfaceCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of sessions) {
+      const ids = new Set<string>();
+      for (const v of views) {
+        const sid = (v as unknown as { sessionId?: string }).sessionId;
+        if (sid === s.id && v.id) ids.add(v.id);
+      }
+      for (const surf of s.surfaces ?? []) if (surf.surfaceId) ids.add(surf.surfaceId);
+      m.set(s.id, ids.size);
+    }
+    return m;
+  }, [views, sessions]);
   const [menu, setMenu] = useState<{
     session: SidebarSession;
     x: number;
@@ -134,6 +159,7 @@ export function AppSidebar({
           toSidebarSession(
             sess,
             new Set(mcpAgents.map((a) => a.agentSessionId).filter(Boolean) as string[]),
+            surfaceCounts.get(sess.id),
           ),
         )}
         onSessionClick={handleSessionClick}

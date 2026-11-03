@@ -104,7 +104,7 @@ export interface McpStatus {
     agentCount: number;
     agents: AgentInfo[];
     /** WebSocket-transport agents currently live (with harness ids). */
-    wsAgents?: Array<{ client: string; agentSessionId: string | null }>;
+    wsAgents?: Array<{ client: string; agentSessionId: string | null; project?: string | null }>;
   };
   ws: { clients: number };
 }
@@ -350,6 +350,7 @@ async function handleOpenBrowserSurface(
   const perm = await permissionBroker.ensure(url, "openBrowserSurface", {
     agentClient: ctx?.agentClient,
     agentSessionId: ctx?.agentSessionId,
+    agentProject: ctx?.agentProject,
   });
   if (!perm.allowed) return { status: "denied", reason: perm.decision, url };
   if (openSurfaces.size >= MAX_SURFACES) {
@@ -591,6 +592,7 @@ const TOOL_DEFINITIONS = [
         agentSessionId: { type: 'string', description: 'Your coding-session id (PI_SESSION_ID etc)' },
         client: { type: 'string', description: 'Client name override (pi | claude-code | ...)' },
         title: { type: 'string', description: 'Optional session title' },
+        project: { type: 'string', description: 'Project this session belongs to — derived from the repo root name. Web-access grants are isolated per project and reviewable in the app.' },
       },
       required: ['agentSessionId'],
     },
@@ -842,6 +844,10 @@ export interface McpAgentCtx {
   clientInfo?: { name?: string; version?: string };
   agentClient?: string;
   agentSessionId?: string;
+  /** Repo-root project name (from bindAgentSession). Web-access grants
+   * are isolated per project so one project's "always allow" never
+   * authorizes another, and the whole trail is reviewable per project. */
+  agentProject?: string;
 }
 
 function handleBindAgentSession(args: unknown, ctx: McpAgentCtx): Record<string, unknown> {
@@ -852,12 +858,14 @@ function handleBindAgentSession(args: unknown, ctx: McpAgentCtx): Record<string,
   }
   const client = typeof obj["client"] === "string" ? (obj["client"] as string).slice(0, 60) : undefined;
   const title = typeof obj["title"] === "string" ? (obj["title"] as string).slice(0, 100) : undefined;
+  const project = typeof obj["project"] === "string" ? (obj["project"] as string).slice(0, 120) : undefined;
   ctx.agentSessionId = sid;
   if (client) ctx.agentClient = client;
   else if (!ctx.agentClient) ctx.agentClient = ctx.clientInfo?.name ?? "agent";
-  console.log("[mcp] bound connection " + ctx.connectionId + " -> client=" + (ctx.agentClient ?? "?") + " session=" + sid);
+  if (project) ctx.agentProject = project;
+  console.log("[mcp] bound connection " + ctx.connectionId + " -> client=" + (ctx.agentClient ?? "?") + " session=" + sid + (project ? " project=" + project : ""));
   broadcastAgentPresence();
-  return { status: "bound", agentSessionId: sid, client: ctx.agentClient ?? null, title: title ?? null };
+  return { status: "bound", agentSessionId: sid, client: ctx.agentClient ?? null, title: title ?? null, project: ctx.agentProject ?? null };
 }
 
 // ── Shared MCP JSON-RPC dispatch (HTTP POST /mcp + WebSocket transport) ──
@@ -967,6 +975,9 @@ export async function processMcpMessage(
       if (typeof a["agentClient"] === "string" && (a["agentClient"] as string).length > 0 && (a["agentClient"] as string).length <= 60) {
         ctx.agentClient = a["agentClient"] as string;
       }
+      if (typeof a["agentProject"] === "string" && (a["agentProject"] as string).length > 0 && (a["agentProject"] as string).length <= 120) {
+        ctx.agentProject = a["agentProject"] as string;
+      }
     }
   }
 
@@ -992,7 +1003,11 @@ const __toolName = (params as Record<string, unknown>)["name"];
     );
     const agentTag =
       ctx.agentSessionId || ctx.agentClient
-        ? { agent: { client: ctx.agentClient ?? "agent", agentSessionId: ctx.agentSessionId ?? null } }
+        ? { agent: {
+            client: ctx.agentClient ?? "agent",
+            agentSessionId: ctx.agentSessionId ?? null,
+            ...(ctx.agentProject ? { agentProject: ctx.agentProject } : {}),
+          } }
         : {};
     const resultSurfaceId = (result as Record<string, unknown>)?.["surfaceId"] as string | undefined;
     if (resultSurfaceId && openSurfaces.has(resultSurfaceId)) {
@@ -1040,11 +1055,11 @@ function logMcpRequest(method: string, id: unknown, ip: string, port: number): v
 
 /** WebSocket MCP server reports live connection count for /status here. */
 let wsPresenceProvider: () => number = () => 0;
-let wsAgentsProvider: () => Array<{ client: string; agentSessionId: string | null }> = () => [];
+let wsAgentsProvider: () => Array<{ client: string; agentSessionId: string | null; project?: string | null }> = () => [];
 
 /** WebSocket MCP layer registers this to feed /status + presence events. */
 export function setWsAgentsProvider(
-  fn: () => Array<{ client: string; agentSessionId: string | null }>,
+  fn: () => Array<{ client: string; agentSessionId: string | null; project?: string | null }>,
 ): void {
   wsAgentsProvider = fn;
 }
@@ -1132,7 +1147,7 @@ function startWebSocketServer(port: number): WebSocketServer {
     client.on("error", () => wsClients.delete(client));
     client.on("message", (data) => {
       try {
-        const msg = JSON.parse(data.toString()) as { type?: unknown; surfaceId?: unknown; id?: unknown; action?: unknown; domains?: unknown; decision?: unknown };
+        const msg = JSON.parse(data.toString()) as { type?: unknown; surfaceId?: unknown; id?: unknown; action?: unknown; domains?: unknown; grants?: unknown; decision?: unknown };
         if (msg && msg.type === "process:control" && typeof msg.id === "string") {
           try {
             if (msg.action === "kill") registryStop(msg.id);
@@ -1142,10 +1157,21 @@ function startWebSocketServer(port: number): WebSocketServer {
             console.warn("[proc] control failed:", (e as Error).message);
           }
         }
-        if (msg && msg.type === "permission:sync" && Array.isArray(msg.domains)) {
-          const doms = msg.domains.filter((d: unknown) => typeof d === "string") as string[];
-          permissionBroker.syncGrants(doms);
-          console.log("[perm] renderer synced grants:", JSON.stringify(doms));
+        if (msg && msg.type === "permission:sync") {
+          // Per-project map { [project]: domains[] } (preferred) or legacy
+          // flat domains[] (lands in the unassigned bucket).
+          if (msg.grants && typeof msg.grants === "object") {
+            permissionBroker.syncGrants(
+              msg.grants as Record<string, string[]>,
+            );
+            console.log("[perm] renderer synced per-project grants");
+          } else if (Array.isArray(msg.domains)) {
+            const doms = msg.domains.filter(
+              (d: unknown) => typeof d === "string",
+            ) as string[];
+            permissionBroker.syncGrants(doms);
+            console.log("[perm] renderer synced grants:", JSON.stringify(doms));
+          }
         }
         if (
           msg &&
@@ -1267,7 +1293,7 @@ async function agentNavigateAndEval(
   tool: string,
   evalJs: string,
   agentArgs: Record<string, unknown>,
-  agent?: { agentClient?: string; agentSessionId?: string | null },
+  agent?: { agentClient?: string; agentSessionId?: string | null; agentProject?: string | null },
 ): Promise<
   | { ok: true; surfaceId: string; value: unknown }
   | { ok: false; status: "denied"; reason: string; url: string }
@@ -1314,6 +1340,7 @@ async function agentNavigateAndEval(
             agent: {
               client: (agentArgs["agentClient"] as string) ?? "agent",
               agentSessionId: (agentArgs["agentSessionId"] as string) ?? null,
+              ...(agentArgs["agentProject"] ? { agentProject: agentArgs["agentProject"] as string } : {}),
             },
           }
         : {};
@@ -1440,6 +1467,7 @@ async function handleGoogleSearch(
   const r = await agentNavigateAndEval(url, "googleSearch", evalJs, o, {
     agentClient: ctx?.agentClient,
     agentSessionId: ctx?.agentSessionId,
+    agentProject: ctx?.agentProject,
   });
   if (!r.ok) return { ...r, tool: "googleSearch" };
   let parsed: Record<string, unknown> = {};
@@ -1484,6 +1512,7 @@ async function handleReadGoogleDriveDoc(
   const r = await agentNavigateAndEval(url, "readGoogleDriveDoc", evalJs, o, {
     agentClient: ctx?.agentClient,
     agentSessionId: ctx?.agentSessionId,
+    agentProject: ctx?.agentProject,
   });
   if (!r.ok) return { ...r, tool: "readGoogleDriveDoc" };
   let parsed: Record<string, unknown> = {};
@@ -1535,6 +1564,7 @@ async function handleScrapeSelective(
   const r = await agentNavigateAndEval(url, "scrapeSelective", evalJs, o, {
     agentClient: ctx?.agentClient,
     agentSessionId: ctx?.agentSessionId,
+    agentProject: ctx?.agentProject,
   });
   if (!r.ok) return { ...r, tool: "scrapeSelective" };
   let parsed: Record<string, unknown> = {};
@@ -1650,6 +1680,7 @@ async function handleBrowserNavigate(
   const perm = await permissionBroker.ensure(url, "browserNavigate", {
     agentClient: ctx?.agentClient,
     agentSessionId: ctx?.agentSessionId,
+    agentProject: ctx?.agentProject,
   });
   if (!perm.allowed) return { status: "denied", reason: perm.decision, url };
   const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);

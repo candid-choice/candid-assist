@@ -11,6 +11,7 @@ import { queueAction } from "../errors/offline-queue";
 export function ensureAgentSessionFor(agent: {
   client?: string;
   agentSessionId?: string | null;
+  agentProject?: string | null;
 }): string | undefined {
   if (!agent?.client) return undefined;
   const agentSessionId = agent.agentSessionId || "anonymous";
@@ -35,6 +36,7 @@ export function ensureAgentSessionFor(agent: {
     archivedAt: null,
     agentSessionId: agent.agentSessionId ?? undefined,
     agentClient: agent.client,
+    agentProject: agent.agentProject ?? undefined,
   });
   useStore.getState().setAgentSession(key, tempId);
   void (async () => {
@@ -42,6 +44,7 @@ export function ensureAgentSessionFor(agent: {
       const doc = await createSession(title, "", {
         agentSessionId: agent.agentSessionId ?? undefined,
         agentClient: agent.client,
+        agentProject: agent.agentProject ?? undefined,
       });
       const st = useStore.getState();
       st.addSession(doc);
@@ -54,6 +57,7 @@ export function ensureAgentSessionFor(agent: {
         workspacePath: "",
         agentSessionId: agent.agentSessionId ?? undefined,
         agentClient: agent.client,
+        agentProject: agent.agentProject ?? undefined,
       });
     }
   })();
