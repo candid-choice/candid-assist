@@ -170,7 +170,14 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
       // Agent-linked recording: actions from a bound coding session
       // record into a dedicated sidebar session (created on first
       // action, reused thereafter).
-      let sessionId = useStore.getState().activeSessionId ?? undefined;
+      const st0 = useStore.getState();
+      // Guard against a dangling persisted activeSessionId (survives
+      // restarts in storage but may be absent from the synced sessions
+      // list) — re-activating a ghost hides every tab forever.
+      let sessionId =
+        st0.activeSessionId && st0.sessions.some((s) => s.id === st0.activeSessionId)
+          ? st0.activeSessionId
+          : undefined;
       const agentSession = agent?.client ? ensureAgentSessionFor(agent) : undefined;
       if (agentSession) sessionId = agentSession;
       // Manual (tab-bar “+”) pushes carry an explicit target session.

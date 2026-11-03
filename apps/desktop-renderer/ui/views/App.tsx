@@ -113,6 +113,19 @@ function App() {
   ) as typeof views;
   const visibleSurface = pickVisibleSurface(activeSession, activeSurface, sessionOpenViews as never[]) as typeof activeSurface;
 
+  // Self-heal a dangling activeSessionId (persisted across restarts but
+  // no longer present in the synced sessions list): a ghost id hides the
+  // whole tab strip and every surface, with no way back for the user.
+  useEffect(() => {
+    if (!activeSessionId || activeSession) return;
+    const st = useStore.getState();
+    if (!st.sessions.some((s) => s.id === activeSessionId) && st.sessions.length > 0) {
+      // eslint-disable-next-line no-console
+      console.log("[app] clearing dangling activeSessionId " + activeSessionId);
+      st.setActiveSession(null);
+    }
+  }, [activeSessionId, activeSession]);
+
   const handleTabClick = useCallback(
     (id: string) => {
       if (id.startsWith("saved:")) {
