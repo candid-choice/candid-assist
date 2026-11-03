@@ -446,7 +446,7 @@ export default function humanAssist(pi: ExtensionAPI) {
     // Footer: persistent Human Assist connection indicator.
     // Left = HA status dot + project + token stats, right = model (branch).
     try {
-      ctx.ui?.setFooter?.((tui: { requestRender(): void }, theme: { fg(k: string, s: string): string }, footerData: { onBranchChange(cb: () => void): () => void }) => {
+      ctx.ui?.setFooter?.((tui: { requestRender(): void }, theme: { fg(k: string, s: string): string }, footerData: { onBranchChange(cb: () => void): () => void; getGitBranch(): string | null }) => {
         const unsubStatus = conn.onStatus(() => tui.requestRender());
         const unsubBranch = footerData.onBranchChange(() => tui.requestRender());
         return {
@@ -456,7 +456,8 @@ export default function humanAssist(pi: ExtensionAPI) {
             const st = conn.status;
             const dot = st === "connected" ? "●" : st === "connecting" ? "◐" : "○";
             const proj = resolveProject();
-            const ha = theme.fg("dim", ` HA ${dot}${proj ? " " + proj : ""}`);
+            const haColor = st === "connected" ? "success" : st === "connecting" ? "warning" : "error";
+            const ha = theme.fg(haColor, ` HA ${dot}`) + theme.fg("dim", proj ? ` ${proj}` : "");
             let input = 0, output = 0, cost = 0;
             for (const e of ctx.sessionManager.getBranch()) {
               if (e.type === "message" && e.message.role === "assistant") {
