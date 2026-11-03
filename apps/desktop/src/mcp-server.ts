@@ -2050,7 +2050,14 @@ async function handleBrowserExecuteActions(
           denied = perm.decision;
           r = { ok: false, status: "denied", reason: perm.decision };
         } else {
-          await handle.loadURL(a.url as string);
+          try {
+            await handle.loadURL(a.url as string);
+          } catch (e) {
+            // A surface seeded at this exact URL (delegateTask) or a
+            // user-initiated nav in flight makes loadURL abort the
+            // duplicate load — that IS "already on our way".
+            if (!/\(-3\)|ERR_ABORTED/i.test((e as Error).message)) throw e;
+          }
           await sleep(a.settleMs ?? 1_500);
           r = { ok: true, url: a.url };
         }
