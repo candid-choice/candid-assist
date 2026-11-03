@@ -24,7 +24,7 @@ vi.mock('@/views/lib/user-session', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  useStore.setState({ activeSessionId: null, uiMessages: [] } as never);
+  useStore.setState({ activeSessionId: null, uiMessages: [], sessions: [] } as never);
 });
 
 function openMenu(pre?: { activeSessionId?: string | null }) {
@@ -32,7 +32,16 @@ function openMenu(pre?: { activeSessionId?: string | null }) {
   // Plain zustand update — no act: the component reads via getState() at
   // click time and does not subscribe, and act()-wrapping persist's async
   // write was swallowing the subsequent click event in this env.
-  if (pre) useStore.setState(pre);
+  // The active id must exist in `sessions` — the component guards against
+  // dangling activeSessionIds (ghost ids from persisted state).
+  if (pre) {
+    useStore.setState({
+      ...pre,
+      sessions: pre.activeSessionId
+        ? [{ id: pre.activeSessionId, title: 'Active', status: 'active', surfaces: [] }]
+        : [],
+    } as never);
+  }
   fireEvent.click(screen.getByLabelText('Add surface'));
 }
 

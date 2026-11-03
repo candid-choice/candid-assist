@@ -178,8 +178,24 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
         st0.activeSessionId && st0.sessions.some((s) => s.id === st0.activeSessionId)
           ? st0.activeSessionId
           : undefined;
-      const agentSession = agent?.client ? ensureAgentSessionFor(agent) : undefined;
-      if (agentSession) sessionId = agentSession;
+      // Live-directed agent policy: when the human is looking at their
+      // own session, the agent acts THERE (the user is steering it in
+      // real time). The coding session's dedicated recording row is
+      // only used when no human session is open, or the active row is
+      // another agent's recording.
+      let agentSession: string | undefined;
+      if (agent?.client) {
+        const activeNow = st0.sessions.find((s) => s.id === sessionId);
+        const humanOwned = !!activeNow && !activeNow.agentSessionId && !activeNow.agentClient;
+        const sameAgent =
+          !!activeNow &&
+          activeNow.agentClient === agent.client &&
+          (activeNow.agentSessionId ?? null) === (agent.agentSessionId ?? null);
+        if (!humanOwned && !sameAgent) {
+          agentSession = ensureAgentSessionFor(agent);
+          sessionId = agentSession;
+        }
+      }
       // Manual (tab-bar “+”) pushes carry an explicit target session.
       const target = (payload as { targetSessionId?: string } | undefined)?.targetSessionId;
       if (!agentSession && target && useStore.getState().sessions.some((s) => s.id === target)) {

@@ -117,8 +117,13 @@ export function AddSurfaceMenu() {
   const create = (item: SurfaceItem, createUrl?: string) => {
     const st = useStore.getState();
     // Surfaces are session-scoped — ensure the user has a session to
-    // drop this into (create + select one when none is active).
-    const sessionId = st.activeSessionId ?? addUserSession();
+    // drop this into (create + select one when none is active). Guard
+    // against a dangling persisted activeSessionId (see RootUI push).
+    const active =
+      st.activeSessionId && st.sessions.some((s) => s.id === st.activeSessionId)
+        ? st.activeSessionId
+        : undefined;
+    const sessionId = active ?? addUserSession();
     const sent = wsService.send({
       type: "surface:create",
       surfaceType: item.type,
