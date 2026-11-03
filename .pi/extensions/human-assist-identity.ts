@@ -9,11 +9,37 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { existsSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 
 const HUMAN_ASSIST_TOOL = /^mcp[._]+human[._]assist[._]/i;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const presenceSockets: any[] = [];
+
+// Project identity: the repo-root directory name (nearest ancestor holding
+// a .git), else the cwd basename. Cached — this never changes mid-session.
+// Grants are isolated per project, so this string is what scopes "always
+// allow" consent (project A's grants never authorize project B).
+let cachedProject: string | undefined;
+function resolveProject(): string {
+  if (cachedProject) return cachedProject;
+  const start = process.cwd();
+  let dir = start;
+  for (;;) {
+    if (existsSync(join(dir, ".git"))) {
+      cachedProject = basename(dir);
+      break;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) {
+      cachedProject = basename(start) || "(unknown)";
+      break;
+    }
+    dir = parent;
+  }
+  return cachedProject;
+}
 
 async function announcePresence(ctx: any): Promise<void> {
   const url =
@@ -35,6 +61,7 @@ async function announcePresence(ctx: any): Promise<void> {
           type: "agent:hello",
           agentSessionId: harnessId,
           agentClient: "pi",
+          project: resolveProject(),
         }),
       );
     };
@@ -73,6 +100,7 @@ export default function (pi: ExtensionAPI) {
         ...input,
         agentSessionId: harnessId,
         agentClient: "pi",
+        agentProject: resolveProject(),
       };
     }
   });
