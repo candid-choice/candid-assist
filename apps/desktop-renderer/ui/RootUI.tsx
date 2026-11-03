@@ -172,6 +172,11 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
       let sessionId = useStore.getState().activeSessionId ?? undefined;
       const agentSession = agent?.client ? ensureAgentSessionFor(agent) : undefined;
       if (agentSession) sessionId = agentSession;
+      // Manual (tab-bar “+”) pushes carry an explicit target session.
+      const target = (payload as { targetSessionId?: string } | undefined)?.targetSessionId;
+      if (!agentSession && target && useStore.getState().sessions.some((s) => s.id === target)) {
+        sessionId = target;
+      }
 
       useStore.getState().openSurface({
         id: surfaceId,

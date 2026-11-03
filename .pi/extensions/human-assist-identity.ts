@@ -9,8 +9,18 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { existsSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+
+// Temporary debug trail: reveals the exact toolName pi reports for MCP
+// tools (the injection silently no-op'd twice from matcher misses).
+function debugLog(line: string): void {
+  try {
+    appendFileSync("/tmp/ha-identity-debug.log", `${new Date().toISOString()} ${line}\n`);
+  } catch {
+    /* debug only */
+  }
+}
 
 // Tool names arrive as `mcp_human-assist_<tool>` (hyphens preserved by the
 // MCP client) but may also appear dot- or underscore-separated depending on
@@ -91,6 +101,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("tool_call", async (event, ctx) => {
     const name = (event as { toolName?: unknown }).toolName;
+    debugLog(`tool_call name=${JSON.stringify(name)} type=${typeof name}`);
     if (typeof name !== "string" || !isHumanAssistTool(name)) return;
 
     let harnessId: string | undefined;
@@ -103,6 +114,7 @@ export default function (pi: ExtensionAPI) {
 
     const input = (event as { input?: Record<string, unknown> }).input;
     if (input && typeof input !== "string") {
+      debugLog(`injecting identity harness=${harnessId} client=pi project=${resolveProject()} into ${name}`);
       (event as { input: Record<string, unknown> }).input = {
         ...input,
         agentSessionId: harnessId,

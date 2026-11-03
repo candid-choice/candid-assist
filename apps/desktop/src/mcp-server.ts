@@ -347,12 +347,16 @@ async function handleOpenBrowserSurface(
   const obj = args as Record<string, unknown>;
   const url = requireUrl(obj["url"]);
   const prompt = optPrompt(obj["prompt"]);
-  const perm = await permissionBroker.ensure(url, "openBrowserSurface", {
-    agentClient: ctx?.agentClient,
-    agentSessionId: ctx?.agentSessionId,
-    agentProject: ctx?.agentProject,
-  });
-  if (!perm.allowed) return { status: "denied", reason: perm.decision, url };
+  // Human-initiated (tab-bar “+”): the human typed the URL themselves —
+  // consent gates what AGENTS open, not what the human opens.
+  if (obj["__humanInitiated"] !== true) {
+    const perm = await permissionBroker.ensure(url, "openBrowserSurface", {
+      agentClient: ctx?.agentClient,
+      agentSessionId: ctx?.agentSessionId,
+      agentProject: ctx?.agentProject,
+    });
+    if (!perm.allowed) return { status: "denied", reason: perm.decision, url };
+  }
   if (openSurfaces.size >= MAX_SURFACES) {
     throw new Error("MCP_002: Maximum surfaces reached");
   }
@@ -1220,6 +1224,12 @@ function startWebSocketServer(port: number): WebSocketServer {
             console.log("[browser] handoff CLOSE on " + msg.surfaceId + " (human done)");
           }
         }
+        // Human-initiated surface creation (tab-bar “+” picker).
+        if (msg && msg.type === "surface:create") {
+          void __manualSurfaceCreate(msg).catch((err: unknown) => {
+            console.error("[surface] manual create failed:", String(err));
+          });
+        }
       } catch {
         /* ignore malformed renderer messages */
       }
@@ -1240,6 +1250,59 @@ function notifySurfacePush(payload: Record<string, unknown>): void {
       client.send(event);
     }
   }
+}
+
+/** Human-initiated surface creation — the tab-bar “+” picker.
+ *  Reuses the agent-facing handlers but skips consent (a human typed the
+ *  request themselves) and tags the push with targetSessionId so the
+ *  renderer binds the tab to the session the user was looking at. */
+export async function __manualSurfaceCreate(
+  msg: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const kind = typeof msg["surfaceType"] === "string" ? (msg["surfaceType"] as string) : "";
+  const url = typeof msg["url"] === "string" ? (msg["url"] as string).trim() : "";
+  const prompt = typeof msg["prompt"] === "string" ? (msg["prompt"] as string) : undefined;
+  let result: Record<string, unknown>;
+  switch (kind) {
+    case "browser":
+      if (!/^https?:\/\//i.test(url)) throw new Error("MCP_002: Manual browser surface requires an http(s) url");
+      result = await handleOpenBrowserSurface({ url, ...(prompt ? { prompt } : {}), __humanInitiated: true });
+      break;
+    case "process":
+      result = handleOpenProcessManager();
+      break;
+    case "canvas":
+      result = handleOpenCanvasSurface({ prompt: prompt ?? "Scratch canvas" });
+      break;
+    case "image":
+      if (!url) throw new Error("MCP_002: Manual image surface requires a url");
+      result = handleOpenImageSurface({ src: url, ...(prompt ? { caption: prompt } : {}) });
+      break;
+    case "threed":
+      result = await handleOpen3dSurface({
+        primitives: [{ type: "plane", position: [0, 0, 0], size: 10, color: "#1e293b", rotation: [0, 0, 0] }],
+        ...(prompt ? { prompt } : {}),
+      });
+      break;
+    case "screen":
+      result = handleOpenScreenCapture({ mode: "fullscreen" });
+      break;
+    default:
+      throw new Error("MCP_002: Unsupported manual surfaceType: " + (kind || "(missing)"));
+  }
+  const surfaceId = typeof result["surfaceId"] === "string" ? result["surfaceId"] : "";
+  const rec = openSurfaces.get(surfaceId);
+  if (rec) {
+    const sessionId = typeof msg["sessionId"] === "string" ? msg["sessionId"] : undefined;
+    notifySurfacePush({
+      surfaceId,
+      type: rec.type,
+      payload: { ...rec.payload, manual: true, ...(sessionId ? { targetSessionId: sessionId } : {}) },
+      status: "pushed",
+    });
+    console.log("[surface] manual create " + kind + " " + surfaceId);
+  }
+  return result;
 }
 
 // ── Domain permission gate (human consent before real-web access) ─────────

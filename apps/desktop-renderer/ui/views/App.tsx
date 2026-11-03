@@ -17,6 +17,7 @@ import {
   SignInScreen,
   ToastContainer,
   SessionHarnessBadge,
+  AddSurfaceMenu,
 } from "./components";
 import { useStoreSelector, useStore } from "./store";
 import { deriveSessionTabs, reopenRecordedSurface, pickVisibleSurface } from "./lib/session-tabs";
@@ -169,17 +170,20 @@ function App() {
             {/* ── Chrome bar: only when there are tabs — an empty bar
                  would float a stray horizontal line beside the sidebar
                  divider ── */}
-            {addressBarTabs.length > 0 && (
+            {addressBarTabs.length > 0 || activeSession ? (
               <div className="ha-chrome-bar">
-                <AddressBar
-                  tabs={addressBarTabs}
-                  activeTabId={visibleSurface?.id ?? null}
-                  onTabClick={handleTabClick}
-                  onTabClose={closeView}
-                />
+                {addressBarTabs.length > 0 && (
+                  <AddressBar
+                    tabs={addressBarTabs}
+                    activeTabId={visibleSurface?.id ?? null}
+                    onTabClick={handleTabClick}
+                    onTabClose={closeView}
+                  />
+                )}
+                <AddSurfaceMenu />
                 <div className="ha-chrome-spacer" />
               </div>
-            )}
+            ) : null}
 
             {/* ── Content ── */}
             <div className="ha-chrome-content" style={{ overflow: "hidden" }}>
