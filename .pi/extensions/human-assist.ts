@@ -22,12 +22,40 @@
  * the tool manifest.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { existsSync } from "node:fs";
-import { basename, dirname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+
+// ── Configuration ──────────────────────────────────────────────────────────
+
+/** .pi/human-assist.json — read at session_start (trusted projects only).
+ *  Precedence: HARNESS_MCP_WS_URL env > wsUrl in the file > default. */
+interface HaConfig {
+  wsUrl?: string;
+  maxRetries?: number;
+  footer?: boolean;
+}
+
+let cfg: HaConfig = {};
+
+function loadConfig(cwd: string, trusted: boolean): void {
+  cfg = {};
+  if (!trusted) return;
+  const path = join(cwd, CONFIG_DIR_NAME, "human-assist.json");
+  if (!existsSync(path)) return;
+  try {
+    const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    if (typeof raw.wsUrl === "string") cfg.wsUrl = raw.wsUrl;
+    if (typeof raw.maxRetries === "number" && raw.maxRetries > 0) cfg.maxRetries = Math.floor(raw.maxRetries);
+    if (typeof raw.footer === "boolean") cfg.footer = raw.footer;
+  } catch (e) {
+    // Malformed config must not break the session — fall back to defaults.
+    console.warn(`[human-assist] ignoring invalid ${path}:`, e instanceof Error ? e.message : e);
+  }
+}
 
 // ── Identity ──────────────────────────────────────────────────────────────
 
@@ -116,8 +144,15 @@ class HumanAssistConn {
   private reconnectGivenUp = false;
   private closed = false;
   onLost: (() => void) | null = null;
+  maxRetries = 5;
 
-  constructor(private readonly url: string) {}
+  setUrl(url: string): void {
+    if (url === this.url) return;
+    this.url = url;
+    this.closeForReconnect();
+  }
+
+  constructor(private url: string) {}
 
   get status(): "connected" | "connecting" | "disconnected" {
     if (this.ws && this.ws.readyState === 1) return "connected";
@@ -232,7 +267,7 @@ class HumanAssistConn {
 
   private scheduleReconnect(): void {
     if (this.closed || this.reconnectTimer || this.reconnectGivenUp) return;
-    if (this.reconnectTries >= 5) {
+    if (this.reconnectTries >= this.maxRetries) {
       this.reconnectGivenUp = true;
       this.onLost?.();
       return;
@@ -418,7 +453,7 @@ export default function humanAssist(pi: ExtensionAPI) {
         if (connectFails === 0) ctx.ui?.notify?.("Human Assist: waiting for you to sign in to the desktop app…", "warning");
       } catch {
         connectFails++;
-        if (connectFails >= 5) {
+        if (connectFails >= (cfg.maxRetries ?? 5)) {
           ctx.ui?.notify?.(
             `Human Assist unreachable at ${url} after ${connectFails} tries — start the desktop app (pnpm run dev), then /human-assist refresh`,
             "error",
@@ -433,6 +468,11 @@ export default function humanAssist(pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     lastCtx = ctx;
+    // Project config (.pi/human-assist.json, trusted projects only):
+    // { wsUrl?, maxRetries?, footer? } — env HARNESS_MCP_WS_URL wins.
+    try { loadConfig(ctx.cwd, ctx.isProjectTrusted?.() ?? false); } catch { /* defaults */ }
+    conn.setUrl(process.env.HARNESS_MCP_WS_URL || cfg.wsUrl || url);
+    conn.maxRetries = cfg.maxRetries ?? 5;
     conn.onLost = () => {
       lastCtx?.ui?.notify?.(
         "Human Assist connection lost after 5 reconnect tries — /human-assist refresh to reconnect",
@@ -445,7 +485,7 @@ export default function humanAssist(pi: ExtensionAPI) {
 
     // Footer: persistent Human Assist connection indicator.
     // Left = HA status dot + project + token stats, right = model (branch).
-    try {
+    if (cfg.footer !== false) try {
       ctx.ui?.setFooter?.((tui: { requestRender(): void }, theme: { fg(k: string, s: string): string }, footerData: { onBranchChange(cb: () => void): () => void; getGitBranch(): string | null }) => {
         const unsubStatus = conn.onStatus(() => tui.requestRender());
         const unsubBranch = footerData.onBranchChange(() => tui.requestRender());
@@ -508,8 +548,8 @@ export default function humanAssist(pi: ExtensionAPI) {
         return;
       }
       ctx.ui?.notify?.(
-        `Human Assist ${conn.status} @ ${url} — session ${harnessId ? harnessId.slice(0, 8) + "…" : "?"}, ` +
-        `project ${resolveProject() ?? "(none)"}, ${registered.size} tools`,
+        `Human Assist ${conn.status} @ ${process.env.HARNESS_MCP_WS_URL || cfg.wsUrl || url} — session ${harnessId ? harnessId.slice(0, 8) + "…" : "?"}, ` +
+        `project ${resolveProject() ?? "(none)"}, ${registered.size} tools, ${cfg.maxRetries ?? 5} retries, footer ${cfg.footer === false ? "off" : "on"}`,
         "info",
       );
     },
