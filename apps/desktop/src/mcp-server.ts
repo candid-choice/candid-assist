@@ -814,6 +814,21 @@ const TOOL_DEFINITIONS = [
   },
 ];
 
+// The pi-MCP bridge (kobold) converts each inputSchema into a strict TypeBox
+// schema and pi strips undeclared arguments before the call — so the
+// human-assist-identity extension's stamps (agentClient/agentSessionId/
+// agentProject) MUST be declared in every tool schema, or they are silently
+// dropped and sessions render as the raw clientInfo name + "anonymous".
+const AGENT_IDENTITY_PROPS = {
+  agentClient: { type: 'string', description: 'Injected by the harness: coding-agent client name (e.g. "pi")' },
+  agentSessionId: { type: 'string', description: 'Injected by the harness: coding-agent session id' },
+  agentProject: { type: 'string', description: 'Injected by the harness: repo-root project name — web-access grants are isolated per project' },
+};
+for (const tool of TOOL_DEFINITIONS) {
+  const schema = tool.inputSchema as { type?: string; properties?: Record<string, unknown> };
+  schema.properties = { ...(schema.properties ?? {}), ...AGENT_IDENTITY_PROPS };
+}
+
 const TOOL_HANDLERS: Record<
   string,
   (
