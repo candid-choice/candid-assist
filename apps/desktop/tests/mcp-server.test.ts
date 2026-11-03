@@ -122,7 +122,7 @@ describe('MCP tools/call router', () => {
       method: 'POST',
       body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
     }).then((r) => r.json());
-    expect(res.result.tools).toHaveLength(28);
+    expect(res.result.tools).toHaveLength(29);
     const names = res.result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain('openBrowserSurface');
     expect(names).toContain('openInputSurface');
@@ -627,4 +627,67 @@ describe('recipe dedupe (same task → same tab)', () => {
     expect(empty.error?.message).toMatch(/ACTION_001/);
   });
 
+});
+
+describe('delegateTask (internal-model planner → sequence engine)', () => {
+  async function callDT(args: Record<string, unknown>, id: number) {
+    const { processMcpMessage } = await import('../src/mcp-server');
+    const out = await processMcpMessage({
+      jsonrpc: '2.0', method: 'tools/call', params: { name: 'delegateTask', arguments: args }, id,
+    } as never);
+    return (out as { response: Record<string, never> }).response as { result?: Record<string, any>; error?: { message: string } };
+  }
+
+  it('plans a goal with the internal model and executes the actions on an attached surface', async () => {
+    const { permissionBroker } = await import('../src/mcp-server');
+    const { setGuestResolver, registerGuest } = await import('../src/guest-registry');
+    permissionBroker.syncGrants(['gaswork.com']);
+    const planJson = {
+      summary: 'open gaswork and extract listings',
+      actions: [
+        { action: 'navigate', url: 'https://www.gaswork.com/' },
+        { action: 'extract', extract: { kind: 'text' }, optional: true },
+      ],
+    };
+    const origFetch = global.fetch;
+    global.fetch = (async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith('/models')) {
+        return { ok: true, json: async () => ({ data: [{ id: 'planner' }] }) } as unknown as Response;
+      }
+      expect(JSON.parse(String(init?.body)).model).toBe('planner');
+      return {
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: JSON.stringify(planJson) } }] }),
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+    try {
+      setGuestResolver(() => ({
+        executeJavaScript: async (code: string) => {
+          if (code.includes('captchaDetected')) {
+            return { title: 'GasWork', url: 'https://www.gaswork.com/', text: 'Anesthesiologist', captchaDetected: false };
+          }
+          return { ok: true, kind: 'text', count: 1, data: 'locum listings' };
+        },
+        loadURL: async () => {},
+        capturePage: async () => ({ toDataURL: () => 'data:,' }),
+        isDestroyed: () => false,
+        getURL: () => 'https://www.gaswork.com/',
+      }));
+      registerGuest('surf_dt', 96);
+      const res = await callDT({ goal: 'open gaswork.com and pull the listings', surfaceId: 'surf_dt' }, 1050);
+      expect(res.error).toBeUndefined();
+      expect(res.result!.ok).toBe(true);
+      expect(res.result!.summary).toContain('gaswork');
+      expect(res.result!.status).toBe('completed');
+      expect(res.result!.steps.every((s: { ok: boolean }) => s.ok)).toBe(true);
+      expect(res.result!.final.title).toBe('GasWork');
+    } finally {
+      global.fetch = origFetch;
+    }
+  });
+
+  it('delegateTask requires a goal', async () => {
+    const res = await callDT({}, 1051);
+    expect(res.error!.message).toMatch(/MCP_021/);
+  });
 });

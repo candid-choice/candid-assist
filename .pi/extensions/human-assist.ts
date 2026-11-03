@@ -466,6 +466,34 @@ export default function humanAssist(pi: ExtensionAPI) {
     ctx.ui?.notify?.("Human Assist: still signed out — sign in to the desktop app, then /human-assist refresh", "warning");
   }
 
+  pi.registerCommand("goal", {
+    description: "Hand a high-level goal to the Human Assist desktop agent: /goal <text>",
+    handler: async (args, ctx) => {
+      const goal = String(args ?? "").trim();
+      if (!goal) {
+        ctx.ui?.notify?.("Usage: /goal <what the app should accomplish>", "warning");
+        return;
+      }
+      ctx.ui?.notify?.(`Human Assist: planning “${goal.slice(0, 60)}”…`, "info");
+      try {
+        const result = (await conn.callTool("delegateTask", { goal })) as {
+          content?: Array<{ type: string; text?: string }>;
+        };
+        const text = (result?.content ?? [])
+          .map((c) => (c.type === "text" ? c.text ?? "" : ""))
+          .join("\n");
+        let summary = text.slice(0, 200);
+        try {
+          const parsed = JSON.parse(text) as { summary?: string; status?: string; ok?: boolean };
+          summary = `${parsed.ok ? "✅" : "⚠"} ${parsed.status ?? "?"} — ${parsed.summary ?? text.slice(0, 120)}`;
+        } catch { /* raw text fallback */ }
+        ctx.ui?.notify?.(`Human Assist goal: ${summary.slice(0, 240)}`, "info");
+      } catch (e) {
+        ctx.ui?.notify?.(`Human Assist goal failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+      }
+    },
+  });
+
   pi.on("session_start", async (_event, ctx) => {
     lastCtx = ctx;
     // Project config (.pi/human-assist.json, trusted projects only):

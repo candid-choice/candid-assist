@@ -134,6 +134,16 @@ function createWindow(): void {
     }
     void win.loadURL(url);
 
+  // Debug mode (HA_DEBUG=1 pnpm run dev): detached DevTools + full
+  // console stream — what the app received (tool calls, goals) is
+  // logged by the MCP server in the dev log as [debug] lines.
+  if (process.env.HA_DEBUG === "1") {
+    console.log("[debug] HA_DEBUG=1 — opening detached DevTools");
+    win.webContents.once("did-finish-load", () => {
+      win?.webContents.openDevTools({ mode: "detach" });
+    });
+  }
+
   // Dev diagnostics: surface renderer lifecycle + console into the dev log.
   win.webContents.on('did-finish-load', () => {
     console.log(`[window] did-finish-load ${win?.webContents.getURL()}`);

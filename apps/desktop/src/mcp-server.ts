@@ -21,6 +21,7 @@ import {
   type ManagedProcess,
 } from "./process-registry";
 import { v4 as uuidv4 } from "uuid";
+import { planGoal } from "./task-service";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -716,6 +717,20 @@ const TOOL_DEFINITIONS = [
       inputSchema: { type: 'object', properties: {} },
     },
     {
+      name: 'delegateTask',
+      description: 'Hand a HIGH-LEVEL GOAL to the desktop app: the internally configured model plans the task into a browser-action sequence and the app executes it autonomously through the consent-gated browser engine (reusing an open page or opening a new one). Use when the human states an outcome ("search X for me", "find listings on Y"); prefer this over chaining many single-step calls. Returns the plan summary, per-step results, and the final page snapshot.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          goal: { type: 'string', description: 'High-level goal in natural language (<=4000 chars)' },
+          surfaceId: { type: 'string', description: 'Drive an existing attached surface (omit to reuse any open browser page or open a new one)' },
+          baseUrl: { type: 'string', description: 'Override the internal model endpoint base URL (optional)' },
+          modelId: { type: 'string', description: 'Override the internal model id (optional)' },
+        },
+        required: ['goal'],
+      },
+    },
+    {
       name: 'readGoogleDriveDoc',
       description: 'Read a Google Drive/Docs page the human has access to (persistent login). If signed out, triggers handoff so the human logs in once.',
       inputSchema: {
@@ -852,6 +867,7 @@ const TOOL_HANDLERS: Record<
   browserType: handleBrowserType,
   browserScreenshot: handleBrowserScreenshot,
   browserExecuteActions: handleBrowserExecuteActions,
+  delegateTask: handleDelegateTask,
   browserHandoff: handleBrowserHandoff,
   reloadUI: handleReloadUI,
   restartApp: handleRestartApp,
@@ -986,6 +1002,13 @@ export async function processMcpMessage(
 
   if (method !== "tools/call" || !params) {
     return { response: { jsonrpc: "2.0", error: { code: -32600, message: "Invalid request" }, id } };
+  }
+
+  if (process.env.HA_DEBUG === "1") {
+    console.log(
+      "[debug] ← tools/call name=" + String((params as Record<string, unknown>)["name"]) +
+      " args=" + JSON.stringify((params as Record<string, unknown>)["arguments"] ?? {}).slice(0, 500),
+    );
   }
 
   // Auto-bind agent identity from tool arguments (injected by the
@@ -1620,7 +1643,7 @@ async function handleScrapeSelective(
       pageTitle: document.title,
       url: location.href,
       matched: chunks ? chunks.length : null,
-      text: (chunks ? chunks.join('\n---\n') : (document.body?.innerText || '')).slice(0, ${RECIPE_TEXT_LIMIT}),
+      text: (chunks ? chunks.join('\\n---\\n') : (document.body?.innerText || '')).slice(0, ${RECIPE_TEXT_LIMIT}),
     });
   } catch (e) {
     return JSON.stringify({ evalError: String(e && e.message ? e.message : e), url: typeof location !== 'undefined' ? location.href : '?' });
@@ -1826,10 +1849,10 @@ function extractJs(ex: SeqStep["extract"], fallbackSelector?: string): string {
       return JSON.stringify({ ok: true, kind, count: data.length, data });
     }
     if (kind === 'html') {
-      const data = nodes.map(n => n.innerHTML).join('\n---\n').slice(0, 20000);
+      const data = nodes.map(n => n.innerHTML).join('\\n---\\n').slice(0, 20000);
       return JSON.stringify({ ok: true, kind, count: nodes.length, data });
     }
-    const data = nodes.map(textOf).filter(Boolean).join('\n').slice(0, 20000);
+    const data = nodes.map(textOf).filter(Boolean).join('\\n').slice(0, 20000);
     return JSON.stringify({ ok: true, kind, count: nodes.length, data });
   } catch (e) {
     return JSON.stringify({ ok: false, kind: ${JSON.stringify(kind)}, error: String(e && e.message ? e.message : e), url: typeof location !== 'undefined' ? location.href : '?' });
@@ -1898,6 +1921,66 @@ async function waitForGuest(handle: GuestHandle, a: SeqStep): Promise<{ ok: bool
     if (Date.now() >= deadline) return { ok: false };
     await sleep(250);
   }
+}
+
+async function handleDelegateTask(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const goal = typeof o["goal"] === "string" ? o["goal"].trim() : "";
+  if (!goal) throw new Error("MCP_021: goal required");
+  if (goal.length > 4000) throw new Error("MCP_022: goal too long (max 4000)");
+  const dbg = process.env.HA_DEBUG === "1";
+  if (dbg) console.log("[debug] delegateTask goal: " + goal.slice(0, 300));
+
+  const plan = await planGoal(goal, {
+    ...(typeof o["baseUrl"] === "string" ? { baseUrl: o["baseUrl"] as string } : {}),
+    ...(typeof o["modelId"] === "string" ? { modelId: o["modelId"] as string } : {}),
+  });
+  if (dbg) console.log("[debug] delegateTask plan: " + JSON.stringify(plan).slice(0, 2000));
+
+  // Surface: explicit > any open+attached browser page > a fresh one
+  // seeded at the plan's first navigate target (the sequence re-navigates
+  // anyway; seeding just satisfies the http(s) requirement).
+  let surfaceId = typeof o["surfaceId"] === "string" ? (o["surfaceId"] as string) : undefined;
+  if (surfaceId) {
+    try { resolveGuest(surfaceId); } catch { surfaceId = undefined; }
+  }
+  if (!surfaceId) {
+    const attached = new Set(listGuestSurfaceIds());
+    for (const [id, s] of openSurfaces.entries()) {
+      if (s.status === "open" && s.type === "browser" && attached.has(id)) {
+        surfaceId = id;
+        break;
+      }
+    }
+  }
+  if (!surfaceId) {
+    const firstNav = plan.actions.find(
+      (a) => a["action"] === "navigate" && typeof a["url"] === "string",
+    );
+    const seed = (firstNav?.["url"] as string | undefined) ?? "https://www.google.com/";
+    const opened = (await handleOpenBrowserSurface({ url: seed }, ctx)) as { surfaceId: string };
+    surfaceId = opened.surfaceId;
+    for (let waited = 0; waited < 10_000; waited += 250) {
+      try { resolveGuest(surfaceId); break; } catch { await new Promise((r) => setTimeout(r, 250)); }
+    }
+  }
+
+  const exec = (await handleBrowserExecuteActions({ surfaceId, actions: plan.actions }, ctx)) as Record<string, unknown>;
+  if (dbg) console.log("[debug] delegateTask done: " + String(exec.status) + " steps=" + String((exec.steps as unknown[] | undefined)?.length ?? 0));
+  return {
+    ok: exec["ok"] === true,
+    tool: "delegateTask",
+    goal: goal.slice(0, 300),
+    summary: plan.summary,
+    surfaceId,
+    status: exec["status"],
+    denied: exec["denied"] ?? null,
+    steps: exec["steps"],
+    final: exec["final"],
+  };
 }
 
 async function handleBrowserExecuteActions(
