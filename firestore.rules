@@ -1,7 +1,30 @@
 rules_version = '2';
 
+// Data model: everything a user owns lives under their own user doc.
+//   users/{uid}                     — profile (created by the beforeCreate
+//                                     blocking function; read/update by owner)
+//   users/{uid}/sessions/{sid}      — sessions (per-user subcollection;
+//                                     NO top-level sessions collection)
+//   users/{uid}/chats/{cid}         — per-session ChatDock transcripts
+// Everything else is denied. The backend reaches Firestore through the
+// Admin SDK, which bypasses these rules by design.
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if request.auth != null && request.auth.uid == userId;
+
+      match /sessions/{sessionId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      match /chats/{chatId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // Default deny for anything not covered above.
     match /{document=**} {
       allow read, write: if false;
     }

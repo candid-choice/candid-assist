@@ -327,7 +327,8 @@ export class AuthService {
     if (!db) return null;
     const now = new Date().toISOString();
 
-    const sessionDoc = await db.collection('sessions').add({
+    // Sessions live in the per-user subcollection users/{uid}/sessions.
+    const sessionDoc = await db.collection(`users/${userId}/sessions`).add({
       userId,
       title,
       status: 'active',
@@ -347,8 +348,7 @@ export class AuthService {
     const db = this.firebaseService.getFirestore();
     if (!db) return [];
     const snapshot = await db
-      .collection('sessions')
-      .where('userId', '==', userId)
+      .collection(`users/${userId}/sessions`)
       .where('status', '==', 'active')
       .orderBy('updatedAt', 'desc')
       .limit(20)
@@ -360,10 +360,10 @@ export class AuthService {
   /**
    * Get a specific session by ID
    */
-  async getSession(sessionId: string): Promise<any> {
+  async getSession(userId: string, sessionId: string): Promise<any> {
     const db = this.firebaseService.getFirestore();
     if (!db) return null;
-    const sessionDoc = await db.collection('sessions').doc(sessionId).get();
+    const sessionDoc = await db.collection(`users/${userId}/sessions`).doc(sessionId).get();
 
     if (!sessionDoc.exists) {
       return null;
@@ -375,10 +375,10 @@ export class AuthService {
   /**
    * Update session status
    */
-  async updateSessionStatus(sessionId: string, status: 'active' | 'waiting' | 'done' | 'error'): Promise<void> {
+  async updateSessionStatus(userId: string, sessionId: string, status: 'active' | 'waiting' | 'done' | 'error'): Promise<void> {
     const db = this.firebaseService.getFirestore();
     if (!db) return;
-    await db.collection('sessions').doc(sessionId).update({
+    await db.collection(`users/${userId}/sessions`).doc(sessionId).update({
       status,
       updatedAt: new Date().toISOString(),
     });
@@ -387,10 +387,10 @@ export class AuthService {
   /**
    * Archive a session (soft delete)
    */
-  async archiveSession(sessionId: string): Promise<void> {
+  async archiveSession(userId: string, sessionId: string): Promise<void> {
     const db = this.firebaseService.getFirestore();
     if (!db) return;
-    await db.collection('sessions').doc(sessionId).update({
+    await db.collection(`users/${userId}/sessions`).doc(sessionId).update({
       status: 'done',
       archivedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -400,10 +400,10 @@ export class AuthService {
   /**
    * Update session title
    */
-  async updateSessionTitle(sessionId: string, title: string): Promise<void> {
+  async updateSessionTitle(userId: string, sessionId: string, title: string): Promise<void> {
     const db = this.firebaseService.getFirestore();
     if (!db) return;
-    await db.collection('sessions').doc(sessionId).update({
+    await db.collection(`users/${userId}/sessions`).doc(sessionId).update({
       title,
       updatedAt: new Date().toISOString(),
     });
