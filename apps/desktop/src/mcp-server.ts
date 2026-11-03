@@ -661,6 +661,22 @@ const TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    name: 'browserExecuteActions',
+    description: 'Execute an ordered SEQUENCE of browser actions on one surface in a single call (plan-then-run web agency). Submit actions[] in order; the model plans the whole task up front. Consent is requested once per domain on the first navigate to it, then the rest of the sequence runs unattended. Stops at the first failed, non-optional step and returns per-step results plus a final snapshot. Prefer this over many single-step browser calls. Per-action fields: navigate{url}; click{selector|target}; type{selector,value}; press{key?,selector?}; extract{extract:{kind:text|html|value|links|attr, selector?, attr?} or selector}; assert{contains, selector?, present?=true|false}; waitFor{selector|target|contains, timeoutMs?}; scroll{selector?}; snapshot{}. Add optional:true to a step so its failure does not abort the sequence.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        surfaceId: { type: 'string', description: 'Target browser surface (open one first with openBrowserSurface). Omit if only one is open.' },
+        actions: {
+          type: 'array',
+          description: 'Ordered steps (1-40). Each: { action, ...fields }.',
+          items: { type: 'object' },
+        },
+      },
+      required: ['actions'],
+    },
+  },
     {
       name: 'open3dSurface',
       description: 'Open an interactive three.js 3D viewer surface (orbit/zoom/pan). Agent describes the scene with primitives: box|sphere|cylinder|torus|plane + position [x,y,z] + size + color #rrggbb. Pass surfaceId to update an existing scene in place. Note: due to a validator quirk, include ALL primitive fields (type, position, size, rotation, color) on every primitive.',
@@ -822,6 +838,7 @@ const TOOL_HANDLERS: Record<
   browserClick: handleBrowserClick,
   browserType: handleBrowserType,
   browserScreenshot: handleBrowserScreenshot,
+  browserExecuteActions: handleBrowserExecuteActions,
   browserHandoff: handleBrowserHandoff,
   reloadUI: handleReloadUI,
   restartApp: handleRestartApp,
@@ -1668,6 +1685,272 @@ function typeJs(selector: string, value: string): string {
     el.dispatchEvent(new Event('change', { bubbles: true }));
     return { ok: true };
   })()`;
+}
+
+// ── Browser SEQUENCE executor (plan-then-run web agency) ────────────────
+// The model plans a whole task and submits an ordered actions[] array in
+// ONE call. Consent is requested once per domain (on the first navigate to
+// it); the remaining steps run unattended. The sequence stops at the first
+// failed, non-optional step and returns per-step results + a final snapshot.
+
+const SEQ_ACTIONS = new Set([
+  "navigate", "click", "type", "extract", "assert", "waitFor", "scroll", "press", "snapshot",
+]);
+const SEQ_EXTRACT_KINDS = new Set(["text", "html", "value", "links", "attr"]);
+
+type SeqStep = {
+  action: string;
+  url?: string;
+  selector?: string;
+  target?: string;
+  value?: string;
+  key?: string;
+  contains?: string;
+  present?: boolean;
+  optional?: boolean;
+  timeoutMs?: number;
+  settleMs?: number;
+  extract?: { kind?: string; selector?: string; attr?: string };
+};
+
+function normalizeBrowserActions(raw: unknown): SeqStep[] {
+  if (!Array.isArray(raw)) throw new Error("ACTION_000: actions must be an array");
+  if (raw.length === 0) throw new Error("ACTION_001: actions[] must not be empty");
+  if (raw.length > 40) throw new Error("ACTION_002: too many actions (max 40)");
+  return raw.map((item, i) => {
+    const a = (item ?? {}) as Record<string, unknown>;
+    if (typeof a["action"] !== "string" || !SEQ_ACTIONS.has(a["action"])) {
+      throw new Error(
+        `ACTION_003: actions[${i}].action must be one of ${[...SEQ_ACTIONS].join(", ")}`,
+      );
+    }
+    const out: SeqStep = { action: a["action"] as string };
+    for (const k of ["url", "selector", "target", "value", "key", "contains"] as const) {
+      if (typeof a[k] === "string") out[k] = a[k] as string;
+    }
+    if (typeof a["present"] === "boolean") out.present = a["present"] as boolean;
+    if (typeof a["optional"] === "boolean") out.optional = a["optional"] as boolean;
+    if (typeof a["timeoutMs"] === "number") out.timeoutMs = a["timeoutMs"] as number;
+    if (typeof a["settleMs"] === "number") out.settleMs = a["settleMs"] as number;
+    if (a["extract"] && typeof a["extract"] === "object") {
+      const ex = a["extract"] as Record<string, unknown>;
+      const kind = typeof ex["kind"] === "string" ? ex["kind"] : "text";
+      if (!SEQ_EXTRACT_KINDS.has(kind)) {
+        throw new Error(`ACTION_004: actions[${i}].extract.kind must be one of ${[...SEQ_EXTRACT_KINDS].join(", ")}`);
+      }
+      out.extract = {
+        kind,
+        ...(typeof ex["selector"] === "string" ? { selector: ex["selector"] as string } : {}),
+        ...(typeof ex["attr"] === "string" ? { attr: ex["attr"] as string } : {}),
+      };
+    }
+    if (out.action === "navigate") requireUrl(out.url, "ACTION_005");
+    return out;
+  });
+}
+
+function extractJs(ex: SeqStep["extract"], fallbackSelector?: string): string {
+  const kind = ex?.kind ?? "text";
+  const sel = ex?.selector ?? fallbackSelector ?? null;
+  const attr = ex?.attr ?? null;
+  return `(() => {
+    const kind = ${JSON.stringify(kind)};
+    const sel = ${JSON.stringify(sel)};
+    const attr = ${JSON.stringify(attr)};
+    const textOf = (n) => (n && (n.innerText || n.textContent) || '').trim();
+    if (kind === 'links') {
+      const scope = sel ? [...document.querySelectorAll(sel)] : [...document.querySelectorAll('a[href]')];
+      const data = scope.filter(e => e.tagName === 'A' && e.href)
+        .map(e => ({ text: textOf(e).slice(0, 140), href: e.href }))
+        .slice(0, 300);
+      return { ok: true, kind, count: data.length, data };
+    }
+    const nodes = sel ? [...document.querySelectorAll(sel)] : (document.body ? [document.body] : []);
+    if (kind === 'value') {
+      const data = nodes.map(n => (n.value != null ? String(n.value) : null)).filter(v => v !== null);
+      return { ok: true, kind, count: data.length, data };
+    }
+    if (kind === 'attr') {
+      const data = nodes.map(n => n.getAttribute(attr || 'href')).filter(Boolean);
+      return { ok: true, kind, count: data.length, data };
+    }
+    if (kind === 'html') {
+      const data = nodes.map(n => n.innerHTML).join('\n---\n').slice(0, 20000);
+      return { ok: true, kind, count: nodes.length, data };
+    }
+    const data = nodes.map(textOf).filter(Boolean).join('\n').slice(0, 20000);
+    return { ok: true, kind, count: nodes.length, data };
+  })()`;
+}
+
+function assertJs(contains: string | null, selector: string | null, present: boolean): string {
+  return `(() => {
+    const txt = ${JSON.stringify(contains)};
+    const sel = ${JSON.stringify(selector)};
+    const wantPresent = ${JSON.stringify(present)};
+    let hay = null;
+    if (sel) { const n = document.querySelector(sel); hay = n ? (n.innerText || n.textContent || '') : null; }
+    else hay = document.body ? (document.body.innerText || '') : '';
+    // selector absent (and we asserted on a selector) => not present
+    if (sel && hay === null) return { ok: !wantPresent, found: false, reason: 'selector absent' };
+    const found = txt ? String(hay).toLowerCase().includes(String(txt).toLowerCase()) : true;
+    return { ok: wantPresent ? found : !found, found };
+  })()`;
+}
+
+function pressJs(key: string, selector: string | null): string {
+  return `(() => {
+    const el = ${JSON.stringify(selector)} ? document.querySelector(${JSON.stringify(selector)}) : (document.activeElement || document.body);
+    if (!el) return { ok: false };
+    const k = ${JSON.stringify(key)};
+    const opts = { key: k, bubbles: true, cancelable: true };
+    if (el.focus) el.focus();
+    el.dispatchEvent(new KeyboardEvent('keydown', opts));
+    el.dispatchEvent(new KeyboardEvent('keypress', opts));
+    el.dispatchEvent(new KeyboardEvent('keyup', opts));
+    return { ok: true };
+  })()`;
+}
+
+function scrollJs(selector: string | null): string {
+  return `(() => {
+    const s = ${JSON.stringify(selector)};
+    if (s) { const e = document.querySelector(s); if (e) e.scrollIntoView({ block: 'center' }); }
+    else window.scrollBy(0, Math.round(window.innerHeight * 0.9));
+    return { ok: true };
+  })()`;
+}
+
+function existsJs(a: SeqStep): string {
+  if (a.selector) return `!!document.querySelector(${JSON.stringify(a.selector)})`;
+  if (a.target) {
+    return `(() => {
+      const t = ${JSON.stringify(a.target.toLowerCase())};
+      return [...document.querySelectorAll('a,button,input,label,summary,[role=button],[onclick],[role=link],[role=tab]')]
+        .some(e => ((( e.innerText) || '') + ' ' + (e.value || '') + ' ' + (e.getAttribute && e.getAttribute('aria-label') || '')).toLowerCase().includes(t));
+    })()`;
+  }
+  if (a.contains) return `((document.body && document.body.innerText) || '').toLowerCase().includes(${JSON.stringify(a.contains.toLowerCase())})`;
+  return "true";
+}
+
+async function waitForGuest(handle: GuestHandle, a: SeqStep): Promise<{ ok: boolean }> {
+  const timeoutMs = Math.min(Math.max(a.timeoutMs ?? 5000, 0), 30_000);
+  const js = existsJs(a);
+  const deadline = Date.now() + timeoutMs;
+  // Always give at least one poll even for timeoutMs=0.
+  for (; ;) {
+    const hit = (await handle.executeJavaScript(js)) as boolean;
+    if (hit) return { ok: true };
+    if (Date.now() >= deadline) return { ok: false };
+    await sleep(250);
+  }
+}
+
+async function handleBrowserExecuteActions(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const actions = normalizeBrowserActions(o["actions"]);
+  const surfaceArg = typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined;
+  const agent = {
+    agentClient: ctx?.agentClient,
+    agentSessionId: ctx?.agentSessionId,
+    agentProject: ctx?.agentProject,
+  };
+  // Same contract as browserNavigate/Click/Type: operate on an existing
+  // attached surface (open one first with openBrowserSurface).
+  const { id, handle } = resolveGuestEntry(surfaceArg);
+  assertHumanControlFree(id);
+
+  const steps: Array<Record<string, unknown>> = [];
+  let aborted = false;
+  let denied: string | null = null;
+
+  for (let i = 0; i < actions.length; i++) {
+    const a = actions[i];
+    const t0 = Date.now();
+    try {
+      assertHumanControlFree(id);
+      let r: Record<string, unknown>;
+      if (a.action === "navigate") {
+        const perm = await permissionBroker.ensure(a.url as string, "browserNavigate", agent);
+        if (!perm.allowed) {
+          denied = perm.decision;
+          r = { ok: false, status: "denied", reason: perm.decision };
+        } else {
+          await handle.loadURL(a.url as string);
+          await sleep(a.settleMs ?? 1_500);
+          r = { ok: true, url: a.url };
+        }
+      } else if (a.action === "click") {
+        if (!a.selector && !a.target) throw new Error("ACTION_006: click needs selector or target");
+        const res = (await handle.executeJavaScript(
+          clickJs(a.selector ?? null, a.target ?? null),
+        )) as { ok: boolean; desc?: string };
+        r = res.ok ? { ok: true, element: res.desc ?? null } : { ok: false, error: "element not found" };
+      } else if (a.action === "type") {
+        if (!a.selector) throw new Error("ACTION_007: type needs selector");
+        const res = (await handle.executeJavaScript(typeJs(a.selector, a.value ?? ""))) as { ok: boolean };
+        r = res.ok ? { ok: true } : { ok: false, error: "input element not found" };
+      } else if (a.action === "extract") {
+        r = (await handle.executeJavaScript(extractJs(a.extract, a.selector))) as Record<string, unknown>;
+        if (typeof r.ok !== "boolean") r = { ok: true, ...r };
+      } else if (a.action === "assert") {
+        if (a.contains === undefined && !a.selector) throw new Error("ACTION_008: assert needs contains and/or selector");
+        const res = (await handle.executeJavaScript(
+          assertJs(a.contains ?? null, a.selector ?? null, a.present ?? true),
+        )) as { ok: boolean; found?: boolean };
+        r = res.ok ? { ok: true, found: res.found } : { ok: false, error: "assertion failed", found: res.found };
+      } else if (a.action === "waitFor") {
+        if (!a.selector && !a.target && !a.contains) throw new Error("ACTION_009: waitFor needs selector, target, or contains");
+        const res = await waitForGuest(handle, a);
+        r = res.ok ? { ok: true } : { ok: false, error: "timed out waiting" };
+      } else if (a.action === "press") {
+        const res = (await handle.executeJavaScript(pressJs(a.key ?? "Enter", a.selector ?? null))) as { ok: boolean };
+        r = res.ok ? { ok: true, key: a.key ?? "Enter" } : { ok: false, error: "no target to press" };
+      } else if (a.action === "scroll") {
+        await handle.executeJavaScript(scrollJs(a.selector ?? null));
+        r = { ok: true };
+      } else if (a.action === "snapshot") {
+        const snap = (await handle.executeJavaScript(SNAPSHOT_JS)) as Record<string, unknown>;
+        r = { ok: true, snapshot: { title: snap.title, url: snap.url, captchaDetected: snap.captchaDetected, text: String(snap.text ?? "").slice(0, 4000) } };
+      } else {
+        r = { ok: false, error: "unknown action" };
+      }
+      steps.push({ i, action: a.action, ok: r.ok === true, ms: Date.now() - t0, ...r });
+      if (r.ok !== true && !a.optional) {
+        aborted = true;
+        break;
+      }
+    } catch (e) {
+      steps.push({ i, action: a.action, ok: false, ms: Date.now() - t0, error: (e as Error).message });
+      if (!a.optional) {
+        aborted = true;
+        break;
+      }
+    }
+  }
+
+  let final: Record<string, unknown> | undefined;
+  try {
+    const snap = (await handle.executeJavaScript(SNAPSHOT_JS)) as Record<string, unknown>;
+    final = { title: snap.title, url: snap.url, captchaDetected: snap.captchaDetected, text: String(snap.text ?? "").slice(0, 4000) };
+  } catch {
+    /* guest may have navigated away / detached */
+  }
+
+  return {
+    status: denied ? "denied" : aborted ? "stopped" : "completed",
+    ok: !aborted && !denied,
+    surfaceId: id,
+    executed: steps.length,
+    total: actions.length,
+    denied,
+    steps,
+    final,
+  };
 }
 
 async function handleBrowserNavigate(

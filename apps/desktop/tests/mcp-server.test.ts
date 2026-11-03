@@ -122,7 +122,7 @@ describe('MCP tools/call router', () => {
       method: 'POST',
       body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
     }).then((r) => r.json());
-    expect(res.result.tools).toHaveLength(27);
+    expect(res.result.tools).toHaveLength(28);
     const names = res.result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain('openBrowserSurface');
     expect(names).toContain('openInputSurface');
@@ -566,4 +566,99 @@ describe('recipe dedupe (same task → same tab)', () => {
     expect(b.result!.surfaceId).toBe(a.result!.surfaceId);
     // (surface reused — no twin opened)
   });
+
+  // ── browserExecuteActions (plan-then-run sequence) ────────────────────
+  async function seqCall(name: string, args: Record<string, unknown>, id: number) {
+    const { processMcpMessage } = await import('../src/mcp-server');
+    const out = await processMcpMessage({
+      jsonrpc: '2.0', method: 'tools/call', params: { name, arguments: args }, id,
+    } as never);
+    return (out as { response: Record<string, never> }).response as { result?: Record<string, any>; error?: { message: string } };
+  }
+  function installSeqGuest(behavior: (js: string) => unknown) {
+    setGuestResolver(() => ({
+      executeJavaScript: async (code: string) => behavior(code),
+      loadURL: async () => {},
+      capturePage: async () => ({ toDataURL: () => 'data:,' }),
+      isDestroyed: () => false,
+      getURL: () => 'https://gasworks.example',
+    }));
+  }
+
+  it('browserExecuteActions runs a click→extract→assert→waitFor→press sequence', async () => {
+    installSeqGuest((code) => {
+      if (code.includes('wantPresent')) return { ok: true, found: true };            // assert
+      if (code.includes('20000')) return { ok: true, kind: 'text', count: 1, data: 'locum anesthesiology' }; // extract
+      if (code.includes('el.click')) return { ok: true, desc: 'a#jobs' };             // click
+      if (code.includes('KeyboardEvent')) return { ok: true };                        // press
+      if (code.startsWith('!!')) return true;                                         // waitFor(exists)
+      if (code.includes('captchaDetected')) return { title: 'Gasworks', url: 'https://gasworks.example', text: 'openings', captchaDetected: false };
+      return { ok: true };
+    });
+    registerGuest('surf_seq', 88);
+    const res = await seqCall('browserExecuteActions', {
+      surfaceId: 'surf_seq',
+      actions: [
+        { action: 'click', selector: '#jobs' },
+        { action: 'extract', extract: { kind: 'text', selector: '.listing' } },
+        { action: 'assert', contains: 'anesthesiology' },
+        { action: 'waitFor', selector: '.listing', timeoutMs: 100 },
+        { action: 'press', key: 'Enter' },
+      ],
+    }, 1001);
+    expect(res.error).toBeUndefined();
+    expect(res.result!.status).toBe('completed');
+    expect(res.result!.ok).toBe(true);
+    expect(res.result!.total).toBe(5);
+    expect(res.result!.steps.every((s: { ok: boolean }) => s.ok)).toBe(true);
+    expect(res.result!.final.title).toBe('Gasworks');
+  });
+
+  it('browserExecuteActions stops at the first failed non-optional step', async () => {
+    installSeqGuest((code) => {
+      if (code.includes('el.click')) return { ok: false };                            // click fails
+      if (code.includes('captchaDetected')) return { title: 'x', url: 'u', text: '', captchaDetected: false };
+      return { ok: true };
+    });
+    registerGuest('surf_seq2', 89);
+    const res = await seqCall('browserExecuteActions', {
+      surfaceId: 'surf_seq2',
+      actions: [
+        { action: 'click', selector: '#nope' },
+        { action: 'extract', extract: { kind: 'text' } },
+      ],
+    }, 1002);
+    expect(res.result!.status).toBe('stopped');
+    expect(res.result!.ok).toBe(false);
+    expect(res.result!.executed).toBe(1);
+  });
+
+  it('browserExecuteActions continues past an optional step failure', async () => {
+    installSeqGuest((code) => {
+      if (code.includes('el.click')) return { ok: false };                            // optional click fails
+      if (code.includes('20000')) return { ok: true, kind: 'text', count: 1, data: 'ok' };
+      if (code.includes('captchaDetected')) return { title: 'x', url: 'u', text: '', captchaDetected: false };
+      return { ok: true };
+    });
+    registerGuest('surf_seq3', 90);
+    const res = await seqCall('browserExecuteActions', {
+      surfaceId: 'surf_seq3',
+      actions: [
+        { action: 'click', selector: '#maybe', optional: true },
+        { action: 'extract', extract: { kind: 'text' } },
+      ],
+    }, 1003);
+    expect(res.result!.status).toBe('completed');
+    expect(res.result!.executed).toBe(2);
+    expect(res.result!.steps[0].ok).toBe(false);
+    expect(res.result!.steps[1].ok).toBe(true);
+  });
+
+  it('browserExecuteActions rejects unknown action and empty list', async () => {
+    const bad = await seqCall('browserExecuteActions', { surfaceId: 'x', actions: [{ action: 'fly' }] }, 1004);
+    expect(bad.error?.message).toMatch(/ACTION_003/);
+    const empty = await seqCall('browserExecuteActions', { surfaceId: 'x', actions: [] }, 1005);
+    expect(empty.error?.message).toMatch(/ACTION_001/);
+  });
+
 });
