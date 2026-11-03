@@ -1472,15 +1472,20 @@ async function agentNavigateAndEval(
             },
           }
         : {};
-    notifySurfacePush({
+    const pushed: Record<string, unknown> = {
       surfaceId,
       type: "browser",
       payload: { url },
       status: "pushed",
       ...agentTag,
-    });
-    // Wait for guest registration (webview attach is async).
-    for (let waited = 0; waited < 10_000; waited += 250) {
+    };
+    notifySurfacePush(pushed);
+    // Wait for guest registration (webview attach is async). The push is
+    // fire-and-forget: if the renderer's WS was still connecting (e.g. a
+    // moment after app start), it never sees the surface — replay the
+    // push every 2s while we wait so late-connecting renderers mount it.
+    for (let waited = 0; waited < 15_000 && !handle; waited += 250) {
+      if (waited % 2_000 === 0) notifySurfacePush(pushed);
       try {
         handle = resolveGuest(surfaceId);
         break;
@@ -1969,8 +1974,31 @@ async function handleDelegateTask(
     const seed = (firstNav?.["url"] as string | undefined) ?? "https://www.google.com/";
     const opened = (await handleOpenBrowserSurface({ url: seed }, ctx)) as { surfaceId: string };
     surfaceId = opened.surfaceId;
-    for (let waited = 0; waited < 10_000; waited += 250) {
-      try { resolveGuest(surfaceId); break; } catch { await new Promise((r) => setTimeout(r, 250)); }
+    // Replay the push while waiting (late-connecting renderer race — see
+    // agentNavigateAndEval).
+    const rec = openSurfaces.get(surfaceId);
+    const pushed = rec
+      ? {
+          surfaceId,
+          type: rec.type,
+          payload: rec.payload,
+          status: "pushed",
+          ...(ctx?.agentClient
+            ? {
+                agent: {
+                  client: ctx.agentClient,
+                  agentSessionId: ctx.agentSessionId ?? null,
+                  ...(ctx.agentProject ? { agentProject: ctx.agentProject } : {}),
+                },
+              }
+            : {}),
+        }
+      : undefined;
+    for (let waited = 0; waited < 15_000; waited += 250) {
+      try { resolveGuest(surfaceId); break; } catch {
+        if (pushed && waited % 2_000 === 0) notifySurfacePush(pushed);
+        await new Promise((r) => setTimeout(r, 250));
+      }
     }
   }
 
