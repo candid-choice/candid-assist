@@ -154,9 +154,18 @@ interface AppState {
     host: string;
     url: string;
     tool: string;
+    agentClient?: string;
+    agentSessionId?: string | null;
   } | null;
   setPendingPermission: (
-    p: { id: string; host: string; url: string; tool: string } | null,
+    p: {
+      id: string;
+      host: string;
+      url: string;
+      tool: string;
+      agentClient?: string;
+      agentSessionId?: string | null;
+    } | null,
   ) => void;
   setMcpStandalone: (v: boolean) => void;
 

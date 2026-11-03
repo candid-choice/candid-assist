@@ -11,6 +11,7 @@ import { useCallback } from "react";
 import { useStore } from "../../store";
 import { wsService } from "../../services/ws-service";
 import { isViewPortal } from "../../services/standalone-guard";
+import { ensureAgentSessionFor } from "../../lib/agent-session";
 
 import "./index.css";
 
@@ -23,6 +24,20 @@ export function PermissionGate() {
     (decision: "once" | "always" | "deny") => {
       if (!pending) return;
       if (decision === "always") addGrant(pending.host);
+      // Approving means "go ahead AND watch": jump to the requesting
+      // agent's session so the surface it opens is visible immediately.
+      if (decision !== "deny" && pending.agentClient) {
+        const st = useStore.getState();
+        const key = `${pending.agentClient}::${pending.agentSessionId || "anonymous"}`;
+        const existing = st.agentSessions[key];
+        const sid =
+          existing ??
+          ensureAgentSessionFor({
+            client: pending.agentClient,
+            agentSessionId: pending.agentSessionId,
+          });
+        if (sid) st.setActiveSession(sid);
+      }
       wsService.send({
         type: "permission:respond",
         id: pending.id,

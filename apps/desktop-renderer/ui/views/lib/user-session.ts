@@ -12,9 +12,12 @@ import { queueAction } from "../errors/offline-queue";
 
 /** True when this session may show the chat right column. */
 export function isChatCapableSession(
-  session: { agentSessionId?: string | null } | null | undefined,
+  session: { agentSessionId?: string | null; agentClient?: string | null } | null | undefined,
 ): boolean {
-  return !!session && !session.agentSessionId;
+  // Chat is exclusively for sessions the human created inside the app.
+  // Anything the coding agent produced (bound or not — presence can list
+  // an agent before bindAgentSession ran) is never chat-capable.
+  return !!session && !session.agentSessionId && !session.agentClient;
 }
 
 /** Create an empty user session, select it, and sync best-effort. */

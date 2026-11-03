@@ -42,13 +42,15 @@ export function deriveSessionTabs(
   activeSession: SessionDoc | null | undefined,
   views: Array<SurfaceConfig<Record<string, unknown>>>,
 ): ChromeTab[] {
+  // Tabs are strictly per-session: with nothing selected there are no
+  // tabs — never leak other sessions' views into the chrome bar.
   const sessionScopedViews = activeSession
     ? views.filter(
         (v) =>
           (v as unknown as { sessionId?: string | null }).sessionId ===
           activeSession.id,
       )
-    : views;
+    : [];
 
   const tabs: ChromeTab[] = sessionScopedViews.map((v) => ({
     id: v.id,

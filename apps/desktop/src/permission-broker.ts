@@ -20,6 +20,15 @@ export interface PermissionRequest {
   host: string;
   url: string;
   tool: string;
+  /** Which agent asked — lets the renderer focus that agent's session
+   * so the human approves AND watches in the right place. */
+  agentClient?: string;
+  agentSessionId?: string | null;
+}
+
+export interface PermissionAgentContext {
+  agentClient?: string;
+  agentSessionId?: string | null;
 }
 
 export interface PermissionOutcome {
@@ -42,7 +51,7 @@ export class PermissionBroker {
 
   constructor(
     private broadcast: Broadcast,
-    private timeoutMs = 45_000,
+    private timeoutMs = 120_000,
   ) {}
 
   /** Renderer (re)sync — replaces server-side view of granted domains. */
@@ -66,7 +75,11 @@ export class PermissionBroker {
   }
 
   /** Ask (or auto-allow) before letting the agent use a domain. */
-  async ensure(url: string, tool: string): Promise<PermissionOutcome> {
+  async ensure(
+    url: string,
+    tool: string,
+    agent?: PermissionAgentContext,
+  ): Promise<PermissionOutcome> {
     if (this.hasGrant(url)) return { allowed: true, decision: "always" };
 
     let host = url;
@@ -77,7 +90,14 @@ export class PermissionBroker {
     }
 
     const id = `perm_${Date.now().toString(36)}_${++this.seq}`;
-    const request: PermissionRequest = { id, host, url, tool };
+    const request: PermissionRequest = {
+      id,
+      host,
+      url,
+      tool,
+      agentClient: agent?.agentClient,
+      agentSessionId: agent?.agentSessionId,
+    };
 
     return new Promise<PermissionOutcome>((resolve) => {
       const timer = setTimeout(() => {
@@ -95,6 +115,10 @@ export class PermissionBroker {
 
       this.pending.set(id, { host, resolve, timer });
 
+      console.log(
+        `[perm] request ${id} host=${host} tool=${tool}` +
+          ` agent=${agent?.agentClient ?? "?"}/${agent?.agentSessionId ? agent.agentSessionId.slice(0, 8) : "null"}`,
+      );
       this.broadcast({
         event: "permission:request",
         data: request,

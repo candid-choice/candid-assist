@@ -340,11 +340,17 @@ function handleGetProcessLog(args: unknown): Record<string, unknown> {
 
 // ── MCP Handlers ──────────────────────────────────────────────────────────
 
-async function handleOpenBrowserSurface(args: unknown): Promise<Record<string, unknown>> {
+async function handleOpenBrowserSurface(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
   const obj = args as Record<string, unknown>;
   const url = requireUrl(obj["url"]);
   const prompt = optPrompt(obj["prompt"]);
-  const perm = await permissionBroker.ensure(url, "openBrowserSurface");
+  const perm = await permissionBroker.ensure(url, "openBrowserSurface", {
+    agentClient: ctx?.agentClient,
+    agentSessionId: ctx?.agentSessionId,
+  });
   if (!perm.allowed) return { status: "denied", reason: perm.decision, url };
   if (openSurfaces.size >= MAX_SURFACES) {
     throw new Error("MCP_002: Maximum surfaces reached");
@@ -792,7 +798,10 @@ const TOOL_DEFINITIONS = [
 
 const TOOL_HANDLERS: Record<
   string,
-  (args: unknown) => Record<string, unknown> | Promise<Record<string, unknown>>
+  (
+    args: unknown,
+    ctx?: McpAgentCtx,
+  ) => Record<string, unknown> | Promise<Record<string, unknown>>
 > = {
   openBrowserSurface: handleOpenBrowserSurface,
   openCanvasSurface: handleOpenCanvasSurface,
@@ -977,7 +986,10 @@ const __toolName = (params as Record<string, unknown>)["name"];
   }
 
   try {
-    const result = await handler((params as Record<string, unknown>)["arguments"]);
+    const result = await handler(
+      (params as Record<string, unknown>)["arguments"],
+      ctx,
+    );
     const agentTag =
       ctx.agentSessionId || ctx.agentClient
         ? { agent: { client: ctx.agentClient ?? "agent", agentSessionId: ctx.agentSessionId ?? null } }
@@ -1255,12 +1267,13 @@ async function agentNavigateAndEval(
   tool: string,
   evalJs: string,
   agentArgs: Record<string, unknown>,
+  agent?: { agentClient?: string; agentSessionId?: string | null },
 ): Promise<
   | { ok: true; surfaceId: string; value: unknown }
   | { ok: false; status: "denied"; reason: string; url: string }
   | { ok: false; status: "no-guest"; url: string }
 > {
-  const perm = await permissionBroker.ensure(url, tool);
+  const perm = await permissionBroker.ensure(url, tool, agent);
   if (!perm.allowed) return { ok: false, status: "denied", reason: perm.decision, url };
 
   // Each task gets its OWN tab — but the SAME task (same searchQuery/
@@ -1396,7 +1409,10 @@ async function handleOpen3dSurface(args: unknown): Promise<Record<string, unknow
   return { surfaceId: id, status: reuse ? "updated" : "opened", primitiveCount: primitives.length };
 }
 
-async function handleGoogleSearch(args: unknown): Promise<Record<string, unknown>> {
+async function handleGoogleSearch(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
   const o = (args ?? {}) as Record<string, unknown>;
   const query = typeof o["query"] === "string" ? o["query"].trim() : "";
   if (!query) throw new Error("MCP_001: query required");
@@ -1421,7 +1437,10 @@ async function handleGoogleSearch(args: unknown): Promise<Record<string, unknown
   } catch (e) {
     return JSON.stringify({ evalError: String(e && e.message ? e.message : e), url: typeof location !== 'undefined' ? location.href : '?' });
   } })()`;
-  const r = await agentNavigateAndEval(url, "googleSearch", evalJs, o);
+  const r = await agentNavigateAndEval(url, "googleSearch", evalJs, o, {
+    agentClient: ctx?.agentClient,
+    agentSessionId: ctx?.agentSessionId,
+  });
   if (!r.ok) return { ...r, tool: "googleSearch" };
   let parsed: Record<string, unknown> = {};
   try {
@@ -1447,7 +1466,10 @@ async function handleGoogleSearch(args: unknown): Promise<Record<string, unknown
   return { tool: "googleSearch", query, surfaceId: r.surfaceId, ...parsed };
 }
 
-async function handleReadGoogleDriveDoc(args: unknown): Promise<Record<string, unknown>> {
+async function handleReadGoogleDriveDoc(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
   const o = (args ?? {}) as Record<string, unknown>;
   const url = requireUrl(o["url"]);
   if (!/^https:\/\/(drive|docs|sites)\.google\.com\//i.test(url)) {
@@ -1459,7 +1481,10 @@ async function handleReadGoogleDriveDoc(args: unknown): Promise<Record<string, u
     loginRequired: location.href.includes('accounts.google.com') || /Sign in|before you continue/i.test((document.body?.innerText || '').slice(0, 500)),
     text: (document.body?.innerText || '').slice(0, ${RECIPE_TEXT_LIMIT}),
   }))()`;
-  const r = await agentNavigateAndEval(url, "readGoogleDriveDoc", evalJs, o);
+  const r = await agentNavigateAndEval(url, "readGoogleDriveDoc", evalJs, o, {
+    agentClient: ctx?.agentClient,
+    agentSessionId: ctx?.agentSessionId,
+  });
   if (!r.ok) return { ...r, tool: "readGoogleDriveDoc" };
   let parsed: Record<string, unknown> = {};
   try {
@@ -1484,7 +1509,10 @@ async function handleReadGoogleDriveDoc(args: unknown): Promise<Record<string, u
   return { tool: "readGoogleDriveDoc", surfaceId: r.surfaceId, url, ...parsed };
 }
 
-async function handleScrapeSelective(args: unknown): Promise<Record<string, unknown>> {
+async function handleScrapeSelective(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
   const o = (args ?? {}) as Record<string, unknown>;
   const url = requireUrl(o["url"]);
   const selector =
@@ -1504,7 +1532,10 @@ async function handleScrapeSelective(args: unknown): Promise<Record<string, unkn
       text: (chunks ? chunks.join('\n---\n') : (document.body?.innerText || '')).slice(0, ${RECIPE_TEXT_LIMIT}),
     });
   })()`;
-  const r = await agentNavigateAndEval(url, "scrapeSelective", evalJs, o);
+  const r = await agentNavigateAndEval(url, "scrapeSelective", evalJs, o, {
+    agentClient: ctx?.agentClient,
+    agentSessionId: ctx?.agentSessionId,
+  });
   if (!r.ok) return { ...r, tool: "scrapeSelective" };
   let parsed: Record<string, unknown> = {};
   try {
@@ -1609,11 +1640,17 @@ function typeJs(selector: string, value: string): string {
   })()`;
 }
 
-async function handleBrowserNavigate(args: unknown): Promise<Record<string, unknown>> {
+async function handleBrowserNavigate(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
   const o = (args ?? {}) as Record<string, unknown>;
   const url = typeof o["url"] === "string" ? o["url"] : "";
   if (!/^https?:\/\/.+/i.test(url)) throw new Error("BROWSER_006: url must be an absolute http(s) URL");
-  const perm = await permissionBroker.ensure(url, "browserNavigate");
+  const perm = await permissionBroker.ensure(url, "browserNavigate", {
+    agentClient: ctx?.agentClient,
+    agentSessionId: ctx?.agentSessionId,
+  });
   if (!perm.allowed) return { status: "denied", reason: perm.decision, url };
   const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
   assertHumanControlFree(id);

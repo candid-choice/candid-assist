@@ -124,6 +124,8 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
           host: d.host,
           url: d.url ?? "",
           tool: d.tool ?? "browser",
+          agentClient: (d as { agentClient?: string }).agentClient,
+          agentSessionId: (d as { agentSessionId?: string | null }).agentSessionId,
         });
         // Make it noticeable even when the pane is scrolled/busy.
         useStore.getState().pushUiMessage({
