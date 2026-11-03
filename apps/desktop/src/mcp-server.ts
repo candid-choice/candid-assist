@@ -667,7 +667,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'browserExecuteActions',
-    description: 'Execute an ordered SEQUENCE of browser actions on one surface in a single call (plan-then-run web agency). Submit actions[] in order; the model plans the whole task up front. Consent is requested once per domain on the first navigate to it, then the rest of the sequence runs unattended. Stops at the first failed, non-optional step and returns per-step results plus a final snapshot. Prefer this over many single-step browser calls. Per-action fields: navigate{url}; click{selector|target}; type{selector,value}; press{key?,selector?}; extract{extract:{kind:text|html|value|links|attr, selector?, attr?} or selector}; assert{contains, selector?, present?=true|false}; waitFor{selector|target|contains, timeoutMs?}; scroll{selector?}; snapshot{}. Add optional:true to a step so its failure does not abort the sequence.',
+    description: 'Agency loop: browserListSurfaces (what is open?) → reuse an existing page or openBrowserSurface (new page) → browser_snapshot to READ content → decide click/type/extract from the actual content — never hardcoded search; navigate directly to the site the human names. Execute an ordered SEQUENCE of browser actions on one surface in a single call (plan-then-run web agency). Submit actions[] in order; the model plans the whole task up front. Consent is requested once per domain on the first navigate to it, then the rest of the sequence runs unattended. Stops at the first failed, non-optional step and returns per-step results plus a final snapshot. Prefer this over many single-step browser calls. Per-action fields: navigate{url}; click{selector|target}; type{selector,value}; press{key?,selector?}; extract{extract:{kind:text|html|value|links|attr, selector?, attr?} or selector}; assert{contains, selector?, present?=true|false}; waitFor{selector|target|contains, timeoutMs?}; scroll{selector?}; snapshot{}. Add optional:true to a step so its failure does not abort the sequence.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -711,15 +711,9 @@ const TOOL_DEFINITIONS = [
       },
     },
     {
-      name: 'googleSearch',
-      description: 'Google web search via the embedded browser (consent-gated). Returns result titles/links + page text to summarize.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Search query (<=512 chars)' },
-        },
-        required: ['query'],
-      },
+      name: 'browserListSurfaces',
+      description: 'List the pages/surfaces currently open in the desktop app: id, type, URL, and whether a drivable guest (webview) is attached. Call FIRST to decide whether to drive an EXISTING page or open a new one — then browser_snapshot to read the content and decide clicks/inputs. There is no built-in search: navigate directly to the site the human names.',
+      inputSchema: { type: 'object', properties: {} },
     },
     {
       name: 'readGoogleDriveDoc',
@@ -850,7 +844,7 @@ const TOOL_HANDLERS: Record<
   showMessage: handleShowMessage,
   browserNavigate: handleBrowserNavigate,
   open3dSurface: handleOpen3dSurface,
-  googleSearch: handleGoogleSearch,
+  browserListSurfaces: handleBrowserListSurfaces,
   readGoogleDriveDoc: handleReadGoogleDriveDoc,
   scrapeSelective: handleScrapeSelective,
   browserSnapshot: handleBrowserSnapshot,
@@ -1547,62 +1541,19 @@ async function handleOpen3dSurface(args: unknown): Promise<Record<string, unknow
   return { surfaceId: id, status: reuse ? "updated" : "opened", primitiveCount: primitives.length };
 }
 
-async function handleGoogleSearch(
-  args: unknown,
-  ctx?: McpAgentCtx,
-): Promise<Record<string, unknown>> {
-  const o = (args ?? {}) as Record<string, unknown>;
-  const query = typeof o["query"] === "string" ? o["query"].trim() : "";
-  if (!query) throw new Error("MCP_001: query required");
-  if (query.length > 512) throw new Error("MCP_012: query too long (max 512)");
-  const url = "https://www.google.com/search?q=" + encodeURIComponent(query);
-  const evalJs = `(function(){ try {
-    const results = [...document.querySelectorAll('a[href^="http"]')]
-      .map((a) => ({
-        title: (a.querySelector('h3') ? a.querySelector('h3').textContent : a.textContent) || '',
-        link: a.href,
-      }))
-      .filter((r) => r.title && r.title.trim() && r.link.indexOf('google.') === -1 && r.link.indexOf('gstatic') === -1)
-      .slice(0, 10);
-    return JSON.stringify({
-      pageTitle: document.title,
-      url: location.href,
-      loginRequired: location.href.indexOf('accounts.google.com') !== -1 || /before you continue/i.test(document.body ? document.body.innerText : ''),
-      botCheck: /sorry\\/index|unusual traffic|recaptcha|are you a robot/i.test(location.href + ' ' + (document.body ? document.body.innerText : '')),
-      results,
-      pageText: (document.body ? document.body.innerText : '').slice(0, 4000),
-    });
-  } catch (e) {
-    return JSON.stringify({ evalError: String(e && e.message ? e.message : e), url: typeof location !== 'undefined' ? location.href : '?' });
-  } })()`;
-  const r = await agentNavigateAndEval(url, "googleSearch", evalJs, o, {
-    agentClient: ctx?.agentClient,
-    agentSessionId: ctx?.agentSessionId,
-    agentProject: ctx?.agentProject,
-  });
-  if (!r.ok) return { ...r, tool: "googleSearch" };
-  let parsed: Record<string, unknown> = {};
-  try {
-    parsed = typeof r.value === "string" ? JSON.parse(r.value) : {};
-  } catch {
-    /* malformed eval result */
-  }
-  if (parsed["botCheck"]) {
-    notifyHandoff(r.surfaceId, true, "Google human check — solve it, then click Done");
-    browserHandoffs.set(r.surfaceId, {
-      reason: "Google human check (unusual traffic)",
-      ts: Date.now(),
-    });
-    return {
-      tool: "googleSearch",
-      query,
-      status: "human-check-required",
-      handoff: true,
-      surfaceId: r.surfaceId,
-      note: "Human: solve the check in the pane and click Done; then ask the agent to search again (the persistent profile remembers you).",
-    };
-  }
-  return { tool: "googleSearch", query, surfaceId: r.surfaceId, ...parsed };
+function handleBrowserListSurfaces(): Record<string, unknown> {
+  const attached = new Set(listGuestSurfaceIds());
+  const surfaces = [...openSurfaces.values()]
+    .filter((s) => s.status === "open")
+    .map((s) => ({
+      surfaceId: s.surfaceId,
+      type: s.type,
+      url: typeof s.payload["url"] === "string" ? (s.payload["url"] as string) : null,
+      prompt: typeof s.payload["prompt"] === "string" ? String(s.payload["prompt"]).slice(0, 80) : null,
+      guestAttached: attached.has(s.surfaceId),
+      lastActive: new Date(s.lastActive).toISOString(),
+    }));
+  return { ok: true, count: surfaces.length, surfaces };
 }
 
 async function handleReadGoogleDriveDoc(
@@ -1660,7 +1611,7 @@ async function handleScrapeSelective(
       ? o["selector"].trim().slice(0, 128)
       : null;
   const safeSel = selector ? JSON.stringify(selector) : "null";
-  const evalJs = `(() => {
+  const evalJs = `(function(){ try {
     const sel = ${safeSel};
     const chunks = sel
       ? [...document.querySelectorAll(sel)].map((el) => el.innerText.trim()).filter(Boolean).slice(0, 50)
@@ -1671,7 +1622,9 @@ async function handleScrapeSelective(
       matched: chunks ? chunks.length : null,
       text: (chunks ? chunks.join('\n---\n') : (document.body?.innerText || '')).slice(0, ${RECIPE_TEXT_LIMIT}),
     });
-  })()`;
+  } catch (e) {
+    return JSON.stringify({ evalError: String(e && e.message ? e.message : e), url: typeof location !== 'undefined' ? location.href : '?' });
+  } })()`;
   const r = await agentNavigateAndEval(url, "scrapeSelective", evalJs, o, {
     agentClient: ctx?.agentClient,
     agentSessionId: ctx?.agentSessionId,
@@ -1847,7 +1800,11 @@ function extractJs(ex: SeqStep["extract"], fallbackSelector?: string): string {
   const kind = ex?.kind ?? "text";
   const sel = ex?.selector ?? fallbackSelector ?? null;
   const attr = ex?.attr ?? null;
-  return `(() => {
+  // Page-side try/catch + JSON string return: mirrors the proven
+  // proven page-side try/catch + JSON-string eval shape. Without it, any page-context throw becomes
+  // an opaque executeJavaScript rejection ("Script failed to execute")
+  // and object results can hit structured-clone edge cases.
+  return `(function(){ try {
     const kind = ${JSON.stringify(kind)};
     const sel = ${JSON.stringify(sel)};
     const attr = ${JSON.stringify(attr)};
@@ -1857,24 +1814,26 @@ function extractJs(ex: SeqStep["extract"], fallbackSelector?: string): string {
       const data = scope.filter(e => e.tagName === 'A' && e.href)
         .map(e => ({ text: textOf(e).slice(0, 140), href: e.href }))
         .slice(0, 300);
-      return { ok: true, kind, count: data.length, data };
+      return JSON.stringify({ ok: true, kind, count: data.length, data });
     }
     const nodes = sel ? [...document.querySelectorAll(sel)] : (document.body ? [document.body] : []);
     if (kind === 'value') {
       const data = nodes.map(n => (n.value != null ? String(n.value) : null)).filter(v => v !== null);
-      return { ok: true, kind, count: data.length, data };
+      return JSON.stringify({ ok: true, kind, count: data.length, data });
     }
     if (kind === 'attr') {
       const data = nodes.map(n => n.getAttribute(attr || 'href')).filter(Boolean);
-      return { ok: true, kind, count: data.length, data };
+      return JSON.stringify({ ok: true, kind, count: data.length, data });
     }
     if (kind === 'html') {
       const data = nodes.map(n => n.innerHTML).join('\n---\n').slice(0, 20000);
-      return { ok: true, kind, count: nodes.length, data };
+      return JSON.stringify({ ok: true, kind, count: nodes.length, data });
     }
     const data = nodes.map(textOf).filter(Boolean).join('\n').slice(0, 20000);
-    return { ok: true, kind, count: nodes.length, data };
-  })()`;
+    return JSON.stringify({ ok: true, kind, count: nodes.length, data });
+  } catch (e) {
+    return JSON.stringify({ ok: false, kind: ${JSON.stringify(kind)}, error: String(e && e.message ? e.message : e), url: typeof location !== 'undefined' ? location.href : '?' });
+  } })()`;
 }
 
 function assertJs(contains: string | null, selector: string | null, present: boolean): string {
@@ -1989,7 +1948,8 @@ async function handleBrowserExecuteActions(
         const res = (await handle.executeJavaScript(typeJs(a.selector, a.value ?? ""))) as { ok: boolean };
         r = res.ok ? { ok: true } : { ok: false, error: "input element not found" };
       } else if (a.action === "extract") {
-        r = (await handle.executeJavaScript(extractJs(a.extract, a.selector))) as Record<string, unknown>;
+        const raw = await handle.executeJavaScript(extractJs(a.extract, a.selector));
+        r = (typeof raw === "string" ? JSON.parse(raw) : raw) as Record<string, unknown>;
         if (typeof r.ok !== "boolean") r = { ok: true, ...r };
       } else if (a.action === "assert") {
         if (a.contains === undefined && !a.selector) throw new Error("ACTION_008: assert needs contains and/or selector");
