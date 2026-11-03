@@ -23,6 +23,8 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { existsSync } from "node:fs";
 import { basename, dirname } from "node:path";
@@ -106,10 +108,14 @@ class HumanAssistConn {
   private ws: WSLike | null = null;
   private connecting: Promise<void> | null = null;
   private pending = new Map<number, Pending>();
+  private statusListeners = new Set<() => void>();
   private rpcId = 0;
   private reconnectTimer: Timer | null = null;
   private backoffMs = 1_000;
+  private reconnectTries = 0;
+  private reconnectGivenUp = false;
   private closed = false;
+  onLost: (() => void) | null = null;
 
   constructor(private readonly url: string) {}
 
@@ -119,11 +125,26 @@ class HumanAssistConn {
     return "disconnected";
   }
 
+  /** Subscribe to connect/disconnect transitions; returns unsubscribe. */
+  onStatus(cb: () => void): () => void {
+    this.statusListeners.add(cb);
+    return () => this.statusListeners.delete(cb);
+  }
+
+  private emitStatus(): void {
+    for (const cb of this.statusListeners) {
+      try { cb(); } catch { /* listener error must not break the socket */ }
+    }
+  }
+
   /** Connect (single-flight) + MCP handshake + presence hello. */
   async ensure(): Promise<void> {
     if (this.closed) throw new Error("human-assist connection closed");
     if (this.ws && this.ws.readyState === 1) return;
     if (this.connecting) return this.connecting;
+    // An explicit call revives a previously given-up background loop.
+    this.reconnectGivenUp = false;
+    this.reconnectTries = 0;
     this.connecting = this.open().finally(() => {
       this.connecting = null;
     });
@@ -147,6 +168,9 @@ class HumanAssistConn {
       ws.onopen = () => {
         clearTimeout(failTimer);
         this.backoffMs = 1_000;
+        this.reconnectTries = 0;
+        this.reconnectGivenUp = false;
+        this.emitStatus();
         // MCP handshake (marks the connection initialized server-side)…
         void this.rpc("initialize", {
           protocolVersion: "2025-03-26",
@@ -198,6 +222,7 @@ class HumanAssistConn {
         }
         this.pending.clear();
         this.ws = null;
+        this.emitStatus();
         if (!this.closed) this.scheduleReconnect();
       };
       ws.onclose = drop;
@@ -206,9 +231,15 @@ class HumanAssistConn {
   }
 
   private scheduleReconnect(): void {
-    if (this.closed || this.reconnectTimer) return;
+    if (this.closed || this.reconnectTimer || this.reconnectGivenUp) return;
+    if (this.reconnectTries >= 5) {
+      this.reconnectGivenUp = true;
+      this.onLost?.();
+      return;
+    }
+    this.reconnectTries++;
     const delay = this.backoffMs;
-    this.backoffMs = Math.min(this.backoffMs * 2, 30_000);
+    this.backoffMs = Math.min(this.backoffMs * 2, 10_000);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       void this.ensure().catch(() => { /* scheduleReconnect fires again via drop */ });
@@ -251,6 +282,23 @@ class HumanAssistConn {
       { name, arguments: { ...args, ...identityArgs() } },
       10 * 60_000,
     );
+  }
+
+  /** Drop the socket but stay alive — next call (or /human-assist
+   *  reconnect) re-dials from scratch. */
+  closeForReconnect(): void {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    for (const p of this.pending.values()) {
+      clearTimeout(p.timer);
+      p.reject(new Error("human-assist reconnect requested"));
+    }
+    this.pending.clear();
+    try { this.ws?.close(); } catch { /* noop */ }
+    this.ws = null;
+    this.reconnectTries = 0;
+    this.reconnectGivenUp = false;
+    this.emitStatus();
   }
 
   close(): void {
@@ -315,6 +363,8 @@ export default function humanAssist(pi: ExtensionAPI) {
   const conn = new HumanAssistConn(url);
   const registered = new Set<string>();
   let started = false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let lastCtx: any = null;
 
   async function syncTools(): Promise<number> {
     const tools = await conn.listTools();
@@ -351,8 +401,11 @@ export default function humanAssist(pi: ExtensionAPI) {
 
   async function bootstrap(ctx: { ui?: { notify?: (m: string, k?: "info" | "error" | "warning") => void } }): Promise<void> {
     if (started) return;
-    let firstCount = -1;
-    for (let attempt = 0; attempt < 400; attempt++) {
+    // Bounded retries: 5 connect attempts (~15s) then time out and prompt
+    // the human; signed-out gets a longer window (12 × 10s) since that
+    // self-clears once they sign in.
+    let connectFails = 0;
+    for (let attempt = 0; attempt < 17; attempt++) {
       try {
         const n = await syncTools();
         if (n > 0) {
@@ -360,19 +413,70 @@ export default function humanAssist(pi: ExtensionAPI) {
           ctx.ui?.notify?.(`Human Assist connected — ${n} tools (${resolveProject() ?? "no project"})`, "info");
           return;
         }
-        // Signed out: server advertises zero tools until the human signs in.
-        ctx.ui?.notify?.("Human Assist: waiting for you to sign in to the desktop app…", "warning");
+        // Reachable but signed out: server advertises zero tools until the
+        // human signs in. Keep a bounded window, then prompt.
+        if (connectFails === 0) ctx.ui?.notify?.("Human Assist: waiting for you to sign in to the desktop app…", "warning");
       } catch {
-        // App not up yet — keep backing off quietly.
+        connectFails++;
+        if (connectFails >= 5) {
+          ctx.ui?.notify?.(
+            `Human Assist unreachable at ${url} after ${connectFails} tries — start the desktop app (pnpm run dev), then /human-assist refresh`,
+            "error",
+          );
+          return;
+        }
       }
-      await new Promise((r) => setTimeout(r, Math.min(2_000 * (attempt + 1), 20_000)));
+      await new Promise((r) => setTimeout(r, connectFails > 0 ? 2_000 : 10_000));
     }
+    ctx.ui?.notify?.("Human Assist: still signed out — sign in to the desktop app, then /human-assist refresh", "warning");
   }
 
   pi.on("session_start", async (_event, ctx) => {
+    lastCtx = ctx;
+    conn.onLost = () => {
+      lastCtx?.ui?.notify?.(
+        "Human Assist connection lost after 5 reconnect tries — /human-assist refresh to reconnect",
+        "error",
+      );
+    };
     harnessId = ctx?.sessionManager?.getSessionId?.() ?? "";
     projectResolved = false; // recompute per session (cwd may change)
     project = null;
+
+    // Footer: persistent Human Assist connection indicator.
+    // Left = HA status dot + project + token stats, right = model (branch).
+    try {
+      ctx.ui?.setFooter?.((tui: { requestRender(): void }, theme: { fg(k: string, s: string): string }, footerData: { onBranchChange(cb: () => void): () => void }) => {
+        const unsubStatus = conn.onStatus(() => tui.requestRender());
+        const unsubBranch = footerData.onBranchChange(() => tui.requestRender());
+        return {
+          dispose: () => { unsubStatus(); unsubBranch(); },
+          invalidate() { /* text derives from live state at render time */ },
+          render(width: number): string[] {
+            const st = conn.status;
+            const dot = st === "connected" ? "●" : st === "connecting" ? "◐" : "○";
+            const proj = resolveProject();
+            const ha = theme.fg("dim", ` HA ${dot}${proj ? " " + proj : ""}`);
+            let input = 0, output = 0, cost = 0;
+            for (const e of ctx.sessionManager.getBranch()) {
+              if (e.type === "message" && e.message.role === "assistant") {
+                const m = e.message as AssistantMessage;
+                input += m.usage.input; output += m.usage.output; cost += m.usage.cost.total;
+              }
+            }
+            const fmt = (n: number) => (n < 1000 ? `${n}` : `${(n / 1000).toFixed(1)}k`);
+            const tokens = theme.fg("dim", ` ↑${fmt(input)} ↓${fmt(output)} $${cost.toFixed(3)}`);
+            const left = ha + tokens;
+            const model = ctx.model?.id ?? "no-model";
+            const branch = footerData.getGitBranch();
+            const right = theme.fg("dim", `${model}${branch ? ` (${branch})` : ""}`);
+            const pad = " ".repeat(Math.max(1, width - visibleWidth(left) - visibleWidth(right)));
+            return [truncateToWidth(left + pad + right, width)];
+          },
+        };
+      });
+    } catch { /* older pi without setFooter — status still available via /human-assist */ }
+
     await bootstrap(ctx);
   });
 
@@ -390,10 +494,13 @@ export default function humanAssist(pi: ExtensionAPI) {
   pi.registerCommand("human-assist", {
     description: "Human Assist desktop connection status (… refresh to re-pull tools)",
     handler: async (args, ctx) => {
-      if (args.trim().toLowerCase() === "refresh") {
+      const sub = args.trim().toLowerCase();
+      if (sub === "refresh" || sub === "reconnect") {
         try {
+          if (sub === "reconnect") conn.closeForReconnect();
           const n = await syncTools();
-          ctx.ui?.notify?.(`Human Assist: ${n} server tools, ${registered.size} registered`, "info");
+          started = n > 0;
+          ctx.ui?.notify?.(`Human Assist: ${conn.status}, ${n} server tools, ${registered.size} registered`, "info");
         } catch (e) {
           ctx.ui?.notify?.(`Human Assist refresh failed: ${e instanceof Error ? e.message : String(e)}`, "error");
         }
