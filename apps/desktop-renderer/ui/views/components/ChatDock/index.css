@@ -7,7 +7,6 @@
   min-width: 240px;
   max-width: 560px;
   height: 100%;
-  border-left: 1px solid var(--ha-border);
   background: var(--ha-surface);
   flex-shrink: 0;
 }
@@ -167,7 +166,7 @@
 .ha-chat-dock { position: relative; }
 .ha-chat-resizer {
   position: absolute;
-  left: -3px;
+  left: -7px;
   top: 0;
   bottom: 0;
   width: 7px;
@@ -176,6 +175,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  background: transparent;
 }
 .ha-chat-resizer::after {
   content: "";
@@ -183,6 +183,7 @@
   height: 28px;
   border-radius: 2px;
   background: var(--ha-border, #333a45);
+  transition: background 0.12s;
 }
 .ha-chat-resizer:hover::after,
 .ha-chat-resizer--active::after {
