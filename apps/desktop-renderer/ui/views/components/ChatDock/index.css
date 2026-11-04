@@ -7,7 +7,7 @@
   min-width: 240px;
   max-width: 560px;
   height: 100%;
-  background: var(--ha-surface);
+  background: var(--ha-chat-bg, var(--ha-surface)); /* distinct right-column tint (see --ha-chat-bg) */
   flex-shrink: 0;
 }
 

@@ -15,6 +15,7 @@
   --ha-primary: #7c6fa8;
   --ha-primary-hover: #6b5d94;
   --ha-primary-light: #f0eef6; /* purple-tinted hover/chip surface */
+  --ha-chat-bg: oklch(0.968 0.006 285); /* chat dock tint — barely-there lavender so the right column reads as its own region */
   /* Secondary */
   --ha-secondary: oklch(0.371 0 0); /* web: chart-4 */
   /* Text */
@@ -41,6 +42,7 @@
   --ha-bg: oklch(0.145 0 0); /* web dark: --background */
   --ha-titlebar-bg: oklch(0.205 0 0); /* web dark: --card — reads as chrome on 0.145 bg */
   --ha-surface: oklch(0.205 0 0); /* web dark: --card */
+  --ha-chat-bg: oklch(0.232 0.01 285); /* chat dock tint — lifts a hair above --ha-surface with a hint of brand purple */
   --ha-primary: #9c8fc4;
   --ha-primary-hover: #b0a4d4;
   --ha-primary-light: #353143;
