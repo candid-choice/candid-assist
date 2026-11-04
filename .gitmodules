@@ -1,0 +1,3 @@
+[submodule ".pi/extensions/pi-dev-stack"]
+	path = .pi/extensions/pi-dev-stack
+	url = https://github.com/candid-choice/candid-pi-dev-stack.git
