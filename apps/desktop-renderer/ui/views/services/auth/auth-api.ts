@@ -224,7 +224,11 @@ export async function devAutoLogin(
         (name === 'TypeError' && !code) ||
         code === 'AUTH_ERROR' ||
         code === 'Network request failed.';
-      if (retryable) return 'network';
+      if (retryable) {
+        // eslint-disable-next-line no-console
+        console.log('[auth] dev auto-login: backend not ready (' + endpoint + '), retrying…');
+        return 'network';
+      }
       // eslint-disable-next-line no-console
       console.log('[auth] dev auto-login attempt', endpoint, 'failed (final):', code ?? name ?? String(err));
       return null;
