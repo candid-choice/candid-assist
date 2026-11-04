@@ -39,6 +39,16 @@
  * Commands: /dev-stack (status) · /dev-stack logs [n] (tail log) ·
  * /dev-stack restart (manual teardown + respawn).
  *
+ * Slack bridge (optional cfg.slack): botToken/channel as literals or
+ * "env:VAR"/"${VAR}" (process.env → <repo>/.env). postOnComplete posts
+ * the final assistant text of each completed run; inbound channel
+ * messages (socket mode — provide appToken) are forwarded into the pi
+ * session as prompts; the slack_send tool posts messages with optional
+ * file/image attachments (e.g. screenshots) on demand.
+ * Dependencies: declare npm packages in <repo>/.pi/npm/package.json
+ * (pi resolves extension imports from .pi/npm/node_modules — e.g.
+ * "@slack/bolt" for the bridge, pi-playwright for browser tools).
+ *
  * Status contract for other extensions (no import needed):
  *   globalThis.__haStackStatus = { alive, env, partial, changedAt, logPath }
  *   globalThis.__haStackStatusListeners = Set<(s)=>void>
@@ -46,6 +56,7 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import { connect } from "node:net";
 import { existsSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
@@ -69,6 +80,22 @@ interface DevStackConfig {
   healthUrl?: string;
   /** Substrings that must all appear in healthUrl's response body. */
   healthContains?: string[];
+  /** Extra ports to evict (kill holders of) on teardown — e.g. emulator
+   *  UI/hub ports that survivors squat on and block the next launch. */
+  teardownPorts?: number[];
+  /** Optional Slack bridge. Tokens/channel may be literal values or
+   *  "env:VAR" (resolved from process.env, then <repo>/.env). */
+  slack?: {
+    botToken?: string;
+    appToken?: string;
+    channel?: string;
+    /** post the final assistant text of each completed run (default true) */
+    postOnComplete?: boolean;
+    /** forward inbound channel messages into the pi session (default true,
+     *  requires appToken for socket mode) */
+    inboundEnabled?: boolean;
+    maxTextLen?: number;
+  };
 }
 
 const STATUS_KEY = "__haStackStatus";
@@ -94,6 +121,28 @@ function readJson(path: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+/** Resolve secrets/placeholders: "env:VAR" or inline ${VAR} against
+ *  process.env, falling back to <repo>/.env (never logged). */
+export function resolveSecret(v: string | undefined, repo: string): string {
+  if (!v) return "";
+  let repoEnv: Record<string, string> | null = null;
+  const fromRepoEnv = (name: string): string => {
+    if (repoEnv === null) {
+      repoEnv = {};
+      try {
+        for (const line of readFileSync(join(repo, ".env"), "utf8").split("\n")) {
+          const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+          if (m) repoEnv[m[1]] = m[2].replace(/^(["'])(.*)\1$/, "$2");
+        }
+      } catch { /* no .env */ }
+    }
+    return repoEnv[name] ?? "";
+  };
+  const lookup = (name: string) => process.env[name] || fromRepoEnv(name) || "";
+  if (v.startsWith("env:")) return lookup(v.slice(4));
+  return v.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_m, name: string) => lookup(name));
 }
 
 function isConfig(v: unknown): v is DevStackConfig {
@@ -275,6 +324,23 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** Deterministic teardown: kill whatever still holds the stack's ports
+ *  (group-kill misses survivors like the firestore java child and stale
+ *  emulator hubs, which then block the next launch with "port taken"). */
+function forceKillPorts(ports: number[]): void {
+  const { execSync } = require("node:child_process") as typeof import("node:child_process");
+  for (const p of ports) {
+    try {
+      const out = execSync(`lsof -ti :${p}`, { timeout: 2_000 }).toString();
+      for (const pid of out.split("\n").map((x) => parseInt(x.trim(), 10))) {
+        if (Number.isFinite(pid) && pid > 1) {
+          try { process.kill(pid, "SIGKILL"); } catch { /* gone */ }
+        }
+      }
+    } catch { /* port already free */ }
+  }
+}
+
 function logPathFor(c: DevStackConfig): string {
   return c.logFile || join(tmpdir(), `${c.project.replace(/[^\w.-]/g, "_")}-dev-stack.log`);
 }
@@ -307,7 +373,7 @@ export default function devStack(pi: ExtensionAPI) {
   const openConfiguredUrls = (c: DevStackConfig) => {
     if (!c.openUrls?.length || urlsOpenedForThisLaunch) return;
     urlsOpenedForThisLaunch = true;
-    const list = c.openUrls.map((u) => `    - ${u}`).join("\n");
+    const list = c.openUrls.map((u) => `    - ${resolveSecret(u, c.repo)}`).join("\n");
     send(
       `[dev-stack] The "${c.project}" stack is up. Open these URLs in Playwright (each in its OWN new tab via ` +
       `browser_tabs action=new followed by browser_navigate — never reuse or replace existing tabs; skip any that ` +
@@ -356,6 +422,11 @@ export default function devStack(pi: ExtensionAPI) {
       if (Date.now() > deadline) break;
       await sleep(400);
     }
+    // Evict stubborn survivors (firestore java, stale emulator hubs) so
+    // the fresh launch can bind everything — the "port taken" class of
+    // failed restarts.
+    forceKillPorts([...c.ports, ...(c.emulatorPorts ?? []), ...(c.teardownPorts ?? [])]);
+    await sleep(500);
     rotateLog(logPathFor(c));
     return startManaged(c);
   };
@@ -422,6 +493,7 @@ export default function devStack(pi: ExtensionAPI) {
       }
       const logPath = cfg.logFile || join(tmpdir(), `${cfg.project.replace(/[^\w.-]/g, "_")}-dev-stack.log`);
       setStackStatus({ logPath });
+      startSlack(cfg, (m, k) => ctx.ui?.notify?.(m, k));
       const h = await health(cfg);
       setStackStatus({ alive: h.up, env: h.emu ? "dev" : "prod", partial: !h.up && h.any });
       if (h.up) {
@@ -460,6 +532,109 @@ export default function devStack(pi: ExtensionAPI) {
     } catch {
       // Never block session start on this.
     }
+  });
+
+  // ── Slack bridge (optional: cfg.slack) ─────────────────────────────────
+  // Outbound: postOnComplete sends the final assistant text on agent_end;
+  // the slack_send tool lets the model push messages + file/image
+  // attachments (e.g. screenshots) on demand. Inbound (socket mode needs
+  // appToken): channel messages are forwarded into this pi session as
+  // prompts. Tokens via "env:VAR" / ${VAR} → process.env then <repo>/.env.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let slackApp: any = null;
+  let slackChannel = "";
+  const startSlack = (c: DevStackConfig, notify: (m: string, k?: "info" | "warning" | "error") => void) => {
+    const s = c.slack;
+    if (!s?.botToken || !s.channel) return;
+    const botToken = resolveSecret(s.botToken, c.repo);
+    const appToken = resolveSecret(s.appToken, c.repo);
+    slackChannel = resolveSecret(s.channel, c.repo);
+    if (!botToken || !slackChannel) {
+      notify("slack: botToken/channel unresolved (check env vars / .env) — bridge disabled", "warning");
+      return;
+    }
+    let App: (new (opts: Record<string, unknown>) => any) | undefined;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      App = (require("@slack/bolt") as { App: new (o: Record<string, unknown>) => any }).App;
+    } catch {
+      notify('slack: @slack/bolt not installed — add "@slack/bolt" to .pi/npm/package.json and run npm install', "error");
+      return;
+    }
+    const socket = Boolean(appToken);
+    try {
+      slackApp = new App(socket ? { token: botToken, socketMode: true, appToken } : { token: botToken });
+      if (socket && s.inboundEnabled !== false) {
+        slackApp.event("message", async ({ event }: { event: Record<string, unknown> }) => {
+          if (event.subtype || event.bot_id || !event.user || String(event.channel) !== slackChannel) return;
+          const text = String(event.text ?? "").trim();
+          if (!text) return;
+          const fn = (pi as unknown as { sendUserMessage?: (c: string, o?: { deliverAs?: "steer" | "followUp" }) => Promise<void> }).sendUserMessage;
+          if (fn) await fn.call(pi, `[slack] message from <@${String(event.user)}> in #${slackChannel}:\n${text}`, { deliverAs: "followUp" });
+        });
+      }
+      if (socket) {
+        void slackApp.start()
+          .then(() => notify(`slack: connected (socket) → #${slackChannel}`, "info"))
+          .catch((e: unknown) => notify(`slack: connect failed: ${e instanceof Error ? e.message : String(e)}`, "error"));
+      } else {
+        notify(`slack: outbound-only (no appToken) → #${slackChannel}`, "info");
+      }
+    } catch (e) {
+      slackApp = null;
+      notify(`slack: init failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+    }
+  };
+
+  pi.on("agent_end", (event) => {
+    const s = cfg?.slack;
+    if (!slackApp || !s || s.postOnComplete === false) return;
+    try {
+      const msgs = (event as unknown as { messages?: Array<{ role?: string; content?: Array<{ type: string; text?: string }> }> }).messages ?? [];
+      const last = [...msgs].reverse().find((m) => m.role === "assistant");
+      const text = (last?.content ?? []).filter((cn) => cn.type === "text").map((cn) => cn.text ?? "").join("\n").trim();
+      if (!text) return;
+      const cap = s.maxTextLen ?? 3000;
+      void slackApp.client.chat.postMessage({
+        channel: slackChannel,
+        text: `:robot_face: *pi.dev · ${cfg?.project ?? "project"}*\n${text.length > cap ? text.slice(0, cap) + "\n… (truncated)" : text}`,
+      }).catch(() => { /* transient */ });
+    } catch { /* never break the run */ }
+  });
+
+  pi.registerTool({
+    name: "slack_send",
+    label: "Send to Slack",
+    description: "Post a message to the configured Slack channel; optionally attach a file/image (absolute path, e.g. a screenshot captured during the task) as an attachment alongside the message.",
+    parameters: Type.Object({
+      text: Type.Optional(Type.String({ description: "Message text" })),
+      file: Type.Optional(Type.String({ description: "Absolute path to an image/file to attach" })),
+    }),
+    async execute(_toolCallId, p) {
+      if (!slackApp || !slackChannel) throw new Error("slack not configured (cfg.slack.botToken/channel) or connected");
+      const text = p.text ?? "";
+      const r = await slackApp.client.chat.postMessage({ channel: slackChannel, text });
+      if (!r?.ok) throw new Error("slack chat.postMessage failed");
+      if (p.file) {
+        try {
+          const buf = readFileSync(p.file);
+          const filename = p.file.split("/").pop() || "attachment";
+          const up = await slackApp.client.files_getUploadURLExternal({ filename, length: buf.length });
+          const form = new FormData();
+          form.append("file", new Blob([new Uint8Array(buf)]), filename);
+          await fetch(up.upload_url, { method: "POST", body: form });
+          await slackApp.client.files_completeUploadExternal({
+            files: [{ id: up.file_id, filename }],
+            channel: slackChannel,
+            initial_comment: text ? undefined : "📎 attachment",
+          });
+          return { content: [{ type: "text", text: `sent message + ${filename} to #${slackChannel}` }], details: {} };
+        } catch (e) {
+          return { content: [{ type: "text", text: `message sent, but ${p.file} failed: ${e instanceof Error ? e.message : String(e)}` }], details: { fileError: true } };
+        }
+      }
+      return { content: [{ type: "text", text: `sent to #${slackChannel}` }], details: {} };
+    },
   });
 
   pi.registerCommand("dev-stack", {
