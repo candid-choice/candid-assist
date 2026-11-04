@@ -717,6 +717,19 @@ const TOOL_DEFINITIONS = [
       inputSchema: { type: 'object', properties: {} },
     },
     {
+      name: 'saveExportFile',
+      description: 'Write an export file (CSV/JSON/text) from the agent into the desktop app exports directory on disk. Content arrives in append chunks (<=64KB per call); call with mode "start" first, then "append" chunks, then "close". Use for large scraped datasets so they never have to pass through the chat.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filename: { type: 'string', description: 'File name, e.g. locum-2026-11-03.csv (no path separators)' },
+          content: { type: 'string', description: 'Chunk content (<=64KB)' },
+          mode: { type: 'string', enum: ['start', 'append', 'close'], description: 'start=create/truncate, append=add, close=finalize' },
+        },
+        required: ['filename', 'mode'],
+      },
+    },
+    {
       name: 'delegateTask',
       description: 'Hand a HIGH-LEVEL GOAL to the desktop app: the internally configured model plans the task into a browser-action sequence and the app executes it autonomously through the consent-gated browser engine (reusing an open page or opening a new one). Use when the human states an outcome ("search X for me", "find listings on Y"); prefer this over chaining many single-step calls. Returns the plan summary, per-step results, and the final page snapshot.',
       inputSchema: {
@@ -860,6 +873,7 @@ const TOOL_HANDLERS: Record<
   browserNavigate: handleBrowserNavigate,
   open3dSurface: handleOpen3dSurface,
   browserListSurfaces: handleBrowserListSurfaces,
+  saveExportFile: handleSaveExportFile,
   readGoogleDriveDoc: handleReadGoogleDriveDoc,
   scrapeSelective: handleScrapeSelective,
   browserSnapshot: handleBrowserSnapshot,
@@ -1591,6 +1605,45 @@ async function handleOpen3dSurface(args: unknown): Promise<Record<string, unknow
     status: "open",
   });
   return { surfaceId: id, status: reuse ? "updated" : "opened", primitiveCount: primitives.length };
+}
+
+// ── Export files (large agent datasets land on disk, not in chat) ─────
+const EXPORTS_DIR = require("node:path").join(require("node:os").homedir(), "Downloads", "human-assist-exports");
+const exportStreams = new Map<string, { path: string; bytes: number }>();
+
+function handleSaveExportFile(args: unknown): Record<string, unknown> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const filename = typeof o["filename"] === "string" ? o["filename"] : "";
+  const mode = o["mode"] === "append" || o["mode"] === "close" ? o["mode"] : o["mode"] === "start" ? "start" : null;
+  if (!filename || mode === null) throw new Error("EXP_001: filename and mode required");
+  if (/[\\/]\.\.?|[\\/]/.test(filename) || !/^[\w.\- ]{1,120}$/.test(filename)) {
+    throw new Error("EXP_002: filename must be a plain file name");
+  }
+  const fs = require("node:fs") as typeof import("node:fs");
+  const pathmod = require("node:path") as typeof import("node:path");
+  fs.mkdirSync(EXPORTS_DIR, { recursive: true });
+  const path = pathmod.join(EXPORTS_DIR, filename);
+  // Confine to the exports directory even after the name check.
+  if (!path.startsWith(EXPORTS_DIR + pathmod.sep)) throw new Error("EXP_003: path escape rejected");
+  const content = typeof o["content"] === "string" ? o["content"] : "";
+  if (content.length > 64 * 1024) throw new Error("EXP_004: chunk too large (max 64KB)");
+  const state = exportStreams.get(filename);
+  if (mode === "start") {
+    fs.writeFileSync(path, content, "utf8");
+    exportStreams.set(filename, { path, bytes: Buffer.byteLength(content) });
+  } else {
+    if (!state) throw new Error("EXP_005: no active export stream for " + filename + " — call mode=start first");
+    if (content) fs.appendFileSync(path, content, "utf8");
+    state.bytes += Buffer.byteLength(content);
+    if (state.bytes > 64 * 1024 * 1024) throw new Error("EXP_006: export exceeds 64MB");
+  }
+  if (mode === "close") {
+    exportStreams.delete(filename);
+    const size = fs.statSync(path).size;
+    console.log("[export] wrote " + path + " (" + size + " bytes)");
+    return { ok: true, path, bytes: size, closed: true };
+  }
+  return { ok: true, path, bytes: exportStreams.get(filename)?.bytes ?? 0, closed: false };
 }
 
 function handleBrowserListSurfaces(): Record<string, unknown> {
