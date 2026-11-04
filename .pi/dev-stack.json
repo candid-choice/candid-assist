@@ -1,0 +1,8 @@
+{
+  "project": "candid-assist",
+  "repo": "/Users/szhao/candid-choice/candid-assist",
+  "command": "pnpm run dev",
+  "ports": [3600, 3601, 3602, 3604, 3613, 3614, 3615, 3616, 43179],
+  "emulatorPorts": [3602, 3613],
+  "taskName": "candid-assist dev"
+}

@@ -26,7 +26,23 @@ import { CONFIG_DIR_NAME, type ExtensionAPI } from "@earendil-works/pi-coding-ag
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { getStackStatus, onStackStatus } from "./stack-status";
+
+// Stack status reader — reads the contract published by the dev-stack
+// extension (globalThis.__haStackStatus + __haStackStatusListeners).
+// Deliberately a local copy (no import) so human-assist stays usable in
+// projects without dev-stack installed.
+interface StackStatus { alive: boolean; env: "dev" | "prod"; changedAt: number }
+function getStackStatus(): StackStatus {
+  const g = globalThis as Record<string, unknown>;
+  return (g.__haStackStatus as StackStatus) || { alive: false, env: "prod", changedAt: 0 };
+}
+function onStackStatus(cb: (s: StackStatus) => void): () => void {
+  const g = globalThis as Record<string, unknown>;
+  if (!g.__haStackStatusListeners) g.__haStackStatusListeners = new Set<(s: StackStatus) => void>();
+  const set = g.__haStackStatusListeners as Set<(s: StackStatus) => void>;
+  set.add(cb);
+  return () => set.delete(cb);
+}
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
