@@ -546,7 +546,7 @@ export default function humanAssist(pi: ExtensionAPI) {
             const stack = getStackStatus();
             const stackIcon = stack.alive ? "●" : stack.partial ? "◐" : "○";
             const stackColor = stack.alive ? "success" : stack.partial ? "warning" : "error";
-            const stackSeg = theme.fg(stackColor, ` ${stack.env} ${stackIcon}`);
+            const stackSeg = theme.fg(stackColor, ` ${stack.env[0].toUpperCase() + stack.env.slice(1)} ${stackIcon}`);
             const ha = theme.fg(haColor, ` HA ${dot}`) + stackSeg + theme.fg("dim", proj ? ` ${proj}` : "");
             let input = 0, output = 0, cost = 0;
             for (const e of ctx.sessionManager.getBranch()) {
