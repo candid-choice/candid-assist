@@ -1256,6 +1256,20 @@ function startWebSocketServer(port: number): WebSocketServer {
   return ws;
 }
 
+/** loadURL with a hard cap: a stalled navigation must not wedge a
+ *  sequence forever (observed: 600s tool timeout behind one hang). */
+async function loadUrlCapped(handle: GuestHandle, url: string, timeoutMs = 30_000): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, rej) => {
+    timer = setTimeout(() => rej(new Error("BROWSER_009: navigation timed out after " + timeoutMs / 1000 + "s: " + url)), timeoutMs);
+  });
+  try {
+    await Promise.race([handle.loadURL(url), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function notifySurfacePush(payload: Record<string, unknown>): void {
   const event = JSON.stringify({
     event: "surface:push",
@@ -1507,7 +1521,7 @@ async function agentNavigateAndEval(
   }
 
   try {
-    await handle.loadURL(url);
+    await loadUrlCapped(handle, url);
   } catch (e) {
     // A freshly-pushed <webview src=...> is already navigating to this
     // exact URL; calling loadURL on top of it aborts the in-flight load
@@ -2085,7 +2099,7 @@ async function handleBrowserExecuteActions(
           r = { ok: false, status: "denied", reason: perm.decision };
         } else {
           try {
-            await handle.loadURL(a.url as string);
+            await loadUrlCapped(handle, a.url as string);
           } catch (e) {
             // A surface seeded at this exact URL (delegateTask) or a
             // user-initiated nav in flight makes loadURL abort the
@@ -2180,7 +2194,7 @@ async function handleBrowserNavigate(
   if (!perm.allowed) return { status: "denied", reason: perm.decision, url };
   const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
   assertHumanControlFree(id);
-  await handle.loadURL(url);
+  await loadUrlCapped(handle, url);
   return { status: "navigated", surfaceId: id, url, permission: perm.decision };
 }
 
