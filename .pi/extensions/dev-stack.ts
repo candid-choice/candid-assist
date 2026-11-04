@@ -1,83 +1,67 @@
-/** Dev-stack keeper — self-contained, shareable pi extension.
+/** Dev-stack keeper — self-contained, shareable pi extension (no plugins).
  *
  * Drop this ONE file into any project's .pi/extensions/ (or ~/.pi/agent/
- * extensions/) and it keeps that project's dev stack alive:
+ * extensions/) and it OWNS the project's dev stack lifecycle:
  *
- *  • Autostart: session_start with the stack down → one follow-up kickoff
- *    telling the model to start it via better-background-tasks
- *    (bg_task_spawn — supervised, logged, restartable).
- *  • Watchdog: probes every configured port every 20s. If the stack was
- *    healthy and ANY component dies (after concurrently's local
- *    restart-tries are exhausted), inject one action telling the model
- *    to STOP the supervised task (whole-stack teardown) and spawn a
- *    fresh one. 90s throttle; re-arms when all ports answer again.
- *  • Status: publishes { alive, env, changedAt } so other extensions
- *    (e.g. human-assist's footer: ⌁dev / ⌁prod / ⌁down) can display it.
+ *  • Launch: stack down at session_start → spawns `command` itself
+ *    (detached, own process group) with stdout+stderr appended to a
+ *    known log file. No better-background-tasks or other plugin needed.
+ *  • Watchdog: probes every configured port every 20s. Loss of ANY
+ *    component after the stack was healthy = crash → kills the whole
+ *    process group and respawns, then injects one action telling the
+ *    model to read the log tail and act (fix compile errors, etc.).
+ *  • Status: publishes { alive, env, partial, logPath } on globalThis so
+ *    other extensions render it (human-assist footer: Dev ● / ◐ / ○).
+ *  • openUrls: opened in Playwright tabs (each in its own new tab) every
+ *    time the stack reaches healthy — initial launch and every restart.
  *
- * Config (first hit wins; repo defaults to the session cwd):
+ * Config (first hit wins):
  *   1. <cwd>/.pi/dev-stack.json
  *   2. ~/.pi/agent/dev-stack.json — { "activeProject": "name",
- *      "projects": { "name": { project, repo, command, ports,
- *      emulatorPorts?, taskName?, openUrls? } } }  ← lets one session
- *      keep the CONFIGURED project's stack alive anywhere ("open this
- *      project").
- *   3. none → extension idles with a notify.
+ *      "projects": { "name": DevStackConfig } }   ← one session anywhere
+ *      can keep the CONFIGURED project's stack alive.
+ *   3. none → idles with a notify.
  *
- * ── Using this in another project ───────────────────────────────────────
- *   1. Copy dev-stack.ts into <project>/.pi/extensions/ (or put it in
- *      ~/.pi/agent/extensions/ once and share it globally).
- *   2. Create <project>/.pi/dev-stack.json:
- *        {
- *          "project": "my-app",
- *          "repo": "/absolute/path/to/my-app",
- *          "command": "pnpm run dev",        // any stack-start command
- *          "ports": [3000, 5432],            // EVERY port that must answer
- *          "emulatorPorts": [5432],          // optional: alive ⇒ env=Dev
- *          "taskName": "my-app dev",         // optional label
- *          "openUrls": [                     // optional: opened in
- *            "http://localhost:3000",        // Playwright tabs once the
- *            "http://localhost:3000/admin"   // stack is up
- *          ]
- *        }
- *      …or add it to the global file under projects{} and set
- *      activeProject to it.
- *   3. Install better-background-tasks (supervised spawns) and the
- *      Playwright MCP (browser_* tools) if you use openUrls.
- *   4. Run /dev-stack in pi for status + config help.
- *   The watchdog treats the loss of ANY port as a crash once the stack
- *   was healthy: the supervised task is stopped (whole-stack teardown)
- *   and respawned; openUrls are (re)opened in Playwright after every
- *   successful launch/restart (once per pi process per launch cycle).
+ * DevStackConfig:
+ *   {
+ *     "project": "my-app",                       // display name (required)
+ *     "repo": "/abs/path/to/my-app",             // stack cwd (required)
+ *     "command": "pnpm run dev",                 // any stack-start command
+ *     "ports": [3000, 5432],                     // EVERY port = healthy
+ *     "emulatorPorts": [5432],                   // alive ⇒ env "Dev"
+ *     "taskName": "my-app dev",                  // label (optional)
+ *     "logFile": "/tmp/my-app-dev.log",          // default below
+ *     "openUrls": ["http://localhost:3000"]      // Playwright on healthy
+ *   }
+ *   Defaults: command "pnpm run dev"; logFile
+ *   <os.tmpdir()>/<project>-dev-stack.log.
  *
- * Status contract for other extensions (no file dependency — read via
- * globalThis): globalThis.__haStackStatus = { alive, env, changedAt };
- * globalThis.__haStackStatusListeners = Set<(s)=>void>.
+ * Commands: /dev-stack (status) · /dev-stack logs [n] (tail log) ·
+ * /dev-stack restart (manual teardown + respawn).
+ *
+ * Status contract for other extensions (no import needed):
+ *   globalThis.__haStackStatus = { alive, env, partial, changedAt, logPath }
+ *   globalThis.__haStackStatusListeners = Set<(s)=>void>
  * This module also exports getStackStatus/onStackStatus/setStackStatus.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { connect } from "node:net";
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 // ── Config ────────────────────────────────────────────────────────────────
 
 interface DevStackConfig {
-  /** Display name; also the default task name component. */
   project: string;
-  /** Absolute repo root whose stack we keep alive. */
   repo: string;
-  /** Command that starts the whole stack (default "pnpm run dev"). */
   command?: string;
-  /** Every port that must answer for the stack to be healthy. */
   ports: number[];
-  /** Ports whose liveness marks the environment as "dev" (emulators). */
   emulatorPorts?: number[];
-  /** better-background-tasks task label (default "<project> dev"). */
   taskName?: string;
-  /** URIs to open in Playwright browser tabs each time the stack reaches
-   *  healthy (initial launch and every watchdog restart). */
+  logFile?: string;
   openUrls?: string[];
 }
 
@@ -119,13 +103,13 @@ export interface StackStatus {
   alive: boolean;
   env: "dev" | "prod";
   changedAt: number;
-  /** some (but not all) ports answering — degraded, watchdog pending */
   partial?: boolean;
+  logPath?: string;
 }
 
 function state(): StackStatus {
   const g = globalThis as Record<string, unknown>;
-  if (!g[STATUS_KEY]) g[STATUS_KEY] = { alive: false, env: "prod", changedAt: Date.now() };
+  if (!g[STATUS_KEY]) g[STATUS_KEY] = { alive: false, env: "prod", changedAt: Date.now() } as StackStatus;
   return g[STATUS_KEY] as StackStatus;
 }
 
@@ -143,7 +127,8 @@ export function setStackStatus(next: Partial<StackStatus>): void {
   const cur = state();
   const changed = (next.alive !== undefined && next.alive !== cur.alive)
     || (next.env !== undefined && next.env !== cur.env)
-    || (next.partial !== undefined && next.partial !== cur.partial);
+    || (next.partial !== undefined && next.partial !== cur.partial)
+    || (next.logPath !== undefined && next.logPath !== cur.logPath);
   Object.assign(cur, next);
   if (changed) cur.changedAt = Date.now();
   for (const cb of listeners()) {
@@ -183,12 +168,85 @@ async function health(cfg: DevStackConfig) {
   return { up: all.every(Boolean), any: all.some(Boolean), all, emu };
 }
 
+// ── Managed process (detached, own group, logged) ─────────────────────────
+
+function pidFileFor(c: DevStackConfig): string {
+  return join(tmpdir(), `${c.project.replace(/[^\w.-]/g, "_")}-dev-stack.pid`);
+}
+
+function readPid(path: string): number | null {
+  try {
+    const p = parseInt(readFileSync(path, "utf8").trim(), 10);
+    if (!Number.isFinite(p) || p <= 1) return null;
+    process.kill(p, 0); // liveness probe (EPERM counts as alive)
+    return p;
+  } catch {
+    return null;
+  }
+}
+
+function killGroup(pid: number): void {
+  try { process.kill(-pid, "SIGTERM"); } catch { /* group may be gone */ }
+  const t = setTimeout(() => {
+    try { process.kill(-pid, "SIGKILL"); } catch { /* gone */ }
+  }, 5_000) as ReturnType<typeof setTimeout> & { unref?: () => void };
+  t.unref?.();
+}
+
+/** Stop our managed stack (whole process group), if any. */
+function stopManaged(c: DevStackConfig): boolean {
+  const pf = pidFileFor(c);
+  const pid = readPid(pf);
+  let stopped = false;
+  if (pid) {
+    killGroup(pid);
+    stopped = true;
+  }
+  try { require("node:fs").unlinkSync(pf); } catch { /* ok */ }
+  return stopped;
+}
+
+/** Spawn the stack detached with combined stdout/stderr into logFile. */
+function startManaged(c: DevStackConfig): { pid: number; logPath: string } | null {
+  const logPath = c.logFile || join(tmpdir(), `${c.project.replace(/[^\w.-]/g, "_")}-dev-stack.log`);
+  try { mkdirSync(c.repo, { recursive: true }); } catch { /* exists */ }
+  const fd = openSync(logPath, "a");
+  const cmd = c.command || "pnpm run dev";
+  const [bin, ...rest] = cmd.split(/\s+/);
+  try {
+    const child = spawn(bin, rest, {
+      cwd: c.repo,
+      detached: true,
+      stdio: ["ignore", fd, fd],
+      env: { ...process.env },
+    });
+    if (!child.pid) return null;
+    child.unref();
+    writeFileSync(pidFileFor(c), String(child.pid), "utf8");
+    writeFileSync(fd, `\n===== dev-stack keeper spawned pid ${child.pid} (${cmd}) ${new Date().toISOString()} =====\n`, "utf8");
+    return { pid: child.pid, logPath };
+  } catch {
+    return null;
+  }
+}
+
+function tailLog(path: string, n: number): string {
+  try {
+    const lines = readFileSync(path, "utf8").split("\n");
+    return lines.slice(-Math.max(1, n)).join("\n");
+  } catch {
+    return "(log not readable yet)";
+  }
+}
+
 // ── Extension ─────────────────────────────────────────────────────────────
 
 export default function devStack(pi: ExtensionAPI) {
   let started = false;
   let wasHealthy = false;
   let lastActionAt = 0;
+  let urlsOpenedForThisLaunch = false;
+  let startAttempts = 0;
   let cfg: DevStackConfig | null = null;
 
   const send = (text: string) => {
@@ -196,35 +254,6 @@ export default function devStack(pi: ExtensionAPI) {
     if (fn) void fn.call(pi, text, { deliverAs: "followUp" }).catch(() => { /* best effort */ });
   };
 
-  const taskLabel = (c: DevStackConfig) => c.taskName || `${c.project} dev`;
-
-  const kickoff = (c: DevStackConfig) => {
-    send(
-      `[dev-stack] The "${c.project}" dev stack is not running. Start it exactly once as a supervised background ` +
-      `task: call the better-background-tasks bg_task_spawn tool (find it via searchTools if needed) with name ` +
-      `"${taskLabel(c)}", command "${c.command || "pnpm run dev"}", cwd "${c.repo}". Do NOT wait, poll, or check ` +
-      `logs — just spawn, then confirm the task id in one short line.`,
-    );
-  };
-
-  const restartAction = (c: DevStackConfig, missing: number[]) => {
-    const now = Date.now();
-    if (now - lastActionAt < CRASH_THROTTLE_MS) return;
-    lastActionAt = now;
-    send(
-      `[dev-stack-watchdog] The "${c.project}" dev stack crashed (ports not answering: ${missing.join(", ")}). ` +
-      `Tear the WHOLE stack down and bring it back exactly once: use better-background-tasks to stop the ` +
-      `"${taskLabel(c)}" task (bg_task_stop / bg_status to find its id if needed — if no managed task exists, ` +
-      `pkill -f "${c.project}.*concurrently" once), then bg_task_spawn a fresh one: name "${taskLabel(c)}", ` +
-      `command "${c.command || "pnpm run dev"}", cwd "${c.repo}". Do not wait or poll; confirm the new task id ` +
-      `in one short line.`,
-    );
-  };
-
-  // Open configured URLs in Playwright tabs after a (re)launch reaches
-  // healthy. Latched per launch cycle so a steady stack never re-opens;
-  // cleared whenever the watchdog sees a crash, armed again on recovery.
-  let urlsOpenedForThisLaunch = false;
   const openConfiguredUrls = (c: DevStackConfig) => {
     if (!c.openUrls?.length || urlsOpenedForThisLaunch) return;
     urlsOpenedForThisLaunch = true;
@@ -236,21 +265,57 @@ export default function devStack(pi: ExtensionAPI) {
     );
   };
 
+  /** Tear the whole stack down and bring it back exactly once. */
+  const relaunch = (c: DevStackConfig, why: string, missing: number[]) => {
+    const now = Date.now();
+    if (now - lastActionAt < CRASH_THROTTLE_MS) return;
+    lastActionAt = now;
+    startAttempts++;
+    const stopped = stopManaged(c);
+    const spawned = startManaged(c);
+    urlsOpenedForThisLaunch = false; // re-open on the next healthy
+    setStackStatus({ alive: false, partial: false });
+    const logPath = c.logFile || join(tmpdir(), `${c.project.replace(/[^\w.-]/g, "_")}-dev-stack.log`);
+    send(
+      `[dev-stack-watchdog] The "${c.project}" dev stack crashed (${why}; ports not answering: ` +
+      `${missing.join(", ") || "all"}). I ${stopped ? "killed the managed process group and " : ""}` +
+      `${spawned ? `respawned it (pid ${spawned.pid})` : "could NOT respawn it — check the log"}; log: ${logPath}. ` +
+      `Read the LAST ~60 lines of that log now and act accordingly: report the root cause; if it is a code/config ` +
+      `error, fix it (the watchdog will bring the stack back on its next healthy probe); if the crash loop exceeds ` +
+      `${startAttempts} attempts, stop and ask me. Do not start another copy of the stack yourself.`,
+    );
+  };
+
   const probe = () => {
     if (!cfg) return;
     const c = cfg;
     void (async () => {
       try {
         const h = await health(c);
-        setStackStatus({ alive: h.up, env: h.emu ? "dev" : "prod", partial: !h.up && h.any });
+        const logPath = c.logFile || join(tmpdir(), `${c.project.replace(/[^\w.-]/g, "_")}-dev-stack.log`);
+        setStackStatus({ alive: h.up, env: h.emu ? "dev" : "prod", partial: !h.up && h.any, logPath });
         if (h.up) {
-          if (!wasHealthy) openConfiguredUrls(c); // fresh launch or post-crash recovery
+          if (!wasHealthy) {
+            startAttempts = 0;
+            openConfiguredUrls(c);
+          }
           wasHealthy = true;
           return;
         }
         if (wasHealthy) {
-          urlsOpenedForThisLaunch = false; // next successful launch re-opens URLs
-          restartAction(c, c.ports.filter((_, i) => !h.all[i]));
+          relaunch(c, "watchdog: components lost", c.ports.filter((_, i) => !h.all[i]));
+        } else if (startAttempts === 0) {
+          // Never up since session start and nothing managed → launch once.
+          const spawned = startManaged(c);
+          if (spawned) {
+            startAttempts = 1;
+            lastActionAt = Date.now();
+            send(
+              `[dev-stack] "${c.project}" stack was not running — spawned it (pid ${spawned.pid}, ` +
+              `log ${spawned.logPath}). Watch the log tail if it fails to become healthy within ~2 minutes; ` +
+              `the keeper auto-restarts on crashes and will notify you.`,
+            );
+          }
         }
       } catch {
         /* probe failures read as not-healthy; never throw */
@@ -268,26 +333,30 @@ export default function devStack(pi: ExtensionAPI) {
         ctx.ui?.notify?.("dev-stack: no .pi/dev-stack.json (or global activeProject) — idle", "info");
         return;
       }
+      const logPath = cfg.logFile || join(tmpdir(), `${cfg.project.replace(/[^\w.-]/g, "_")}-dev-stack.log`);
+      setStackStatus({ logPath });
       const h = await health(cfg);
       setStackStatus({ alive: h.up, env: h.emu ? "dev" : "prod", partial: !h.up && h.any });
       if (h.up) {
         wasHealthy = true;
         ctx.ui?.notify?.(`dev-stack: "${cfg.project}" stack already running`, "info");
-        // Already up at session start → open URLs once per pi process
-        // (latch intentionally NOT cleared on later recoveries here).
-        if (cfg.openUrls?.length) {
-          urlsOpenedForThisLaunch = true;
-          const list = cfg.openUrls.map((u) => `    - ${u}`).join("\n");
-          send(
-            `[dev-stack] The "${cfg.project}" stack is already running. Open these URLs in Playwright (each in its ` +
-            `OWN new tab via browser_tabs action=new followed by browser_navigate — never reuse or replace existing ` +
-            `tabs; skip any that are already open; do not wait for loads):\n${list}\nConfirm the open tabs in one ` +
-            `short line.`,
-          );
+        openConfiguredUrls(cfg);
+      } else {
+        // Start it ourselves — no external supervisor required.
+        const managed = readPid(pidFileFor(cfg));
+        if (managed) {
+          ctx.ui?.notify?.(`dev-stack: managed pid ${managed} alive but ports down — watchdog will restart`, "warning");
+          lastActionAt = Date.now();
+        } else {
+          const spawned = startManaged(cfg);
+          if (spawned) {
+            startAttempts = 1;
+            lastActionAt = Date.now();
+            ctx.ui?.notify?.(`dev-stack: spawned "${cfg.project}" stack (pid ${spawned.pid}) → ${spawned.logPath}`, "info");
+          } else {
+            ctx.ui?.notify?.(`dev-stack: FAILED to spawn "${cfg.project}" stack — check command/repo`, "error");
+          }
         }
-      } else if (ctx.isInteractive !== false) {
-        lastActionAt = Date.now(); // don't let the watchdog double-fire right after kickoff
-        kickoff(cfg);
       }
       const timer = setInterval(probe, PROBE_MS) as ReturnType<typeof setInterval> & { unref?: () => void };
       timer.unref?.();
@@ -297,26 +366,41 @@ export default function devStack(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("dev-stack", {
-    description: "Dev-stack keeper status: health, env, config source, openUrls",
-    handler: async (_args, ctx) => {
+    description: "Dev-stack keeper: status · 'logs [n]' to tail · 'restart' to cycle",
+    handler: async (args, ctx) => {
       const s = getStackStatus();
-      const lines = [
-        `dev-stack: ${s.alive ? "● up" : s.partial ? "◐ degraded" : "○ down"} · env ${s.env}` +
-          (s.alive ? "" : s.partial ? " (watchdog preparing teardown+respawn)" : ""),
-        cfg
-          ? `project "${cfg.project}" · repo ${cfg.repo} · command "${cfg.command || "pnpm run dev"}"`
-          : "no config (checked <cwd>/.pi/dev-stack.json, then ~/.pi/agent/dev-stack.json activeProject)",
-      ];
-      if (cfg) {
-        lines.push(`ports [${cfg.ports.join(", ")}]` + (cfg.emulatorPorts?.length ? ` · emulators [${cfg.emulatorPorts.join(", ")}]` : ""));
-        if (cfg.openUrls?.length) lines.push(`openUrls: ${cfg.openUrls.join(", ")} (opened in Playwright on each successful launch)`);
-        lines.push(
-          "setup for other projects: copy dev-stack.ts into <project>/.pi/extensions/ and add " +
-          ".pi/dev-stack.json { project, repo, command, ports, emulatorPorts?, taskName?, openUrls? } " +
-          "— or register it in ~/.pi/agent/dev-stack.json projects{} + activeProject.",
-        );
+      const sub = String(args || "").trim().toLowerCase();
+      if (!cfg) {
+        ctx.ui?.notify?.("dev-stack: no config (checked <cwd>/.pi/dev-stack.json, ~/.pi/agent/dev-stack.json activeProject)", "warning");
+        return;
       }
-      ctx.ui?.notify?.(lines.join("\n"), "info");
+      const logPath = cfg.logFile || join(tmpdir(), `${cfg.project.replace(/[^\w.-]/g, "_")}-dev-stack.log`);
+      if (sub.startsWith("logs")) {
+        const n = parseInt(sub.split(/\s+/)[1] || "40", 10) || 40;
+        ctx.ui?.notify?.(`dev-stack log tail (${logPath}):\n${tailLog(logPath, n)}`, "info");
+        return;
+      }
+      if (sub === "restart") {
+        stopManaged(cfg);
+        const spawned = startManaged(cfg);
+        urlsOpenedForThisLaunch = false;
+        wasHealthy = false;
+        startAttempts = spawned ? 1 : 0;
+        ctx.ui?.notify?.(spawned ? `dev-stack: restarted (pid ${spawned.pid})` : "dev-stack: restart FAILED", spawned ? "info" : "error");
+        return;
+      }
+      const pid = readPid(pidFileFor(cfg));
+      ctx.ui?.notify?.(
+        [
+          `dev-stack: ${s.alive ? "● up" : s.partial ? "◐ degraded" : "○ down"} · env ${s.env}` +
+            (pid ? ` · managed pid ${pid}` : ""),
+          `project "${cfg.project}" · repo ${cfg.repo} · command "${cfg.command || "pnpm run dev"}"`,
+          `ports [${cfg.ports.join(", ")}]` + (cfg.emulatorPorts?.length ? ` · emulators [${cfg.emulatorPorts.join(", ")}]` : ""),
+          `log: ${logPath}  (… /dev-stack logs)`,
+          cfg.openUrls?.length ? `openUrls: ${cfg.openUrls.join(", ")}` : "",
+        ].filter(Boolean).join("\n"),
+        "info",
+      );
     },
   });
 }
