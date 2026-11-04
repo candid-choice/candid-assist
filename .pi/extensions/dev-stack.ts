@@ -89,6 +89,8 @@ export interface StackStatus {
   alive: boolean;
   env: "dev" | "prod";
   changedAt: number;
+  /** some (but not all) ports answering — degraded, watchdog pending */
+  partial?: boolean;
 }
 
 function state(): StackStatus {
@@ -110,7 +112,8 @@ export function getStackStatus(): StackStatus {
 export function setStackStatus(next: Partial<StackStatus>): void {
   const cur = state();
   const changed = (next.alive !== undefined && next.alive !== cur.alive)
-    || (next.env !== undefined && next.env !== cur.env);
+    || (next.env !== undefined && next.env !== cur.env)
+    || (next.partial !== undefined && next.partial !== cur.partial);
   Object.assign(cur, next);
   if (changed) cur.changedAt = Date.now();
   for (const cb of listeners()) {
@@ -147,7 +150,7 @@ async function health(cfg: DevStackConfig) {
     const e = await Promise.all(cfg.emulatorPorts.map((p) => portOpen(p, 600)));
     emu = e.every(Boolean);
   }
-  return { up: all.every(Boolean), all, emu };
+  return { up: all.every(Boolean), any: all.some(Boolean), all, emu };
 }
 
 // ── Extension ─────────────────────────────────────────────────────────────
@@ -194,7 +197,7 @@ export default function devStack(pi: ExtensionAPI) {
     void (async () => {
       try {
         const h = await health(c);
-        setStackStatus({ alive: h.up, env: h.emu ? "dev" : "prod" });
+        setStackStatus({ alive: h.up, env: h.emu ? "dev" : "prod", partial: !h.up && h.any });
         if (h.up) {
           wasHealthy = true;
           return;
@@ -219,7 +222,7 @@ export default function devStack(pi: ExtensionAPI) {
         return;
       }
       const h = await health(cfg);
-      setStackStatus({ alive: h.up, env: h.emu ? "dev" : "prod" });
+      setStackStatus({ alive: h.up, env: h.emu ? "dev" : "prod", partial: !h.up && h.any });
       if (h.up) {
         wasHealthy = true;
         ctx.ui?.notify?.(`dev-stack: "${cfg.project}" stack already running`, "info");

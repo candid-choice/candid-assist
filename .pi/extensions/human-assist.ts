@@ -31,7 +31,7 @@ import { Type } from "typebox";
 // extension (globalThis.__haStackStatus + __haStackStatusListeners).
 // Deliberately a local copy (no import) so human-assist stays usable in
 // projects without dev-stack installed.
-interface StackStatus { alive: boolean; env: "dev" | "prod"; changedAt: number }
+interface StackStatus { alive: boolean; env: "dev" | "prod"; changedAt: number; partial?: boolean }
 function getStackStatus(): StackStatus {
   const g = globalThis as Record<string, unknown>;
   return (g.__haStackStatus as StackStatus) || { alive: false, env: "prod", changedAt: 0 };
@@ -544,9 +544,9 @@ export default function humanAssist(pi: ExtensionAPI) {
             const proj = resolveProject();
             const haColor = st === "connected" ? "success" : st === "connecting" ? "warning" : "error";
             const stack = getStackStatus();
-            const stackSeg = stack.alive
-              ? theme.fg("success", ` ⌁${stack.env}`)
-              : theme.fg("error", " ⌁down");
+            const stackIcon = stack.alive ? "●" : stack.partial ? "◐" : "○";
+            const stackColor = stack.alive ? "success" : stack.partial ? "warning" : "error";
+            const stackSeg = theme.fg(stackColor, ` ${stack.env} ${stackIcon}`);
             const ha = theme.fg(haColor, ` HA ${dot}`) + stackSeg + theme.fg("dim", proj ? ` ${proj}` : "");
             let input = 0, output = 0, cost = 0;
             for (const e of ctx.sessionManager.getBranch()) {
