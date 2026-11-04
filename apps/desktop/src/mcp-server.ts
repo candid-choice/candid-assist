@@ -1330,18 +1330,28 @@ function sendToWsClients(eventObj: Record<string, unknown>): void {
   for (const client of wsClients) {
     if (client.readyState === WebSocket.OPEN) client.send(payload);
   }
-  // A consent prompt the human never sees is a denied prompt: bring the
-  // window forward the moment one is issued so it can actually be answered.
+  // A consent prompt the human never sees is a denied prompt — but
+  // yanking focus (macOS: switching spaces/displays) every time one is
+  // issued turns the app into an uninvited guest on every screen.
+  // Policy: the window stays where the human put it; we only un-minimize
+  // when minimized and otherwise bounce the Dock icon for attention.
   if (eventObj["event"] === "permission:request") {
     try {
       // Lazy require keeps this module importable from non-Electron tests.
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const electron = require("electron") as { BrowserWindow?: { getAllWindows(): Array<{ show(): void; focus(): void; isMinimized(): boolean }> } };
+      const electron = require("electron") as {
+        BrowserWindow?: { getAllWindows(): Array<{ isMinimized(): boolean; restore(): void; focus(): void }> };
+        app?: { dock?: { bounce?: (kind?: "informational" | "critical") => void } };
+      };
+      let raised = false;
       for (const win of electron.BrowserWindow?.getAllWindows() ?? []) {
-        if (win.isMinimized()) win.show();
-        win.show();
-        win.focus();
+        if (win.isMinimized()) {
+          win.restore();
+          win.focus();
+          raised = true;
+        }
       }
+      if (!raised) electron.app?.dock?.bounce?.("informational");
     } catch {
       // non-Electron (tests) — no windows to raise
     }
