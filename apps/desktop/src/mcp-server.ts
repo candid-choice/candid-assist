@@ -2039,9 +2039,33 @@ async function handleBrowserExecuteActions(
     agentSessionId: ctx?.agentSessionId,
     agentProject: ctx?.agentProject,
   };
-  // Same contract as browserNavigate/Click/Type: operate on an existing
-  // attached surface (open one first with openBrowserSurface).
-  const { id, handle } = resolveGuestEntry(surfaceArg);
+  // Wait (briefly) for the guest to attach: a sequence fired right
+  // after openBrowserSurface used to die with BROWSER_002 because the
+  // <webview> mount is async. Replays the push so a renderer that
+  // missed the original still mounts it.
+  let entry: { id: string; handle: GuestHandle } | undefined;
+  let lastGuestErr: unknown;
+  {
+    const t0 = Date.now();
+    for (;;) {
+      try {
+        entry = resolveGuestEntry(surfaceArg);
+        break;
+      } catch (e) {
+        lastGuestErr = e;
+        if (Date.now() - t0 > 12_000) break;
+        if (surfaceArg) {
+          const rec = openSurfaces.get(surfaceArg);
+          if (rec && (Date.now() - t0) % 2_000 < 300) {
+            notifySurfacePush({ surfaceId: surfaceArg, type: rec.type, payload: rec.payload, status: "pushed" });
+          }
+        }
+        await sleep(250);
+      }
+    }
+  }
+  if (!entry) throw lastGuestErr instanceof Error ? lastGuestErr : new Error("BROWSER_002: no attached surface");
+  const { id, handle } = entry;
   assertHumanControlFree(id);
 
   const steps: Array<Record<string, unknown>> = [];
