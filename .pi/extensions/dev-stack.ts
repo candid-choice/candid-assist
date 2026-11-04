@@ -74,6 +74,10 @@ const CRASH_THROTTLE_MS = 90_000;
  *  restarting the stack, or Electron's single-instance lock churn) that
  *  would otherwise tear down a healthy stack on one flaky sample. */
 const CRASH_CONFIRMATIONS = 2;
+/** Grace after a spawn/relaunch: slow components (java firestore
+ *  emulator) bind LAST — the watchdog must not call a boot in progress
+ *  a crash. */
+const STARTUP_GRACE_MS = 90_000;
 const PROBE_TIMEOUT_MS = 1_200;
 
 function readJson(path: string): Record<string, unknown> | null {
@@ -351,6 +355,12 @@ export default function devStack(pi: ExtensionAPI) {
           return;
         }
         if (wasHealthy) {
+          if (Date.now() - lastActionAt < STARTUP_GRACE_MS) {
+            // Still within the grace window of the last (re)launch:
+            // treat as boot-in-progress, not crash.
+            setStackStatus({ partial: true });
+            return;
+          }
           crashStreak++;
           if (crashStreak < CRASH_CONFIRMATIONS) {
             setStackStatus({ partial: true });
