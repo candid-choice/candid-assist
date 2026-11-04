@@ -18,9 +18,36 @@
  *   1. <cwd>/.pi/dev-stack.json
  *   2. ~/.pi/agent/dev-stack.json — { "activeProject": "name",
  *      "projects": { "name": { project, repo, command, ports,
- *      emulatorPorts?, taskName? } } }  ← lets one session keep the
- *      CONFIGURED project's stack alive anywhere ("open this project").
+ *      emulatorPorts?, taskName?, openUrls? } } }  ← lets one session
+ *      keep the CONFIGURED project's stack alive anywhere ("open this
+ *      project").
  *   3. none → extension idles with a notify.
+ *
+ * ── Using this in another project ───────────────────────────────────────
+ *   1. Copy dev-stack.ts into <project>/.pi/extensions/ (or put it in
+ *      ~/.pi/agent/extensions/ once and share it globally).
+ *   2. Create <project>/.pi/dev-stack.json:
+ *        {
+ *          "project": "my-app",
+ *          "repo": "/absolute/path/to/my-app",
+ *          "command": "pnpm run dev",        // any stack-start command
+ *          "ports": [3000, 5432],            // EVERY port that must answer
+ *          "emulatorPorts": [5432],          // optional: alive ⇒ env=Dev
+ *          "taskName": "my-app dev",         // optional label
+ *          "openUrls": [                     // optional: opened in
+ *            "http://localhost:3000",        // Playwright tabs once the
+ *            "http://localhost:3000/admin"   // stack is up
+ *          ]
+ *        }
+ *      …or add it to the global file under projects{} and set
+ *      activeProject to it.
+ *   3. Install better-background-tasks (supervised spawns) and the
+ *      Playwright MCP (browser_* tools) if you use openUrls.
+ *   4. Run /dev-stack in pi for status + config help.
+ *   The watchdog treats the loss of ANY port as a crash once the stack
+ *   was healthy: the supervised task is stopped (whole-stack teardown)
+ *   and respawned; openUrls are (re)opened in Playwright after every
+ *   successful launch/restart (once per pi process per launch cycle).
  *
  * Status contract for other extensions (no file dependency — read via
  * globalThis): globalThis.__haStackStatus = { alive, env, changedAt };
@@ -49,6 +76,9 @@ interface DevStackConfig {
   emulatorPorts?: number[];
   /** better-background-tasks task label (default "<project> dev"). */
   taskName?: string;
+  /** URIs to open in Playwright browser tabs each time the stack reaches
+   *  healthy (initial launch and every watchdog restart). */
+  openUrls?: string[];
 }
 
 const STATUS_KEY = "__haStackStatus";
@@ -191,6 +221,21 @@ export default function devStack(pi: ExtensionAPI) {
     );
   };
 
+  // Open configured URLs in Playwright tabs after a (re)launch reaches
+  // healthy. Latched per launch cycle so a steady stack never re-opens;
+  // cleared whenever the watchdog sees a crash, armed again on recovery.
+  let urlsOpenedForThisLaunch = false;
+  const openConfiguredUrls = (c: DevStackConfig) => {
+    if (!c.openUrls?.length || urlsOpenedForThisLaunch) return;
+    urlsOpenedForThisLaunch = true;
+    const list = c.openUrls.map((u) => `    - ${u}`).join("\n");
+    send(
+      `[dev-stack] The "${c.project}" stack is up. Open these URLs in Playwright (each in its OWN new tab via ` +
+      `browser_tabs action=new followed by browser_navigate — never reuse or replace existing tabs; skip any that ` +
+      `are already open; do not wait for loads to finish):\n${list}\nConfirm the open tabs in one short line.`,
+    );
+  };
+
   const probe = () => {
     if (!cfg) return;
     const c = cfg;
@@ -199,10 +244,12 @@ export default function devStack(pi: ExtensionAPI) {
         const h = await health(c);
         setStackStatus({ alive: h.up, env: h.emu ? "dev" : "prod", partial: !h.up && h.any });
         if (h.up) {
+          if (!wasHealthy) openConfiguredUrls(c); // fresh launch or post-crash recovery
           wasHealthy = true;
           return;
         }
         if (wasHealthy) {
+          urlsOpenedForThisLaunch = false; // next successful launch re-opens URLs
           restartAction(c, c.ports.filter((_, i) => !h.all[i]));
         }
       } catch {
@@ -226,6 +273,18 @@ export default function devStack(pi: ExtensionAPI) {
       if (h.up) {
         wasHealthy = true;
         ctx.ui?.notify?.(`dev-stack: "${cfg.project}" stack already running`, "info");
+        // Already up at session start → open URLs once per pi process
+        // (latch intentionally NOT cleared on later recoveries here).
+        if (cfg.openUrls?.length) {
+          urlsOpenedForThisLaunch = true;
+          const list = cfg.openUrls.map((u) => `    - ${u}`).join("\n");
+          send(
+            `[dev-stack] The "${cfg.project}" stack is already running. Open these URLs in Playwright (each in its ` +
+            `OWN new tab via browser_tabs action=new followed by browser_navigate — never reuse or replace existing ` +
+            `tabs; skip any that are already open; do not wait for loads):\n${list}\nConfirm the open tabs in one ` +
+            `short line.`,
+          );
+        }
       } else if (ctx.isInteractive !== false) {
         lastActionAt = Date.now(); // don't let the watchdog double-fire right after kickoff
         kickoff(cfg);
@@ -235,5 +294,29 @@ export default function devStack(pi: ExtensionAPI) {
     } catch {
       // Never block session start on this.
     }
+  });
+
+  pi.registerCommand("dev-stack", {
+    description: "Dev-stack keeper status: health, env, config source, openUrls",
+    handler: async (_args, ctx) => {
+      const s = getStackStatus();
+      const lines = [
+        `dev-stack: ${s.alive ? "● up" : s.partial ? "◐ degraded" : "○ down"} · env ${s.env}` +
+          (s.alive ? "" : s.partial ? " (watchdog preparing teardown+respawn)" : ""),
+        cfg
+          ? `project "${cfg.project}" · repo ${cfg.repo} · command "${cfg.command || "pnpm run dev"}"`
+          : "no config (checked <cwd>/.pi/dev-stack.json, then ~/.pi/agent/dev-stack.json activeProject)",
+      ];
+      if (cfg) {
+        lines.push(`ports [${cfg.ports.join(", ")}]` + (cfg.emulatorPorts?.length ? ` · emulators [${cfg.emulatorPorts.join(", ")}]` : ""));
+        if (cfg.openUrls?.length) lines.push(`openUrls: ${cfg.openUrls.join(", ")} (opened in Playwright on each successful launch)`);
+        lines.push(
+          "setup for other projects: copy dev-stack.ts into <project>/.pi/extensions/ and add " +
+          ".pi/dev-stack.json { project, repo, command, ports, emulatorPorts?, taskName?, openUrls? } " +
+          "— or register it in ~/.pi/agent/dev-stack.json projects{} + activeProject.",
+        );
+      }
+      ctx.ui?.notify?.(lines.join("\n"), "info");
+    },
   });
 }

@@ -4,5 +4,9 @@
   "command": "pnpm run dev",
   "ports": [3600, 3601, 3602, 3604, 3613, 3614, 3615, 3616, 43179],
   "emulatorPorts": [3602, 3613],
-  "taskName": "candid-assist dev"
+  "taskName": "candid-assist dev",
+  "openUrls": [
+    "http://localhost:3600/",
+    "http://localhost:3616/?viewPortal=1&wsPort=3614&mcpPort=3615"
+  ]
 }
