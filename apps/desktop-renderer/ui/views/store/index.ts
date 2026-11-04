@@ -34,6 +34,54 @@ import type { SessionDoc } from '../services/sync/types';
 /** Runtime WS connection state (never persisted). */
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
+/** A live consent prompt awaiting the human's answer. Carries the asking
+ * agent + project so the UI can focus the right session and record the
+ * grant under the right project. */
+export interface PendingPermission {
+  id: string;
+  host: string;
+  url: string;
+  tool: string;
+  agentClient?: string;
+  agentSessionId?: string | null;
+  agentProject?: string | null;
+}
+
+/** Bucket key for grants made without a project context. */
+export const UNASSIGNED_PROJECT = "(unassigned)";
+
+/** A single persisted "always allow" decision, kept as a reviewable
+ * audit trail (who was granted what, when, and via which tool/agent). */
+export interface ConsentGrant {
+  project: string;
+  domain: string;
+  tool?: string;
+  agentClient?: string;
+  agentSessionId?: string | null;
+  grantedAt: number;
+}
+
+/** Normalize a host/domain for grant comparison (lowercase, no www). */
+export function normalizeGrantDomain(domain: string): string {
+  return domain.toLowerCase().replace(/^www\./, "");
+}
+
+/** Flattened, de-duplicated union of every project's granted domains —
+ * this is what the broker enforces and Settings lists. */
+function unionGrants(grantsByProject: Record<string, string[]>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const domains of Object.values(grantsByProject)) {
+    for (const d of domains) {
+      if (!seen.has(d)) {
+        seen.add(d);
+        out.push(d);
+      }
+    }
+  }
+  return out;
+}
+
 /** User-adjustable preferences (persisted). */
 export interface AppSettings {
   theme: 'light' | 'dark';
@@ -82,11 +130,13 @@ interface AppState {
   // ── UI overlays (transient, not persisted) ────────────────────────────
   composerOpen: boolean;
   signInOpen: boolean;
+  signInMode: 'signin' | 'register';
   userMenuOpen: boolean;
   settingsOpen: boolean;
   openComposer: () => void;
   closeComposer: () => void;
-  openSignIn: () => void;
+  openSignIn: (mode?: 'signin' | 'register') => void;
+  setSignInMode: (mode: 'signin' | 'register') => void;
   closeSignIn: () => void;
   setUserMenuOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -112,8 +162,8 @@ interface AppState {
   setMcpAgentCount: (count: number) => void;
   /** Live WebSocket MCP agents (harness identities) — drives sidebar
    * graying of sessions whose agent has disconnected. */
-  mcpAgents: Array<{ client: string; agentSessionId: string | null }>;
-  setMcpAgents: (agents: Array<{ client: string; agentSessionId: string | null }>) => void;
+  mcpAgents: Array<{ client: string; agentSessionId: string | null; project?: string | null }>;
+  setMcpAgents: (agents: Array<{ client: string; agentSessionId: string | null; project?: string | null }>) => void;
 
   /** Direct-chat transcripts keyed by harness session id. */
   chatBySession: Record<string, ChatMessage[]>;
@@ -142,20 +192,34 @@ interface AppState {
   setChatModels: (models: string[]) => void;
   setChatBaseUrl: (url: string) => void;
   setChatApi: (api: 'auto' | 'openai-completions' | 'anthropic-messages') => void;
-  /** Domains the human granted "always" for agent web access. */
+  /** Domains the human granted "always" for agent web access — the
+   * flattened union across every project (source the broker enforces).
+   * Prefer grantsByProject for review/authoring. */
   browserGrants: string[];
   addBrowserGrant: (domain: string) => void;
   clearBrowserGrants: () => void;
   removeBrowserGrant: (domain: string) => void;
-  pendingPermission: {
-    id: string;
-    host: string;
-    url: string;
-    tool: string;
-  } | null;
-  setPendingPermission: (
-    p: { id: string; host: string; url: string; tool: string } | null,
+  /** Per-project domain grants. Isolation: one project's "always allow"
+   * never authorizes another. Key = project (repo root name). */
+  grantsByProject: Record<string, string[]>;
+  /** Audit trail of every consent decision the human made. */
+  consentLog: ConsentGrant[];
+  /** Grant a domain for a specific project ("always allow"). */
+  grantForProject: (
+    project: string,
+    domain: string,
+    meta?: {
+      tool?: string;
+      agentClient?: string;
+      agentSessionId?: string | null;
+    },
   ) => void;
+  /** Revoke a single domain for one project. */
+  revokeProjectGrant: (project: string, domain: string) => void;
+  /** Revoke every domain granted to a project. */
+  revokeProjectAll: (project: string) => void;
+  pendingPermission: PendingPermission | null;
+  setPendingPermission: (p: PendingPermission | null) => void;
   setMcpStandalone: (v: boolean) => void;
 
   /** Browser automation handoffs: surfaceId -> reason while the human
@@ -184,8 +248,10 @@ interface AppState {
    *  Lets MCP agent actions record into a dedicated sidebar session. */
   agentSessions: Record<string, string>;
   setAgentSession: (agentKey: string, sessionId: string) => void;
-  /** Remove every session (and their bound views/agent maps). */
+  /** Remove every session (and their bound views/agent maps/chat). */
   deleteAllSessions: () => void;
+  /** Move a session's chat binding to another session id. */
+  migrateChatId: (fromSessionId: string, toSessionId: string) => void;
 
   // ── View manager ───────────────────────────────────────────────────────
   settings: AppSettings;
@@ -200,6 +266,8 @@ interface AppState {
 }
 
 export type { AppState };
+
+import { getDesktopBridge } from "../services/desktop-bridge";
 
 const defaultViews: SurfaceConfig<BrowserPayload>[] = [];
 
@@ -221,6 +289,8 @@ function persistableSlice(state: AppState) {
     settings: state.settings,
     sidebarWidth: state.sidebarWidth,
     browserGrants: state.browserGrants,
+    grantsByProject: state.grantsByProject,
+    consentLog: state.consentLog,
     chatBySession: state.chatBySession,
     chatOpen: state.chatOpen,
     chatWidth: state.chatWidth,
@@ -298,12 +368,15 @@ export const useStore = create<AppState>()(
 
       composerOpen: false,
       signInOpen: false,
+      signInMode: 'signin' as 'signin' | 'register',
       userMenuOpen: false,
       settingsOpen: false,
 
       openComposer: () => set({ composerOpen: true }),
       closeComposer: () => set({ composerOpen: false }),
-      openSignIn: () => set({ signInOpen: true }),
+      openSignIn: (mode?: 'signin' | 'register') =>
+        set({ signInOpen: true, signInMode: mode ?? 'signin' }),
+      setSignInMode: (mode: 'signin' | 'register') => set({ signInMode: mode }),
       closeSignIn: () => set({ signInOpen: false }),
       setUserMenuOpen: (open: boolean) => set({ userMenuOpen: open }),
       setSettingsOpen: (open: boolean) => set({ settingsOpen: open }),
@@ -376,20 +449,85 @@ export const useStore = create<AppState>()(
           return { chatBySession: next, chatBusy: busy };
         }),
       browserGrants: [],
+      grantsByProject: {},
+      consentLog: [],
       addBrowserGrant: (domain: string) =>
+        get().grantForProject(UNASSIGNED_PROJECT, domain),
+      grantForProject: (project, domain, meta) =>
         set((state) => {
-          const d = domain.toLowerCase().replace(/^www\./, "");
-          return state.browserGrants.includes(d)
-            ? {}
-            : { browserGrants: [...state.browserGrants, d] };
+          const d = normalizeGrantDomain(domain);
+          const key = project || UNASSIGNED_PROJECT;
+          const bucket = state.grantsByProject[key] ?? [];
+          const alreadyGranted = bucket.includes(d);
+          const grantsByProject = alreadyGranted
+            ? state.grantsByProject
+            : { ...state.grantsByProject, [key]: [...bucket, d] };
+          const consentLog = alreadyGranted
+            ? state.consentLog
+            : [
+                ...state.consentLog,
+                {
+                  project: key,
+                  domain: d,
+                  tool: meta?.tool,
+                  agentClient: meta?.agentClient,
+                  agentSessionId: meta?.agentSessionId,
+                  grantedAt: Date.now(),
+                },
+              ];
+          return {
+            grantsByProject,
+            consentLog,
+            browserGrants: unionGrants(grantsByProject),
+          };
         }),
-      clearBrowserGrants: () => set({ browserGrants: [] }),
+      clearBrowserGrants: () =>
+        set({ browserGrants: [], grantsByProject: {}, consentLog: [] }),
       removeBrowserGrant: (domain: string) =>
-        set((state) => ({
-          browserGrants: state.browserGrants.filter(
-            (d) => d !== domain.toLowerCase().replace(/^www\./, ""),
-          ),
-        })),
+        set((state) => {
+          const d = normalizeGrantDomain(domain);
+          const grantsByProject: Record<string, string[]> = {};
+          for (const [project, domains] of Object.entries(state.grantsByProject)) {
+            const kept = domains.filter((x) => x !== d);
+            if (kept.length) grantsByProject[project] = kept;
+          }
+          const consentLog = state.consentLog.filter((c) => c.domain !== d);
+          return {
+            grantsByProject,
+            consentLog,
+            browserGrants: unionGrants(grantsByProject),
+          };
+        }),
+      revokeProjectGrant: (project, domain) =>
+        set((state) => {
+          const d = normalizeGrantDomain(domain);
+          const key = project || UNASSIGNED_PROJECT;
+          const bucket = state.grantsByProject[key] ?? [];
+          const kept = bucket.filter((x) => x !== d);
+          const grantsByProject = { ...state.grantsByProject };
+          if (kept.length) grantsByProject[key] = kept;
+          else delete grantsByProject[key];
+          const consentLog = state.consentLog.filter(
+            (c) => !(c.project === key && c.domain === d),
+          );
+          return {
+            grantsByProject,
+            consentLog,
+            browserGrants: unionGrants(grantsByProject),
+          };
+        }),
+      revokeProjectAll: (project) =>
+        set((state) => {
+          const key = project || UNASSIGNED_PROJECT;
+          const grantsByProject = { ...state.grantsByProject };
+          delete grantsByProject[key];
+          const consentLog = state.consentLog.filter((c) => c.project !== key);
+          return {
+            grantsByProject,
+            consentLog,
+            browserGrants: unionGrants(grantsByProject),
+          };
+        }),
       pendingPermission: null,
       setPendingPermission: (p) => set({ pendingPermission: p }),
       mcpStandalone: false,
@@ -456,6 +594,10 @@ export const useStore = create<AppState>()(
           views: [],
           activeViewId: null,
           activeSurface: null,
+          // Chat is session-owned: a session wipe takes its chats with it.
+          chatIds: {},
+          chatBySession: {},
+          chatBusy: {},
         })),
 
       removeSession: (id: string) =>
@@ -481,6 +623,24 @@ export const useStore = create<AppState>()(
             s.activeSurface && removed.has(s.activeSurface.id)
               ? null
               : s.activeSurface;
+          // Chat belongs to the session: delete the conversation with it.
+          const chatIds = { ...s.chatIds };
+          const chatId = chatIds[id];
+          if (chatId) {
+            delete chatIds[id];
+            // Dispose the main-process runtime best-effort.
+            try {
+              void getDesktopBridge()?.chat?.close?.(chatId);
+            } catch {
+              // bridge absent (tests/standalone) — store cleanup suffices
+            }
+          }
+          const chatBySession = chatId
+            ? Object.fromEntries(Object.entries(s.chatBySession).filter(([k]) => k !== chatId))
+            : s.chatBySession;
+          const chatBusy = chatId
+            ? Object.fromEntries(Object.entries(s.chatBusy).filter(([k]) => k !== chatId))
+            : s.chatBusy;
           return {
             sessions: s.sessions.filter((sess) => sess.id !== id),
             agentSessions,
@@ -488,7 +648,21 @@ export const useStore = create<AppState>()(
             views,
             activeViewId,
             activeSurface,
+            chatIds,
+            chatBySession,
+            chatBusy,
           };
+        }),
+
+      /** Re-key a chat binding when an optimistic session id is replaced
+       *  by the backend doc id (add-session sync round-trip). */
+      migrateChatId: (fromSessionId: string, toSessionId: string) =>
+        set((st) => {
+          const chatId = st.chatIds[fromSessionId];
+          if (!chatId || fromSessionId === toSessionId) return {};
+          const chatIds = { ...st.chatIds, [toSessionId]: chatId };
+          delete chatIds[fromSessionId];
+          return { chatIds };
         }),
 
       setActiveSession: (id: string | null) => set({ activeSessionId: id }),
@@ -501,7 +675,14 @@ export const useStore = create<AppState>()(
       agentSessions: {},
 
       setAgentSession: (agentKey: string, sessionId: string) =>
-        set((s) => ({ agentSessions: { ...s.agentSessions, [agentKey]: sessionId } })),
+        set((s) => {
+          if (!sessionId) {
+            const next = { ...s.agentSessions };
+            delete next[agentKey];
+            return { agentSessions: next };
+          }
+          return { agentSessions: { ...s.agentSessions, [agentKey]: sessionId } };
+        }),
 
       // ── View manager ───────────────────────────────────────────────────
       activeViewId: null,

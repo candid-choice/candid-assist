@@ -17,7 +17,7 @@ import {
 import { queueAction } from "../../errors/offline-queue";
 import type { SessionDoc } from "../../services/sync/types";
 
-/** Map embedded surfaces → detail view rows. */
+/** Map embedded surfaces → detail view rows. (Legacy: persisted doc.) */
 export function toSurfaceViews(doc: SessionDoc): SessionSurfaceView[] {
   return (doc.surfaces ?? []).map((s) => ({
     surfaceId: s.surfaceId,
@@ -29,11 +29,30 @@ export function toSurfaceViews(doc: SessionDoc): SessionSurfaceView[] {
   }));
 }
 
+/** Live open tabs for a session, mapped to detail rows. This is the
+ * same source the chrome bar uses, so badge == tabs == list. */
+export function toLiveSurfaceViews(
+  views: ReadonlyArray<{ id: string; type: SessionSurfaceView["type"]; title: string; instruction?: string; createdAt: number; sessionId?: string }>,
+  sessionId: string,
+): SessionSurfaceView[] {
+  return views
+    .filter((v) => v.sessionId === sessionId)
+    .map((v) => ({
+      surfaceId: v.id,
+      type: v.type,
+      prompt: v.instruction || v.title,
+      createdAt: new Date(v.createdAt).toISOString(),
+      closedAt: null,
+      responded: false,
+    }));
+}
+
 export function AppSessionDetail() {
   const activeSessionId = useStore((s) => s.activeSessionId);
   const session = useStore((s) =>
     s.sessions.find((sess) => sess.id === s.activeSessionId) ?? null,
   );
+  const views = useStore((s) => s.views);
   const removeSession = useStore((s) => s.removeSession);
 
   if (!activeSessionId || !session) return null;
@@ -57,6 +76,19 @@ export function AppSessionDetail() {
     removeSession(session.id);
   };
 
+  // Merge LIVE open tabs (from the renderer store) with persisted history
+  // (doc.surfaces) — deduped by surfaceId (a pushed surface's doc record
+  // shares the view id). Live rows win so an open tab shows as open.
+  const liveSurfaces = toLiveSurfaceViews(
+    views as unknown as Parameters<typeof toLiveSurfaceViews>[0],
+    session.id,
+  );
+  const liveIds = new Set(liveSurfaces.map((s) => s.surfaceId));
+  const allSurfaces = [
+    ...liveSurfaces,
+    ...toSurfaceViews(session).filter((s) => !liveIds.has(s.surfaceId)),
+  ];
+
   return (
     <SessionDetail
       session={{
@@ -64,9 +96,9 @@ export function AppSessionDetail() {
         title: session.title,
         status: session.status,
         createdAt: session.createdAt,
-        surfaceCount: session.surfaces?.length ?? 0,
+        surfaceCount: allSurfaces.length,
       }}
-      surfaces={toSurfaceViews(session)}
+      surfaces={allSurfaces}
       onBack={() => useStore.getState().setActiveSession(null)}
       onArchive={() => {
         void handleArchive();

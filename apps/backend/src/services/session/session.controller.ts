@@ -2,7 +2,6 @@ import {
   Controller,
   Get,
   Post,
-  Put,
   Delete,
   Patch,
   Param,
@@ -14,11 +13,19 @@ import {
 import { AuthGuard } from '../../auth/auth.guard';
 import { UserRequest } from '../../auth/interfaces';
 import { SessionService } from './session.service';
-import { SessionDoc, EmbeddedSurface } from '../../types/firestore';
+import { EmbeddedSurface } from '../../types/firestore';
 
 @Controller('sessions')
 export class SessionController {
   constructor(private readonly sessionService: SessionService) {}
+
+  /** All routes are auth-guarded; sessions live under users/{uid}/sessions. */
+  private uid(req: UserRequest): string {
+    if (!req.user?.uid) {
+      throw new BadRequestException('User not authenticated');
+    }
+    return req.user.uid;
+  }
 
   /**
    * Get all active sessions for the current user
@@ -26,11 +33,7 @@ export class SessionController {
   @Get()
   @UseGuards(AuthGuard)
   async getActiveSessions(@Req() req: UserRequest) {
-    if (!req.user?.uid) {
-      throw new BadRequestException('User not authenticated');
-    }
-
-    return this.sessionService.getUserSessions(req.user.uid);
+    return this.sessionService.getUserSessions(this.uid(req));
   }
 
   /**
@@ -39,21 +42,17 @@ export class SessionController {
   @Get('all')
   @UseGuards(AuthGuard)
   async getAllSessions(@Req() req: UserRequest) {
-    if (!req.user?.uid) {
-      throw new BadRequestException('User not authenticated');
-    }
-
-    return this.sessionService.getAllUserSessions(req.user.uid);
+    return this.sessionService.getAllUserSessions(this.uid(req));
   }
 
   /**
-   * Get a specific session by ID
+   * Get a specific session by ID (scoped to the caller's own subcollection)
    */
   @Get(':sessionId')
   @UseGuards(AuthGuard)
-  async getSession(@Param('sessionId') sessionId: string) {
-    const session = await this.sessionService.getSession(sessionId);
-    
+  async getSession(@Req() req: UserRequest, @Param('sessionId') sessionId: string) {
+    const session = await this.sessionService.getSession(this.uid(req), sessionId);
+
     if (!session) {
       throw new BadRequestException('Session not found');
     }
@@ -72,18 +71,16 @@ export class SessionController {
     @Body('workspacePath') workspacePath: string,
     @Body('agentSessionId') agentSessionId?: string,
     @Body('agentClient') agentClient?: string,
+    @Body('agentProject') agentProject?: string,
   ) {
     if (!title || !workspacePath) {
       throw new BadRequestException('Title and workspace path are required');
     }
 
-    if (!req.user?.uid) {
-      throw new BadRequestException('User not authenticated');
-    }
-
-    return this.sessionService.createSession(req.user.uid, title, {
+    return this.sessionService.createSession(this.uid(req), title, {
       agentSessionId,
       agentClient,
+      agentProject,
     });
   }
 
@@ -93,6 +90,7 @@ export class SessionController {
   @Patch(':sessionId/title')
   @UseGuards(AuthGuard)
   async updateSessionTitle(
+    @Req() req: UserRequest,
     @Param('sessionId') sessionId: string,
     @Body('title') title: string,
   ) {
@@ -100,7 +98,7 @@ export class SessionController {
       throw new BadRequestException('Title is required');
     }
 
-    await this.sessionService.updateSessionTitle(sessionId, title);
+    await this.sessionService.updateSessionTitle(this.uid(req), sessionId, title);
     return { success: true };
   }
 
@@ -110,10 +108,11 @@ export class SessionController {
   @Patch(':sessionId/status')
   @UseGuards(AuthGuard)
   async updateSessionStatus(
+    @Req() req: UserRequest,
     @Param('sessionId') sessionId: string,
     @Body('status') status: 'active' | 'waiting' | 'done' | 'error',
   ) {
-    await this.sessionService.updateSessionStatus(sessionId, status);
+    await this.sessionService.updateSessionStatus(this.uid(req), sessionId, status);
     return { success: true };
   }
 
@@ -122,8 +121,8 @@ export class SessionController {
    */
   @Post(':sessionId/archive')
   @UseGuards(AuthGuard)
-  async archiveSession(@Param('sessionId') sessionId: string) {
-    await this.sessionService.archiveSession(sessionId);
+  async archiveSession(@Req() req: UserRequest, @Param('sessionId') sessionId: string) {
+    await this.sessionService.archiveSession(this.uid(req), sessionId);
     return { success: true };
   }
 
@@ -132,8 +131,8 @@ export class SessionController {
    */
   @Delete(':sessionId')
   @UseGuards(AuthGuard)
-  async deleteSession(@Param('sessionId') sessionId: string) {
-    await this.sessionService.deleteSession(sessionId);
+  async deleteSession(@Req() req: UserRequest, @Param('sessionId') sessionId: string) {
+    await this.sessionService.deleteSession(this.uid(req), sessionId);
     return { success: true };
   }
 
@@ -143,6 +142,7 @@ export class SessionController {
   @Post(':sessionId/surfaces')
   @UseGuards(AuthGuard)
   async addSurfaceToSession(
+    @Req() req: UserRequest,
     @Param('sessionId') sessionId: string,
     @Body() surface: EmbeddedSurface,
   ) {
@@ -150,7 +150,7 @@ export class SessionController {
       throw new BadRequestException('Surface data is required');
     }
 
-    await this.sessionService.addSurfaceToSession(sessionId, surface);
+    await this.sessionService.addSurfaceToSession(this.uid(req), sessionId, surface);
     return { success: true };
   }
 
@@ -160,11 +160,17 @@ export class SessionController {
   @Post(':sessionId/surfaces/:surfaceId/response')
   @UseGuards(AuthGuard)
   async addResponseToSurface(
+    @Req() req: UserRequest,
     @Param('sessionId') sessionId: string,
     @Param('surfaceId') surfaceId: string,
-    @Body() response: any, // SurfaceUserResponse
+    @Body() response: unknown, // SurfaceUserResponse
   ) {
-    await this.sessionService.addResponseToSurface(sessionId, surfaceId, response);
+    await this.sessionService.addResponseToSurface(
+      this.uid(req),
+      sessionId,
+      surfaceId,
+      response,
+    );
     return { success: true };
   }
 }

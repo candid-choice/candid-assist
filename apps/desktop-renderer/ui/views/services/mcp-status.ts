@@ -27,7 +27,7 @@ function apply(status: McpStatusPayload | undefined): void {
   // Connected+bound agent ⇒ new session: show its row right away
   // (don't wait for the first surface push).
   for (const a of agents) {
-    if (a.agentSessionId) ensureAgentSessionFor({ client: a.client, agentSessionId: a.agentSessionId });
+    if (a.agentSessionId) ensureAgentSessionFor({ client: a.client, agentSessionId: a.agentSessionId, agentProject: a.project });
   }
 }
 

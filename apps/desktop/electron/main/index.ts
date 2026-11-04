@@ -13,9 +13,9 @@ get no preload and a host-allowlist navigation policy.
 import { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, webContents as webContentsNS } from 'electron';
 
 import { checkForUpdates as checkAppUpdate, onUpdaterState } from '../../src/updater';
-import { setChatRuntimeFactory, setChatEventListener, sendChat, abortChat } from '../../src/chat-service';
+import { setChatRuntimeFactory, setChatEventListener, sendChat, abortChat, closeChat } from '../../src/chat-service';
 import { createPiChatRuntime, fetchChatModels, CHAT_DEFAULT_BASE_URL } from './chat-runtime';
-import { setUiControlHandlers, getMcpStatus, clearDomainGrants } from '../../src/mcp-server';
+import { setUiControlHandlers, getMcpStatus, clearDomainGrants, setMcpSignedIn } from '../../src/mcp-server';
 import {
   registerGuest,
   unregisterGuest,
@@ -23,6 +23,7 @@ import {
   type GuestHandle,
 } from '../../src/guest-registry';
 import path from 'node:path';
+import fs from 'node:fs';
 
 import { startMcpServer } from '../../src/mcp-server';
 import {
@@ -71,16 +72,42 @@ if (!app.requestSingleInstanceLock()) {
 
 // ── Window ─────────────────────────────────────────────────────────────
 
+// Allow popups whose host is the Firebase authDomain (Google sign-in flow).
+// Root .env may define FIREBASE_AUTH_DOMAIN; default matches candid-assist.
+for (const file of ['../../.env', '.env']) {
+  try {
+    process.loadEnvFile(file);
+  } catch {
+    /* optional */
+  }
+}
+function haAuthPopupAllowed(rawUrl: string): boolean {
+  try {
+    const host = new URL(rawUrl).hostname;
+    const authDomain = process.env.FIREBASE_AUTH_DOMAIN || 'candid-assist.firebaseapp.com';
+    return host === authDomain;
+  } catch {
+    return false;
+  }
+}
+
 function createWindow(): void {
   win = new BrowserWindow({
     width: 1280,
-    height: 800,
-    minWidth: 720,
-    minHeight: 480,
+    height: 840,
+    // Never smaller than the auth screens (register card measures ~683px +
+    // padding/error chip); measured via Playwright on 2026-11-02.
+    // NOTE: default height sits ABOVE minHeight on purpose — a window born
+    // at its own constraint rubber-bands and glitches on every drag.
+    minWidth: 900,
+    minHeight: 800,
     titleBarStyle: 'hiddenInset',
     // Vertically center the ~14px traffic lights within the 40px title bar
     trafficLightPosition: { x: 16, y: 13 },
-    backgroundColor: '#faf7f2',
+    // Dark by default (theme-sync IPC corrects it once the renderer boots);
+    // fast-resize reveals are painted with this color, so it must match the
+    // app background the user actually sees.
+    backgroundColor: '#17181c',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -97,7 +124,53 @@ function createWindow(): void {
     // used for the web app).
     const baseUrl = process.env.DESKTOP_UI_URL ?? 'http://localhost:3616';
     const sep = baseUrl.includes('?') ? '&' : '?';
-    void win.loadURL(`${baseUrl}${sep}wsPort=${WS_PORT}&mcpPort=${MCP_PORT}`);
+    let url = `${baseUrl}${sep}wsPort=${WS_PORT}&mcpPort=${MCP_PORT}`;
+    // Dev auto-login: same URL-param contract Playwright uses (localhost-only
+    // handling in the renderer). Never applied in packaged builds.
+    if (process.env.HA_DEV_AUTOLOGIN_EMAIL && process.env.HA_DEV_AUTOLOGIN_PASSWORD) {
+      url +=
+        `&ha_dev_email=${encodeURIComponent(process.env.HA_DEV_AUTOLOGIN_EMAIL)}` +
+        `&ha_dev_password=${encodeURIComponent(process.env.HA_DEV_AUTOLOGIN_PASSWORD)}`;
+    }
+    void win.loadURL(url).catch(() => { /* did-fail-load handles retry */ });
+    // Dev: the renderer is a Next dev server that may still be compiling
+    // (or restarting) when the window first navigates — a failed initial
+    // load used to leave a dead window (no WsService, no agents, no
+    // surfaces). Retry until the first successful load sticks.
+    let initialLoads = 0;
+    win.webContents.on('did-fail-load', (_e, code, desc, failedUrl) => {
+      console.error(`[window] did-fail-load ${code} ${desc} ${failedUrl}`);
+      if (!win?.webContents.isLoadingMainFrame() && initialLoads < 20 && win?.webContents.getURL().startsWith(baseUrl)) {
+        initialLoads++;
+        setTimeout(() => { void win?.loadURL(url).catch(() => { /* retried */ }); }, 1500);
+      } else if (initialLoads < 20 && !/favicon/.test(failedUrl || '')) {
+        // Mid-session failures (e.g. renderer restart) also self-heal.
+        initialLoads++;
+        setTimeout(() => { void win?.loadURL(url).catch(() => { /* retried */ }); }, 2000);
+      }
+    });
+
+  // Debug mode (HA_DEBUG=1 pnpm run dev): detached DevTools + full
+  // console stream — what the app received (tool calls, goals) is
+  // logged by the MCP server in the dev log as [debug] lines.
+  if (process.env.HA_DEBUG === "1") {
+    console.log("[debug] HA_DEBUG=1 — opening detached DevTools");
+    win.webContents.once("did-finish-load", () => {
+      win?.webContents.openDevTools({ mode: "detach" });
+    });
+  }
+
+  // Dev diagnostics: surface renderer lifecycle + console into the dev log.
+  win.webContents.on('did-finish-load', () => {
+    console.log(`[window] did-finish-load ${win?.webContents.getURL()}`);
+  });
+  win.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    console.error(`[window] did-fail-load ${code} ${desc} ${url}`);
+  });
+  win.webContents.on('console-message', (_e, level, message) => {
+    // Dev relay: all levels so auth breadcrumbs are visible in pnpm dev log.
+    if (level >= 0) console.log(`[renderer] ${message}`);
+  });
   } else {
     // Packaged: the desktop-renderer Next export, copied into the app
     // as resources/renderer by electron-builder (configured in P6).
@@ -105,6 +178,9 @@ function createWindow(): void {
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {
+    // Allow the Firebase Auth popup (accounts flow starts on the project's
+    // authDomain) to open as a real window; Google sign-in needs it.
+    if (haAuthPopupAllowed(url)) return { action: 'allow' };
     void shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -236,6 +312,12 @@ ipcMain.handle('desktop:chat:abort', (_event, payload: { sessionId?: unknown }) 
   abortChat(String(payload?.sessionId ?? ''));
   return { ok: true };
 });
+// Chat is session-owned: when the renderer deletes a session, dispose its
+// runtime (and on-disk history file binding) in the main process.
+ipcMain.handle('desktop:chat:close', (_event, payload: { sessionId?: unknown }) => {
+  closeChat(String(payload?.sessionId ?? ''));
+  return { ok: true };
+});
 
 let lastMcpAgentSnapshot = "";
 setInterval(() => {
@@ -330,10 +412,56 @@ ipcMain.on('desktop:window:maximize', () => {
 });
 ipcMain.on('desktop:window:close', () => win?.close());
 
+// ── MCP signed-out lockdown ──────────────────────────────────────────────
+// The harness has no owner until a user signs in: agents must see zero
+// tools. The renderer reports auth changes; the last state is persisted
+// so a restart starts locked (or unlocked) exactly as the user left it.
+
+const AUTH_STATE_FILE = () => path.join(app.getPath('userData'), 'harness-auth.json');
+
+function loadPersistedSignedIn(): boolean {
+  try {
+    const raw = fs.readFileSync(AUTH_STATE_FILE(), 'utf8');
+    return Boolean(JSON.parse(raw)?.signedIn);
+  } catch {
+    return false; // first run or unreadable → locked
+  }
+}
+
+ipcMain.handle('desktop:mcp:set-signed-in', (_event, payload: { signedIn?: unknown }) => {
+  const signedIn = Boolean(payload?.signedIn);
+  setMcpSignedIn(signedIn);
+  try {
+    fs.writeFileSync(AUTH_STATE_FILE(), JSON.stringify({ signedIn, at: Date.now() }));
+  } catch {
+    // persistence is best-effort; in-memory latch already updated
+  }
+  return { ok: true, signedIn };
+});
+
+// Keep the native window background in sync with the renderer theme, so
+// fast-resize reveals never flash a mismatched color band.
+ipcMain.on('desktop:window:set-background', (_event, color: unknown) => {
+  if (typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color)) {
+    win?.setBackgroundColor(color);
+  }
+});
+
+// Dev-only auto-login credentials for the emulator (root .env HA_DEV_AUTOLOGIN_*).
+// Strictly dev: packaged builds never expose these.
+ipcMain.handle('desktop:dev:auto-login', () => {
+  if (app.isPackaged) return null;
+  const email = process.env.HA_DEV_AUTOLOGIN_EMAIL;
+  const password = process.env.HA_DEV_AUTOLOGIN_PASSWORD;
+  return email && password ? { email, password } : null;
+});
+
 // ── App lifecycle ──────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
   createWindow();
+  // Lock MCP to the persisted auth state BEFORE any agent can connect.
+  setMcpSignedIn(loadPersistedSignedIn());
   // MCP (HTTP) + surface events (WS). Ports overridable so Electron and
   // the Electrobun desktop can run side by side during migration.
   startMcpServer(MCP_PORT, WS_PORT);

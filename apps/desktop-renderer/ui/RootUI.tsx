@@ -17,6 +17,7 @@ import "./views/index.css";
 
 import { wsService } from "./views/services/ws-service";
 import { ensureAgentSessionFor } from "./views/lib/agent-session";
+import { addUserSession } from "./views/lib/user-session";
 import { useStore } from "./views/store";
 import { AuthProvider } from "./views/context/auth-provider";
 import {
@@ -51,7 +52,7 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
       // Re-share the human's "always allow" domain grants with the server
       wsService.send({
         type: "permission:sync",
-        domains: useStore.getState().browserGrants,
+        grants: useStore.getState().grantsByProject,
       });
     }
   });
@@ -72,12 +73,12 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
   // Push grant changes to the server the moment they happen (the
   // connect-time sync alone leaves a window where an 'always allow'
   // click isn't yet known server-side).
-  let lastGrantsJson = JSON.stringify(useStore.getState().browserGrants);
+  let lastGrantsJson = JSON.stringify(useStore.getState().grantsByProject);
   useStore.subscribe((state) => {
-    const g = JSON.stringify(state.browserGrants);
+    const g = JSON.stringify(state.grantsByProject);
     if (g !== lastGrantsJson) {
       lastGrantsJson = g;
-      wsService.send({ type: "permission:sync", domains: state.browserGrants });
+      wsService.send({ type: "permission:sync", grants: state.grantsByProject });
     }
   });
 
@@ -94,13 +95,13 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
     }
     if (event.event === "agent:presence") {
       // Live WS MCP agent set changed (connected / bound / disconnected).
-      const d = event.data as { agents?: Array<{ client: string; agentSessionId: string | null }> };
+      const d = event.data as { agents?: Array<{ client: string; agentSessionId: string | null; project?: string | null }> };
       const agents = d?.agents ?? [];
       useStore.getState().setMcpAgents(agents);
       // A bound agent means "a new session connected": materialize its
       // sidebar row immediately instead of waiting for a surface push.
       for (const a of agents) {
-        if (a.agentSessionId) ensureAgentSessionFor({ client: a.client, agentSessionId: a.agentSessionId });
+        if (a.agentSessionId) ensureAgentSessionFor({ client: a.client, agentSessionId: a.agentSessionId, agentProject: a.project });
       }
       return;
     }
@@ -124,6 +125,9 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
           host: d.host,
           url: d.url ?? "",
           tool: d.tool ?? "browser",
+          agentClient: (d as { agentClient?: string }).agentClient,
+          agentSessionId: (d as { agentSessionId?: string | null }).agentSessionId,
+          agentProject: (d as { agentProject?: string | null }).agentProject,
         });
         // Make it noticeable even when the pane is scrolled/busy.
         useStore.getState().pushUiMessage({
@@ -166,9 +170,40 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
       // Agent-linked recording: actions from a bound coding session
       // record into a dedicated sidebar session (created on first
       // action, reused thereafter).
-      let sessionId = useStore.getState().activeSessionId ?? undefined;
-      const agentSession = agent?.client ? ensureAgentSessionFor(agent) : undefined;
-      if (agentSession) sessionId = agentSession;
+      const st0 = useStore.getState();
+      // Guard against a dangling persisted activeSessionId (survives
+      // restarts in storage but may be absent from the synced sessions
+      // list) — re-activating a ghost hides every tab forever.
+      let sessionId =
+        st0.activeSessionId && st0.sessions.some((s) => s.id === st0.activeSessionId)
+          ? st0.activeSessionId
+          : undefined;
+      // Live-directed agent policy: when the human is looking at their
+      // own session, the agent acts THERE (the user is steering it in
+      // real time). The coding session's dedicated recording row is
+      // only used when no human session is open, or the active row is
+      // another agent's recording.
+      let agentSession: string | undefined;
+      if (agent?.client) {
+        const activeNow = st0.sessions.find((s) => s.id === sessionId);
+        const humanOwned = !!activeNow && !activeNow.agentSessionId && !activeNow.agentClient;
+        const sameAgent =
+          !!activeNow &&
+          activeNow.agentClient === agent.client &&
+          (activeNow.agentSessionId ?? null) === (agent.agentSessionId ?? null);
+        if (!humanOwned && !sameAgent) {
+          agentSession = ensureAgentSessionFor(agent);
+          sessionId = agentSession;
+        }
+      }
+      // Manual (tab-bar “+”) pushes carry an explicit target session.
+      const target = (payload as { targetSessionId?: string } | undefined)?.targetSessionId;
+      if (!agentSession && target && useStore.getState().sessions.some((s) => s.id === target)) {
+        sessionId = target;
+      }
+      // Surfaces are always session-scoped — if nobody is looking at a
+      // session yet, create one so the tab has an owner.
+      if (!sessionId) sessionId = addUserSession();
 
       useStore.getState().openSurface({
         id: surfaceId,
@@ -182,6 +217,14 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
         // response round-trips into that session's history.
         sessionId,
       });
+      // Make the surface mountable: a <webview> only attaches while its
+      // session's tabs are on screen, so agent-driven flows (googleSearch,
+      // scrapeSelective, agentNavigateAndEval) require the owning session
+      // to be the visible one — otherwise the guest never registers and
+      // the agent gets a false “no-guest”.
+      if (useStore.getState().activeSessionId !== sessionId) {
+        useStore.getState().setActiveSession(sessionId ?? null);
+      }
     }
   });
 

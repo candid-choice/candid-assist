@@ -14,19 +14,214 @@ export class AuthService {
   constructor(private readonly firebaseService: FirebaseService) {}
 
   /**
-   * Verify a Firebase ID token and return user claims
+   * Email/password sign-up & sign-in via the Firebase Identity Toolkit
+   * REST API. Against the local emulator (dev) no web API key is needed;
+   * production requires FIREBASE_WEB_API_KEY.
+   */
+  private identityToolkitBase(): string {
+    const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    if (emulatorHost) {
+      return `http://${emulatorHost}/identitytoolkit.googleapis.com/v1`;
+    }
+    if (process.env.FIREBASE_WEB_API_KEY) {
+      return 'https://identitytoolkit.googleapis.com/v1';
+    }
+    throw new UnauthorizedException(
+      'Email auth is unavailable: start the Firebase emulator or set FIREBASE_WEB_API_KEY',
+    );
+  }
+
+  async emailAuth(
+    mode: 'register' | 'login',
+    email: string,
+    password: string,
+    displayName?: string,
+  ): Promise<{ token: string; refreshToken?: string; user: UserProfile }> {
+    const endpoint =
+      mode === 'register' ? 'accounts:signUp' : 'accounts:signInWithPassword';
+    const key = process.env.FIREBASE_WEB_API_KEY || 'local';
+    const body: Record<string, unknown> = { email, password, returnSecureToken: true };
+    if (mode === 'register' && displayName) body.displayName = displayName;
+
+    const res = await fetch(`${this.identityToolkitBase()}/${endpoint}?key=${key}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data: any = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.idToken) {
+      const msg =
+        data?.error?.message === 'EMAIL_EXISTS'
+          ? 'An account with this email already exists'
+          : data?.error?.message === 'INVALID_PASSWORD' || data?.error?.message === 'USER_NOT_FOUND'
+            ? 'Invalid email or password'
+            : data?.error?.message || 'Authentication failed';
+      throw new UnauthorizedException(msg);
+    }
+
+    const decoded = await this.verifyIdToken(data.idToken);
+    const user = await this.getOrCreateUser(decoded);
+    return { token: data.idToken, refreshToken: data.refreshToken, user };
+  }
+
+  /**
+   * Re-mint an expired ID token from a persisted Firebase refresh token
+   * (Identity Toolkit token?grant_type=refresh_token). Called by clients
+   * when /auth/verify rejects their ID token — a 1h-expired token must
+   * not cost the user their session (nor lock the agent out).
+   */
+  async refreshIdToken(
+    refreshToken: string,
+  ): Promise<{ token: string; refreshToken?: string; user: UserProfile }> {
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      throw new UnauthorizedException('Missing refresh token');
+    }
+    const key = process.env.FIREBASE_WEB_API_KEY || 'local';
+    const res = await fetch(`${this.identityToolkitBase()}/token?key=${key}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ grantType: 'refresh_token', refreshToken }),
+    });
+    const data: any = await res.json().catch(() => ({}));
+    const idToken = data?.id_token ?? data?.idToken;
+    if (!res.ok || !idToken) {
+      throw new UnauthorizedException('Session expired — sign in again');
+    }
+    const decoded = await this.verifyIdToken(idToken);
+    const user = await this.getOrCreateUser(decoded);
+    return {
+      token: idToken,
+      refreshToken: data?.refresh_token ?? data?.refreshToken ?? refreshToken,
+      user,
+    };
+  }
+
+  // ── Google OAuth (backend-mediated authorization-code flow) ─────────────
+  //
+  // Configure GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (and optionally
+  // GOOGLE_REDIRECT_URI / GOOGLE_RENDERER_URL) in the backend environment.
+  // The Google ID token is federated into Firebase via
+  // accounts:signInWithIdp, so Google sign-ins end up as regular Firebase
+  // Auth users and share the exact same /auth/verify session shape as
+  // email sign-ins.
+
+  private googleRedirectUri(): string {
+    return (
+      process.env.GOOGLE_REDIRECT_URI ||
+      'http://localhost:3601/auth/google/callback'
+    );
+  }
+
+  googleAuthConfigured(): boolean {
+    return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  }
+
+  googleAuthorizeUrl(state: string): string {
+    const params = new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID || '',
+      redirect_uri: this.googleRedirectUri(),
+      response_type: 'code',
+      scope: 'openid email profile',
+      state,
+      access_type: 'online',
+      prompt: 'select_account',
+    });
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
+
+  /**
+   * Complete the OAuth flow: exchange the code for Google tokens, federate
+   * the ID token into Firebase Auth, and return the app session shape.
+   */
+  async googleAuth(code: string): Promise<{ token: string; refreshToken?: string; user: UserProfile }> {
+    if (!this.googleAuthConfigured()) {
+      throw new UnauthorizedException(
+        'Google sign-in is not configured (set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)',
+      );
+    }
+
+    // 1. Code → tokens
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: process.env.GOOGLE_CLIENT_ID || '',
+        client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+        redirect_uri: this.googleRedirectUri(),
+        grant_type: 'authorization_code',
+      }).toString(),
+    });
+    const tokens: any = await tokenRes.json().catch(() => ({}));
+    if (!tokenRes.ok || !tokens?.id_token) {
+      throw new UnauthorizedException(
+        tokens?.error_description || 'Google token exchange failed',
+      );
+    }
+
+    // 2. Google ID token → Firebase Auth user (signInWithIdp)
+    const key = process.env.FIREBASE_WEB_API_KEY || 'local';
+    const idpRes = await fetch(
+      `${this.identityToolkitBase()}/accounts:signInWithIdp?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          requestUri: tokens.id_token,
+          returnIdpCredential: true,
+          oauthIdpClientId: process.env.GOOGLE_CLIENT_ID,
+        }),
+      },
+    );
+    const idpData: any = await idpRes.json().catch(() => ({}));
+    if (!idpRes.ok || !idpData?.idToken) {
+      throw new UnauthorizedException(
+        idpData?.error?.message || 'Google account could not be linked to Firebase',
+      );
+    }
+
+    // 3. Same session shape as email auth
+    const decoded = await this.verifyIdToken(idpData.idToken);
+    const user = await this.getOrCreateUser(decoded);
+    return { token: idpData.idToken, refreshToken: idpData.refreshToken, user };
+  }
+
+  /**
+   * Verify a Firebase ID token and return user claims.
+   * Primary path: Admin SDK (emulator or real project). Fallback: Identity
+   * Toolkit accounts:lookup with FIREBASE_WEB_API_KEY — this lets the app
+   * accept real-project tokens (e.g. Google popup sign-ins) while the local
+   * Admin SDK is pointed at the auth emulator.
    */
   async verifyIdToken(idToken: string): Promise<admin.auth.DecodedIdToken> {
     const auth = this.firebaseService.getAuth();
-    if (!auth) {
-      throw new UnauthorizedException('Firebase Auth not available');
+    if (auth) {
+      try {
+        return await auth.verifyIdToken(idToken);
+      } catch {
+        /* fall through to Identity Toolkit lookup */
+      }
     }
-    try {
-      const decodedToken = await auth.verifyIdToken(idToken);
-      return decodedToken;
-    } catch (error) {
-      throw new UnauthorizedException('Invalid or expired Firebase ID token');
+
+    const webKey = process.env.FIREBASE_WEB_API_KEY;
+    if (webKey) {
+      const res = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${webKey}`,
+        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idToken }) },
+      );
+      const data: any = await res.json().catch(() => ({}));
+      const u = res.ok && Array.isArray(data?.users) ? data.users[0] : null;
+      if (u?.localId) {
+        return {
+          uid: u.localId,
+          email: u.email ?? undefined,
+          name: u.displayName ?? undefined,
+          picture: u.photoURL ?? undefined,
+        } as unknown as admin.auth.DecodedIdToken;
+      }
     }
+
+    throw new UnauthorizedException('Invalid or expired Firebase ID token');
   }
 
   /**
@@ -164,7 +359,8 @@ export class AuthService {
     if (!db) return null;
     const now = new Date().toISOString();
 
-    const sessionDoc = await db.collection('sessions').add({
+    // Sessions live in the per-user subcollection users/{uid}/sessions.
+    const sessionDoc = await db.collection(`users/${userId}/sessions`).add({
       userId,
       title,
       status: 'active',
@@ -184,8 +380,7 @@ export class AuthService {
     const db = this.firebaseService.getFirestore();
     if (!db) return [];
     const snapshot = await db
-      .collection('sessions')
-      .where('userId', '==', userId)
+      .collection(`users/${userId}/sessions`)
       .where('status', '==', 'active')
       .orderBy('updatedAt', 'desc')
       .limit(20)
@@ -197,10 +392,10 @@ export class AuthService {
   /**
    * Get a specific session by ID
    */
-  async getSession(sessionId: string): Promise<any> {
+  async getSession(userId: string, sessionId: string): Promise<any> {
     const db = this.firebaseService.getFirestore();
     if (!db) return null;
-    const sessionDoc = await db.collection('sessions').doc(sessionId).get();
+    const sessionDoc = await db.collection(`users/${userId}/sessions`).doc(sessionId).get();
 
     if (!sessionDoc.exists) {
       return null;
@@ -212,10 +407,10 @@ export class AuthService {
   /**
    * Update session status
    */
-  async updateSessionStatus(sessionId: string, status: 'active' | 'waiting' | 'done' | 'error'): Promise<void> {
+  async updateSessionStatus(userId: string, sessionId: string, status: 'active' | 'waiting' | 'done' | 'error'): Promise<void> {
     const db = this.firebaseService.getFirestore();
     if (!db) return;
-    await db.collection('sessions').doc(sessionId).update({
+    await db.collection(`users/${userId}/sessions`).doc(sessionId).update({
       status,
       updatedAt: new Date().toISOString(),
     });
@@ -224,10 +419,10 @@ export class AuthService {
   /**
    * Archive a session (soft delete)
    */
-  async archiveSession(sessionId: string): Promise<void> {
+  async archiveSession(userId: string, sessionId: string): Promise<void> {
     const db = this.firebaseService.getFirestore();
     if (!db) return;
-    await db.collection('sessions').doc(sessionId).update({
+    await db.collection(`users/${userId}/sessions`).doc(sessionId).update({
       status: 'done',
       archivedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -237,10 +432,10 @@ export class AuthService {
   /**
    * Update session title
    */
-  async updateSessionTitle(sessionId: string, title: string): Promise<void> {
+  async updateSessionTitle(userId: string, sessionId: string, title: string): Promise<void> {
     const db = this.firebaseService.getFirestore();
     if (!db) return;
-    await db.collection('sessions').doc(sessionId).update({
+    await db.collection(`users/${userId}/sessions`).doc(sessionId).update({
       title,
       updatedAt: new Date().toISOString(),
     });

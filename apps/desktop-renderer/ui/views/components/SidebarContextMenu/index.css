@@ -1,0 +1,95 @@
+/* Sidebar context menu — theme-aware (ha- tokens), both light & dark. */
+
+.ha-ctx-menu {
+  position: fixed;
+  z-index: 3000;
+  min-width: 200px;
+  max-width: 264px;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--ha-surface, #fff);
+  border: 1px solid var(--ha-border, rgba(0, 0, 0, 0.12));
+  border-radius: var(--ha-radius-lg, 10px);
+  box-shadow: var(--ha-shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.18));
+  animation: ha-ctx-in 90ms ease-out;
+  outline: none;
+  user-select: none;
+}
+
+@keyframes ha-ctx-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ha-ctx-menu {
+    animation: none;
+  }
+}
+
+/* Header — the session title, de-emphasized so actions lead. */
+.ha-ctx-head {
+  padding: 7px 10px 6px;
+  margin-bottom: 4px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--ha-text-tertiary, #888);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--ha-border, #ddd);
+}
+
+/* Rows */
+.ha-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--ha-radius-sm, 6px);
+  color: var(--ha-text, #222);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+.ha-ctx-item svg {
+  flex: none;
+  opacity: 0.65;
+}
+.ha-ctx-item:hover,
+.ha-ctx-item:focus-visible {
+  background: color-mix(in srgb, var(--ha-primary, #6366f8) 9%, transparent);
+  outline: none;
+}
+.ha-ctx-item:hover svg,
+.ha-ctx-item:focus-visible svg {
+  opacity: 0.95;
+}
+
+/* Destructive row */
+.ha-ctx-item--danger {
+  color: var(--ha-danger, #e5484d);
+}
+.ha-ctx-item--danger:hover,
+.ha-ctx-item--danger:focus-visible {
+  background: color-mix(in srgb, var(--ha-danger, #e5484d) 10%, transparent);
+}
+
+.ha-ctx-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--ha-border, #ddd);
+}

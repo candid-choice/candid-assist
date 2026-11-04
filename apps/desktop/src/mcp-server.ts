@@ -21,6 +21,7 @@ import {
   type ManagedProcess,
 } from "./process-registry";
 import { v4 as uuidv4 } from "uuid";
+import { planGoal } from "./task-service";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -104,7 +105,7 @@ export interface McpStatus {
     agentCount: number;
     agents: AgentInfo[];
     /** WebSocket-transport agents currently live (with harness ids). */
-    wsAgents?: Array<{ client: string; agentSessionId: string | null }>;
+    wsAgents?: Array<{ client: string; agentSessionId: string | null; project?: string | null }>;
   };
   ws: { clients: number };
 }
@@ -340,12 +341,23 @@ function handleGetProcessLog(args: unknown): Record<string, unknown> {
 
 // ── MCP Handlers ──────────────────────────────────────────────────────────
 
-async function handleOpenBrowserSurface(args: unknown): Promise<Record<string, unknown>> {
+async function handleOpenBrowserSurface(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
   const obj = args as Record<string, unknown>;
   const url = requireUrl(obj["url"]);
   const prompt = optPrompt(obj["prompt"]);
-  const perm = await permissionBroker.ensure(url, "openBrowserSurface");
-  if (!perm.allowed) return { status: "denied", reason: perm.decision, url };
+  // Human-initiated (tab-bar “+”): the human typed the URL themselves —
+  // consent gates what AGENTS open, not what the human opens.
+  if (obj["__humanInitiated"] !== true) {
+    const perm = await permissionBroker.ensure(url, "openBrowserSurface", {
+      agentClient: ctx?.agentClient,
+      agentSessionId: ctx?.agentSessionId,
+      agentProject: ctx?.agentProject,
+    });
+    if (!perm.allowed) return { status: "denied", reason: perm.decision, url };
+  }
   if (openSurfaces.size >= MAX_SURFACES) {
     throw new Error("MCP_002: Maximum surfaces reached");
   }
@@ -502,6 +514,17 @@ function handleOpenTerminalOutput(args: unknown): Record<string, unknown> {
 
 // ── Tool Router ───────────────────────────────────────────────────────────
 
+/** Signed-out lockdown state (driven by the renderer via IPC from main).
+ *  Defaults to true so unit tests and non-Electron callers keep working;
+ *  Electron main overrides this at startup from persisted auth state. */
+let mcpSignedIn = true;
+export function setMcpSignedIn(value: boolean): void {
+  mcpSignedIn = value;
+}
+export function isMcpSignedIn(): boolean {
+  return mcpSignedIn;
+}
+
 // MCP tools/list manifest (JSON Schema per tool).
 const TOOL_DEFINITIONS = [
   {
@@ -574,6 +597,7 @@ const TOOL_DEFINITIONS = [
         agentSessionId: { type: 'string', description: 'Your coding-session id (PI_SESSION_ID etc)' },
         client: { type: 'string', description: 'Client name override (pi | claude-code | ...)' },
         title: { type: 'string', description: 'Optional session title' },
+        project: { type: 'string', description: 'Project this session belongs to — derived from the repo root name. Web-access grants are isolated per project and reviewable in the app.' },
       },
       required: ['agentSessionId'],
     },
@@ -642,6 +666,22 @@ const TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    name: 'browserExecuteActions',
+    description: 'Agency loop: browserListSurfaces (what is open?) → reuse an existing page or openBrowserSurface (new page) → browser_snapshot to READ content → decide click/type/extract from the actual content — never hardcoded search; navigate directly to the site the human names. Execute an ordered SEQUENCE of browser actions on one surface in a single call (plan-then-run web agency). Submit actions[] in order; the model plans the whole task up front. Consent is requested once per domain on the first navigate to it, then the rest of the sequence runs unattended. Stops at the first failed, non-optional step and returns per-step results plus a final snapshot. Prefer this over many single-step browser calls. Per-action fields: navigate{url}; click{selector|target}; type{selector,value}; press{key?,selector?}; extract{extract:{kind:text|html|value|links|attr, selector?, attr?} or selector}; assert{contains, selector?, present?=true|false}; waitFor{selector|target|contains, timeoutMs?}; scroll{selector?}; snapshot{}. Add optional:true to a step so its failure does not abort the sequence.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        surfaceId: { type: 'string', description: 'Target browser surface (open one first with openBrowserSurface). Omit if only one is open.' },
+        actions: {
+          type: 'array',
+          description: 'Ordered steps (1-40). Each: { action, ...fields }.',
+          items: { type: 'object' },
+        },
+      },
+      required: ['actions'],
+    },
+  },
     {
       name: 'open3dSurface',
       description: 'Open an interactive three.js 3D viewer surface (orbit/zoom/pan). Agent describes the scene with primitives: box|sphere|cylinder|torus|plane + position [x,y,z] + size + color #rrggbb. Pass surfaceId to update an existing scene in place. Note: due to a validator quirk, include ALL primitive fields (type, position, size, rotation, color) on every primitive.',
@@ -672,14 +712,35 @@ const TOOL_DEFINITIONS = [
       },
     },
     {
-      name: 'googleSearch',
-      description: 'Google web search via the embedded browser (consent-gated). Returns result titles/links + page text to summarize.',
+      name: 'browserListSurfaces',
+      description: 'List the pages/surfaces currently open in the desktop app: id, type, URL, and whether a drivable guest (webview) is attached. Call FIRST to decide whether to drive an EXISTING page or open a new one — then browser_snapshot to read the content and decide clicks/inputs. There is no built-in search: navigate directly to the site the human names.',
+      inputSchema: { type: 'object', properties: {} },
+    },
+    {
+      name: 'saveExportFile',
+      description: 'Write an export file (CSV/JSON/text) from the agent into the desktop app exports directory on disk. Content arrives in append chunks (<=64KB per call); call with mode "start" first, then "append" chunks, then "close". Use for large scraped datasets so they never have to pass through the chat.',
       inputSchema: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Search query (<=512 chars)' },
+          filename: { type: 'string', description: 'File name, e.g. locum-2026-11-03.csv (no path separators)' },
+          content: { type: 'string', description: 'Chunk content (<=64KB)' },
+          mode: { type: 'string', enum: ['start', 'append', 'close'], description: 'start=create/truncate, append=add, close=finalize' },
         },
-        required: ['query'],
+        required: ['filename', 'mode'],
+      },
+    },
+    {
+      name: 'delegateTask',
+      description: 'Hand a HIGH-LEVEL GOAL to the desktop app: the internally configured model plans the task into a browser-action sequence and the app executes it autonomously through the consent-gated browser engine (reusing an open page or opening a new one). Use when the human states an outcome ("search X for me", "find listings on Y"); prefer this over chaining many single-step calls. Returns the plan summary, per-step results, and the final page snapshot.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          goal: { type: 'string', description: 'High-level goal in natural language (<=4000 chars)' },
+          surfaceId: { type: 'string', description: 'Drive an existing attached surface (omit to reuse any open browser page or open a new one)' },
+          baseUrl: { type: 'string', description: 'Override the internal model endpoint base URL (optional)' },
+          modelId: { type: 'string', description: 'Override the internal model id (optional)' },
+        },
+        required: ['goal'],
       },
     },
     {
@@ -779,9 +840,27 @@ const TOOL_DEFINITIONS = [
   },
 ];
 
+// The pi-MCP bridge (kobold) converts each inputSchema into a strict TypeBox
+// schema and pi strips undeclared arguments before the call — so the
+// human-assist-identity extension's stamps (agentClient/agentSessionId/
+// agentProject) MUST be declared in every tool schema, or they are silently
+// dropped and sessions render as the raw clientInfo name + "anonymous".
+const AGENT_IDENTITY_PROPS = {
+  agentClient: { type: 'string', description: 'Injected by the harness: coding-agent client name (e.g. "pi")' },
+  agentSessionId: { type: 'string', description: 'Injected by the harness: coding-agent session id' },
+  agentProject: { type: 'string', description: 'Injected by the harness: repo-root project name — web-access grants are isolated per project' },
+};
+for (const tool of TOOL_DEFINITIONS) {
+  const schema = tool.inputSchema as { type?: string; properties?: Record<string, unknown> };
+  schema.properties = { ...(schema.properties ?? {}), ...AGENT_IDENTITY_PROPS };
+}
+
 const TOOL_HANDLERS: Record<
   string,
-  (args: unknown) => Record<string, unknown> | Promise<Record<string, unknown>>
+  (
+    args: unknown,
+    ctx?: McpAgentCtx,
+  ) => Record<string, unknown> | Promise<Record<string, unknown>>
 > = {
   openBrowserSurface: handleOpenBrowserSurface,
   openCanvasSurface: handleOpenCanvasSurface,
@@ -793,13 +872,16 @@ const TOOL_HANDLERS: Record<
   showMessage: handleShowMessage,
   browserNavigate: handleBrowserNavigate,
   open3dSurface: handleOpen3dSurface,
-  googleSearch: handleGoogleSearch,
+  browserListSurfaces: handleBrowserListSurfaces,
+  saveExportFile: handleSaveExportFile,
   readGoogleDriveDoc: handleReadGoogleDriveDoc,
   scrapeSelective: handleScrapeSelective,
   browserSnapshot: handleBrowserSnapshot,
   browserClick: handleBrowserClick,
   browserType: handleBrowserType,
   browserScreenshot: handleBrowserScreenshot,
+  browserExecuteActions: handleBrowserExecuteActions,
+  delegateTask: handleDelegateTask,
   browserHandoff: handleBrowserHandoff,
   reloadUI: handleReloadUI,
   restartApp: handleRestartApp,
@@ -822,6 +904,10 @@ export interface McpAgentCtx {
   clientInfo?: { name?: string; version?: string };
   agentClient?: string;
   agentSessionId?: string;
+  /** Repo-root project name (from bindAgentSession). Web-access grants
+   * are isolated per project so one project's "always allow" never
+   * authorizes another, and the whole trail is reviewable per project. */
+  agentProject?: string;
 }
 
 function handleBindAgentSession(args: unknown, ctx: McpAgentCtx): Record<string, unknown> {
@@ -832,12 +918,14 @@ function handleBindAgentSession(args: unknown, ctx: McpAgentCtx): Record<string,
   }
   const client = typeof obj["client"] === "string" ? (obj["client"] as string).slice(0, 60) : undefined;
   const title = typeof obj["title"] === "string" ? (obj["title"] as string).slice(0, 100) : undefined;
+  const project = typeof obj["project"] === "string" ? (obj["project"] as string).slice(0, 120) : undefined;
   ctx.agentSessionId = sid;
   if (client) ctx.agentClient = client;
   else if (!ctx.agentClient) ctx.agentClient = ctx.clientInfo?.name ?? "agent";
-  console.log("[mcp] bound connection " + ctx.connectionId + " -> client=" + (ctx.agentClient ?? "?") + " session=" + sid);
+  if (project) ctx.agentProject = project;
+  console.log("[mcp] bound connection " + ctx.connectionId + " -> client=" + (ctx.agentClient ?? "?") + " session=" + sid + (project ? " project=" + project : ""));
   broadcastAgentPresence();
-  return { status: "bound", agentSessionId: sid, client: ctx.agentClient ?? null, title: title ?? null };
+  return { status: "bound", agentSessionId: sid, client: ctx.agentClient ?? null, title: title ?? null, project: ctx.agentProject ?? null };
 }
 
 // ── Shared MCP JSON-RPC dispatch (HTTP POST /mcp + WebSocket transport) ──
@@ -891,6 +979,31 @@ export async function processMcpMessage(
     return { response: { jsonrpc: "2.0", result: {}, id } };
   }
 
+  // ── Signed-out lockdown ──────────────────────────────────────────────
+  // Until a user signs in, the harness has no owner: agents get no tools
+  // and tool calls are refused (connections may stay open — the handshake
+  // and ping must keep working so clients don't mark the server broken).
+  if (!mcpSignedIn && (method === "tools/list" || method === "tools/call")) {
+    if (method === "tools/list") {
+      return { response: { jsonrpc: "2.0", result: { tools: [] }, id } };
+    }
+    return {
+      response: {
+        jsonrpc: "2.0",
+        result: {
+          content: [
+            {
+              type: "text",
+              text: "Signed out: the Human Assist user must sign in before agents can use tools. Ask the human to sign in from the desktop app.",
+            },
+          ],
+          isError: true,
+        },
+        id,
+      },
+    };
+  }
+
   if (method === "tools/list") {
     return { response: { jsonrpc: "2.0", result: { tools: TOOL_DEFINITIONS }, id } };
   }
@@ -903,6 +1016,13 @@ export async function processMcpMessage(
 
   if (method !== "tools/call" || !params) {
     return { response: { jsonrpc: "2.0", error: { code: -32600, message: "Invalid request" }, id } };
+  }
+
+  if (process.env.HA_DEBUG === "1") {
+    console.log(
+      "[debug] ← tools/call name=" + String((params as Record<string, unknown>)["name"]) +
+      " args=" + JSON.stringify((params as Record<string, unknown>)["arguments"] ?? {}).slice(0, 500),
+    );
   }
 
   // Auto-bind agent identity from tool arguments (injected by the
@@ -921,6 +1041,9 @@ export async function processMcpMessage(
       }
       if (typeof a["agentClient"] === "string" && (a["agentClient"] as string).length > 0 && (a["agentClient"] as string).length <= 60) {
         ctx.agentClient = a["agentClient"] as string;
+      }
+      if (typeof a["agentProject"] === "string" && (a["agentProject"] as string).length > 0 && (a["agentProject"] as string).length <= 120) {
+        ctx.agentProject = a["agentProject"] as string;
       }
     }
   }
@@ -941,10 +1064,17 @@ const __toolName = (params as Record<string, unknown>)["name"];
   }
 
   try {
-    const result = await handler((params as Record<string, unknown>)["arguments"]);
+    const result = await handler(
+      (params as Record<string, unknown>)["arguments"],
+      ctx,
+    );
     const agentTag =
       ctx.agentSessionId || ctx.agentClient
-        ? { agent: { client: ctx.agentClient ?? "agent", agentSessionId: ctx.agentSessionId ?? null } }
+        ? { agent: {
+            client: ctx.agentClient ?? "agent",
+            agentSessionId: ctx.agentSessionId ?? null,
+            ...(ctx.agentProject ? { agentProject: ctx.agentProject } : {}),
+          } }
         : {};
     const resultSurfaceId = (result as Record<string, unknown>)?.["surfaceId"] as string | undefined;
     if (resultSurfaceId && openSurfaces.has(resultSurfaceId)) {
@@ -992,11 +1122,11 @@ function logMcpRequest(method: string, id: unknown, ip: string, port: number): v
 
 /** WebSocket MCP server reports live connection count for /status here. */
 let wsPresenceProvider: () => number = () => 0;
-let wsAgentsProvider: () => Array<{ client: string; agentSessionId: string | null }> = () => [];
+let wsAgentsProvider: () => Array<{ client: string; agentSessionId: string | null; project?: string | null }> = () => [];
 
 /** WebSocket MCP layer registers this to feed /status + presence events. */
 export function setWsAgentsProvider(
-  fn: () => Array<{ client: string; agentSessionId: string | null }>,
+  fn: () => Array<{ client: string; agentSessionId: string | null; project?: string | null }>,
 ): void {
   wsAgentsProvider = fn;
 }
@@ -1084,7 +1214,7 @@ function startWebSocketServer(port: number): WebSocketServer {
     client.on("error", () => wsClients.delete(client));
     client.on("message", (data) => {
       try {
-        const msg = JSON.parse(data.toString()) as { type?: unknown; surfaceId?: unknown; id?: unknown; action?: unknown; domains?: unknown; decision?: unknown };
+        const msg = JSON.parse(data.toString()) as { type?: unknown; surfaceId?: unknown; id?: unknown; action?: unknown; domains?: unknown; grants?: unknown; decision?: unknown };
         if (msg && msg.type === "process:control" && typeof msg.id === "string") {
           try {
             if (msg.action === "kill") registryStop(msg.id);
@@ -1094,10 +1224,21 @@ function startWebSocketServer(port: number): WebSocketServer {
             console.warn("[proc] control failed:", (e as Error).message);
           }
         }
-        if (msg && msg.type === "permission:sync" && Array.isArray(msg.domains)) {
-          const doms = msg.domains.filter((d: unknown) => typeof d === "string") as string[];
-          permissionBroker.syncGrants(doms);
-          console.log("[perm] renderer synced grants:", JSON.stringify(doms));
+        if (msg && msg.type === "permission:sync") {
+          // Per-project map { [project]: domains[] } (preferred) or legacy
+          // flat domains[] (lands in the unassigned bucket).
+          if (msg.grants && typeof msg.grants === "object") {
+            permissionBroker.syncGrants(
+              msg.grants as Record<string, string[]>,
+            );
+            console.log("[perm] renderer synced per-project grants");
+          } else if (Array.isArray(msg.domains)) {
+            const doms = msg.domains.filter(
+              (d: unknown) => typeof d === "string",
+            ) as string[];
+            permissionBroker.syncGrants(doms);
+            console.log("[perm] renderer synced grants:", JSON.stringify(doms));
+          }
         }
         if (
           msg &&
@@ -1114,6 +1255,12 @@ function startWebSocketServer(port: number): WebSocketServer {
             console.log("[browser] handoff CLOSE on " + msg.surfaceId + " (human done)");
           }
         }
+        // Human-initiated surface creation (tab-bar “+” picker).
+        if (msg && msg.type === "surface:create") {
+          void __manualSurfaceCreate(msg).catch((err: unknown) => {
+            console.error("[surface] manual create failed:", String(err));
+          });
+        }
       } catch {
         /* ignore malformed renderer messages */
       }
@@ -1121,6 +1268,20 @@ function startWebSocketServer(port: number): WebSocketServer {
   });
   console.log(`WebSocket server listening on port ${port}`);
   return ws;
+}
+
+/** loadURL with a hard cap: a stalled navigation must not wedge a
+ *  sequence forever (observed: 600s tool timeout behind one hang). */
+async function loadUrlCapped(handle: GuestHandle, url: string, timeoutMs = 30_000): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, rej) => {
+    timer = setTimeout(() => rej(new Error("BROWSER_009: navigation timed out after " + timeoutMs / 1000 + "s: " + url)), timeoutMs);
+  });
+  try {
+    await Promise.race([handle.loadURL(url), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function notifySurfacePush(payload: Record<string, unknown>): void {
@@ -1136,6 +1297,59 @@ function notifySurfacePush(payload: Record<string, unknown>): void {
   }
 }
 
+/** Human-initiated surface creation — the tab-bar “+” picker.
+ *  Reuses the agent-facing handlers but skips consent (a human typed the
+ *  request themselves) and tags the push with targetSessionId so the
+ *  renderer binds the tab to the session the user was looking at. */
+export async function __manualSurfaceCreate(
+  msg: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const kind = typeof msg["surfaceType"] === "string" ? (msg["surfaceType"] as string) : "";
+  const url = typeof msg["url"] === "string" ? (msg["url"] as string).trim() : "";
+  const prompt = typeof msg["prompt"] === "string" ? (msg["prompt"] as string) : undefined;
+  let result: Record<string, unknown>;
+  switch (kind) {
+    case "browser":
+      if (!/^https?:\/\//i.test(url)) throw new Error("MCP_002: Manual browser surface requires an http(s) url");
+      result = await handleOpenBrowserSurface({ url, ...(prompt ? { prompt } : {}), __humanInitiated: true });
+      break;
+    case "process":
+      result = handleOpenProcessManager();
+      break;
+    case "canvas":
+      result = handleOpenCanvasSurface({ prompt: prompt ?? "Scratch canvas" });
+      break;
+    case "image":
+      if (!url) throw new Error("MCP_002: Manual image surface requires a url");
+      result = handleOpenImageSurface({ src: url, ...(prompt ? { caption: prompt } : {}) });
+      break;
+    case "threed":
+      result = await handleOpen3dSurface({
+        primitives: [{ type: "plane", position: [0, 0, 0], size: 10, color: "#1e293b", rotation: [0, 0, 0] }],
+        ...(prompt ? { prompt } : {}),
+      });
+      break;
+    case "screen":
+      result = handleOpenScreenCapture({ mode: "fullscreen" });
+      break;
+    default:
+      throw new Error("MCP_002: Unsupported manual surfaceType: " + (kind || "(missing)"));
+  }
+  const surfaceId = typeof result["surfaceId"] === "string" ? result["surfaceId"] : "";
+  const rec = openSurfaces.get(surfaceId);
+  if (rec) {
+    const sessionId = typeof msg["sessionId"] === "string" ? msg["sessionId"] : undefined;
+    notifySurfacePush({
+      surfaceId,
+      type: rec.type,
+      payload: { ...rec.payload, manual: true, ...(sessionId ? { targetSessionId: sessionId } : {}) },
+      status: "pushed",
+    });
+    console.log("[surface] manual create " + kind + " " + surfaceId);
+  }
+  return result;
+}
+
 // ── Domain permission gate (human consent before real-web access) ─────────
 import { PermissionBroker, pendingPermissionIds, type PermissionDecision } from "./permission-broker";
 
@@ -1143,6 +1357,32 @@ function sendToWsClients(eventObj: Record<string, unknown>): void {
   const payload = JSON.stringify(eventObj);
   for (const client of wsClients) {
     if (client.readyState === WebSocket.OPEN) client.send(payload);
+  }
+  // A consent prompt the human never sees is a denied prompt — but
+  // yanking focus (macOS: switching spaces/displays) every time one is
+  // issued turns the app into an uninvited guest on every screen.
+  // Policy: the window stays where the human put it; we only un-minimize
+  // when minimized and otherwise bounce the Dock icon for attention.
+  if (eventObj["event"] === "permission:request") {
+    try {
+      // Lazy require keeps this module importable from non-Electron tests.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const electron = require("electron") as {
+        BrowserWindow?: { getAllWindows(): Array<{ isMinimized(): boolean; restore(): void; focus(): void }> };
+        app?: { dock?: { bounce?: (kind?: "informational" | "critical") => void } };
+      };
+      let raised = false;
+      for (const win of electron.BrowserWindow?.getAllWindows() ?? []) {
+        if (win.isMinimized()) {
+          win.restore();
+          win.focus();
+          raised = true;
+        }
+      }
+      if (!raised) electron.app?.dock?.bounce?.("informational");
+    } catch {
+      // non-Electron (tests) — no windows to raise
+    }
   }
 }
 
@@ -1219,12 +1459,13 @@ async function agentNavigateAndEval(
   tool: string,
   evalJs: string,
   agentArgs: Record<string, unknown>,
+  agent?: { agentClient?: string; agentSessionId?: string | null; agentProject?: string | null },
 ): Promise<
   | { ok: true; surfaceId: string; value: unknown }
   | { ok: false; status: "denied"; reason: string; url: string }
   | { ok: false; status: "no-guest"; url: string }
 > {
-  const perm = await permissionBroker.ensure(url, tool);
+  const perm = await permissionBroker.ensure(url, tool, agent);
   if (!perm.allowed) return { ok: false, status: "denied", reason: perm.decision, url };
 
   // Each task gets its OWN tab — but the SAME task (same searchQuery/
@@ -1265,18 +1506,24 @@ async function agentNavigateAndEval(
             agent: {
               client: (agentArgs["agentClient"] as string) ?? "agent",
               agentSessionId: (agentArgs["agentSessionId"] as string) ?? null,
+              ...(agentArgs["agentProject"] ? { agentProject: agentArgs["agentProject"] as string } : {}),
             },
           }
         : {};
-    notifySurfacePush({
+    const pushed: Record<string, unknown> = {
       surfaceId,
       type: "browser",
       payload: { url },
       status: "pushed",
       ...agentTag,
-    });
-    // Wait for guest registration (webview attach is async).
-    for (let waited = 0; waited < 10_000; waited += 250) {
+    };
+    notifySurfacePush(pushed);
+    // Wait for guest registration (webview attach is async). The push is
+    // fire-and-forget: if the renderer's WS was still connecting (e.g. a
+    // moment after app start), it never sees the surface — replay the
+    // push every 2s while we wait so late-connecting renderers mount it.
+    for (let waited = 0; waited < 15_000 && !handle; waited += 250) {
+      if (waited % 2_000 === 0) notifySurfacePush(pushed);
       try {
         handle = resolveGuest(surfaceId);
         break;
@@ -1288,7 +1535,7 @@ async function agentNavigateAndEval(
   }
 
   try {
-    await handle.loadURL(url);
+    await loadUrlCapped(handle, url);
   } catch (e) {
     // A freshly-pushed <webview src=...> is already navigating to this
     // exact URL; calling loadURL on top of it aborts the in-flight load
@@ -1360,58 +1607,64 @@ async function handleOpen3dSurface(args: unknown): Promise<Record<string, unknow
   return { surfaceId: id, status: reuse ? "updated" : "opened", primitiveCount: primitives.length };
 }
 
-async function handleGoogleSearch(args: unknown): Promise<Record<string, unknown>> {
+// ── Export files (large agent datasets land on disk, not in chat) ─────
+const EXPORTS_DIR = require("node:path").join(require("node:os").homedir(), "Downloads", "human-assist-exports");
+const exportStreams = new Map<string, { path: string; bytes: number }>();
+
+function handleSaveExportFile(args: unknown): Record<string, unknown> {
   const o = (args ?? {}) as Record<string, unknown>;
-  const query = typeof o["query"] === "string" ? o["query"].trim() : "";
-  if (!query) throw new Error("MCP_001: query required");
-  if (query.length > 512) throw new Error("MCP_012: query too long (max 512)");
-  const url = "https://www.google.com/search?q=" + encodeURIComponent(query);
-  const evalJs = `(function(){ try {
-    const results = [...document.querySelectorAll('a[href^="http"]')]
-      .map((a) => ({
-        title: (a.querySelector('h3') ? a.querySelector('h3').textContent : a.textContent) || '',
-        link: a.href,
-      }))
-      .filter((r) => r.title && r.title.trim() && r.link.indexOf('google.') === -1 && r.link.indexOf('gstatic') === -1)
-      .slice(0, 10);
-    return JSON.stringify({
-      pageTitle: document.title,
-      url: location.href,
-      loginRequired: location.href.indexOf('accounts.google.com') !== -1 || /before you continue/i.test(document.body ? document.body.innerText : ''),
-      botCheck: /sorry\\/index|unusual traffic|recaptcha|are you a robot/i.test(location.href + ' ' + (document.body ? document.body.innerText : '')),
-      results,
-      pageText: (document.body ? document.body.innerText : '').slice(0, 4000),
-    });
-  } catch (e) {
-    return JSON.stringify({ evalError: String(e && e.message ? e.message : e), url: typeof location !== 'undefined' ? location.href : '?' });
-  } })()`;
-  const r = await agentNavigateAndEval(url, "googleSearch", evalJs, o);
-  if (!r.ok) return { ...r, tool: "googleSearch" };
-  let parsed: Record<string, unknown> = {};
-  try {
-    parsed = typeof r.value === "string" ? JSON.parse(r.value) : {};
-  } catch {
-    /* malformed eval result */
+  const filename = typeof o["filename"] === "string" ? o["filename"] : "";
+  const mode = o["mode"] === "append" || o["mode"] === "close" ? o["mode"] : o["mode"] === "start" ? "start" : null;
+  if (!filename || mode === null) throw new Error("EXP_001: filename and mode required");
+  if (/[\\/]\.\.?|[\\/]/.test(filename) || !/^[\w.\- ]{1,120}$/.test(filename)) {
+    throw new Error("EXP_002: filename must be a plain file name");
   }
-  if (parsed["botCheck"]) {
-    notifyHandoff(r.surfaceId, true, "Google human check — solve it, then click Done");
-    browserHandoffs.set(r.surfaceId, {
-      reason: "Google human check (unusual traffic)",
-      ts: Date.now(),
-    });
-    return {
-      tool: "googleSearch",
-      query,
-      status: "human-check-required",
-      handoff: true,
-      surfaceId: r.surfaceId,
-      note: "Human: solve the check in the pane and click Done; then ask the agent to search again (the persistent profile remembers you).",
-    };
+  const fs = require("node:fs") as typeof import("node:fs");
+  const pathmod = require("node:path") as typeof import("node:path");
+  fs.mkdirSync(EXPORTS_DIR, { recursive: true });
+  const path = pathmod.join(EXPORTS_DIR, filename);
+  // Confine to the exports directory even after the name check.
+  if (!path.startsWith(EXPORTS_DIR + pathmod.sep)) throw new Error("EXP_003: path escape rejected");
+  const content = typeof o["content"] === "string" ? o["content"] : "";
+  if (content.length > 64 * 1024) throw new Error("EXP_004: chunk too large (max 64KB)");
+  const state = exportStreams.get(filename);
+  if (mode === "start") {
+    fs.writeFileSync(path, content, "utf8");
+    exportStreams.set(filename, { path, bytes: Buffer.byteLength(content) });
+  } else {
+    if (!state) throw new Error("EXP_005: no active export stream for " + filename + " — call mode=start first");
+    if (content) fs.appendFileSync(path, content, "utf8");
+    state.bytes += Buffer.byteLength(content);
+    if (state.bytes > 64 * 1024 * 1024) throw new Error("EXP_006: export exceeds 64MB");
   }
-  return { tool: "googleSearch", query, surfaceId: r.surfaceId, ...parsed };
+  if (mode === "close") {
+    exportStreams.delete(filename);
+    const size = fs.statSync(path).size;
+    console.log("[export] wrote " + path + " (" + size + " bytes)");
+    return { ok: true, path, bytes: size, closed: true };
+  }
+  return { ok: true, path, bytes: exportStreams.get(filename)?.bytes ?? 0, closed: false };
 }
 
-async function handleReadGoogleDriveDoc(args: unknown): Promise<Record<string, unknown>> {
+function handleBrowserListSurfaces(): Record<string, unknown> {
+  const attached = new Set(listGuestSurfaceIds());
+  const surfaces = [...openSurfaces.values()]
+    .filter((s) => s.status === "open")
+    .map((s) => ({
+      surfaceId: s.surfaceId,
+      type: s.type,
+      url: typeof s.payload["url"] === "string" ? (s.payload["url"] as string) : null,
+      prompt: typeof s.payload["prompt"] === "string" ? String(s.payload["prompt"]).slice(0, 80) : null,
+      guestAttached: attached.has(s.surfaceId),
+      lastActive: new Date(s.lastActive).toISOString(),
+    }));
+  return { ok: true, count: surfaces.length, surfaces };
+}
+
+async function handleReadGoogleDriveDoc(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
   const o = (args ?? {}) as Record<string, unknown>;
   const url = requireUrl(o["url"]);
   if (!/^https:\/\/(drive|docs|sites)\.google\.com\//i.test(url)) {
@@ -1423,7 +1676,11 @@ async function handleReadGoogleDriveDoc(args: unknown): Promise<Record<string, u
     loginRequired: location.href.includes('accounts.google.com') || /Sign in|before you continue/i.test((document.body?.innerText || '').slice(0, 500)),
     text: (document.body?.innerText || '').slice(0, ${RECIPE_TEXT_LIMIT}),
   }))()`;
-  const r = await agentNavigateAndEval(url, "readGoogleDriveDoc", evalJs, o);
+  const r = await agentNavigateAndEval(url, "readGoogleDriveDoc", evalJs, o, {
+    agentClient: ctx?.agentClient,
+    agentSessionId: ctx?.agentSessionId,
+    agentProject: ctx?.agentProject,
+  });
   if (!r.ok) return { ...r, tool: "readGoogleDriveDoc" };
   let parsed: Record<string, unknown> = {};
   try {
@@ -1448,7 +1705,10 @@ async function handleReadGoogleDriveDoc(args: unknown): Promise<Record<string, u
   return { tool: "readGoogleDriveDoc", surfaceId: r.surfaceId, url, ...parsed };
 }
 
-async function handleScrapeSelective(args: unknown): Promise<Record<string, unknown>> {
+async function handleScrapeSelective(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
   const o = (args ?? {}) as Record<string, unknown>;
   const url = requireUrl(o["url"]);
   const selector =
@@ -1456,7 +1716,7 @@ async function handleScrapeSelective(args: unknown): Promise<Record<string, unkn
       ? o["selector"].trim().slice(0, 128)
       : null;
   const safeSel = selector ? JSON.stringify(selector) : "null";
-  const evalJs = `(() => {
+  const evalJs = `(function(){ try {
     const sel = ${safeSel};
     const chunks = sel
       ? [...document.querySelectorAll(sel)].map((el) => el.innerText.trim()).filter(Boolean).slice(0, 50)
@@ -1465,10 +1725,16 @@ async function handleScrapeSelective(args: unknown): Promise<Record<string, unkn
       pageTitle: document.title,
       url: location.href,
       matched: chunks ? chunks.length : null,
-      text: (chunks ? chunks.join('\n---\n') : (document.body?.innerText || '')).slice(0, ${RECIPE_TEXT_LIMIT}),
+      text: (chunks ? chunks.join('\\n---\\n') : (document.body?.innerText || '')).slice(0, ${RECIPE_TEXT_LIMIT}),
     });
-  })()`;
-  const r = await agentNavigateAndEval(url, "scrapeSelective", evalJs, o);
+  } catch (e) {
+    return JSON.stringify({ evalError: String(e && e.message ? e.message : e), url: typeof location !== 'undefined' ? location.href : '?' });
+  } })()`;
+  const r = await agentNavigateAndEval(url, "scrapeSelective", evalJs, o, {
+    agentClient: ctx?.agentClient,
+    agentSessionId: ctx?.agentSessionId,
+    agentProject: ctx?.agentProject,
+  });
   if (!r.ok) return { ...r, tool: "scrapeSelective" };
   let parsed: Record<string, unknown> = {};
   try {
@@ -1573,15 +1839,415 @@ function typeJs(selector: string, value: string): string {
   })()`;
 }
 
-async function handleBrowserNavigate(args: unknown): Promise<Record<string, unknown>> {
+// ── Browser SEQUENCE executor (plan-then-run web agency) ────────────────
+// The model plans a whole task and submits an ordered actions[] array in
+// ONE call. Consent is requested once per domain (on the first navigate to
+// it); the remaining steps run unattended. The sequence stops at the first
+// failed, non-optional step and returns per-step results + a final snapshot.
+
+const SEQ_ACTIONS = new Set([
+  "navigate", "click", "type", "extract", "assert", "waitFor", "scroll", "press", "snapshot",
+]);
+const SEQ_EXTRACT_KINDS = new Set(["text", "html", "value", "links", "attr"]);
+
+type SeqStep = {
+  action: string;
+  url?: string;
+  selector?: string;
+  target?: string;
+  value?: string;
+  key?: string;
+  contains?: string;
+  present?: boolean;
+  optional?: boolean;
+  timeoutMs?: number;
+  settleMs?: number;
+  extract?: { kind?: string; selector?: string; attr?: string };
+};
+
+function normalizeBrowserActions(raw: unknown): SeqStep[] {
+  if (!Array.isArray(raw)) throw new Error("ACTION_000: actions must be an array");
+  if (raw.length === 0) throw new Error("ACTION_001: actions[] must not be empty");
+  if (raw.length > 40) throw new Error("ACTION_002: too many actions (max 40)");
+  return raw.map((item, i) => {
+    const a = (item ?? {}) as Record<string, unknown>;
+    if (typeof a["action"] !== "string" || !SEQ_ACTIONS.has(a["action"])) {
+      throw new Error(
+        `ACTION_003: actions[${i}].action must be one of ${[...SEQ_ACTIONS].join(", ")}`,
+      );
+    }
+    const out: SeqStep = { action: a["action"] as string };
+    for (const k of ["url", "selector", "target", "value", "key", "contains"] as const) {
+      if (typeof a[k] === "string") out[k] = a[k] as string;
+    }
+    if (typeof a["present"] === "boolean") out.present = a["present"] as boolean;
+    if (typeof a["optional"] === "boolean") out.optional = a["optional"] as boolean;
+    if (typeof a["timeoutMs"] === "number") out.timeoutMs = a["timeoutMs"] as number;
+    if (typeof a["settleMs"] === "number") out.settleMs = a["settleMs"] as number;
+    if (a["extract"] && typeof a["extract"] === "object") {
+      const ex = a["extract"] as Record<string, unknown>;
+      const kind = typeof ex["kind"] === "string" ? ex["kind"] : "text";
+      if (!SEQ_EXTRACT_KINDS.has(kind)) {
+        throw new Error(`ACTION_004: actions[${i}].extract.kind must be one of ${[...SEQ_EXTRACT_KINDS].join(", ")}`);
+      }
+      out.extract = {
+        kind,
+        ...(typeof ex["selector"] === "string" ? { selector: ex["selector"] as string } : {}),
+        ...(typeof ex["attr"] === "string" ? { attr: ex["attr"] as string } : {}),
+      };
+    }
+    if (out.action === "navigate") requireUrl(out.url, "ACTION_005");
+    return out;
+  });
+}
+
+function extractJs(ex: SeqStep["extract"], fallbackSelector?: string): string {
+  const kind = ex?.kind ?? "text";
+  const sel = ex?.selector ?? fallbackSelector ?? null;
+  const attr = ex?.attr ?? null;
+  // Page-side try/catch + JSON string return: mirrors the proven
+  // proven page-side try/catch + JSON-string eval shape. Without it, any page-context throw becomes
+  // an opaque executeJavaScript rejection ("Script failed to execute")
+  // and object results can hit structured-clone edge cases.
+  return `(function(){ try {
+    const kind = ${JSON.stringify(kind)};
+    const sel = ${JSON.stringify(sel)};
+    const attr = ${JSON.stringify(attr)};
+    const textOf = (n) => (n && (n.innerText || n.textContent) || '').trim();
+    if (kind === 'links') {
+      const scope = sel ? [...document.querySelectorAll(sel)] : [...document.querySelectorAll('a[href]')];
+      const data = scope.filter(e => e.tagName === 'A' && e.href)
+        .map(e => ({ text: textOf(e).slice(0, 140), href: e.href }))
+        .slice(0, 300);
+      return JSON.stringify({ ok: true, kind, count: data.length, data });
+    }
+    const nodes = sel ? [...document.querySelectorAll(sel)] : (document.body ? [document.body] : []);
+    if (kind === 'value') {
+      const data = nodes.map(n => (n.value != null ? String(n.value) : null)).filter(v => v !== null);
+      return JSON.stringify({ ok: true, kind, count: data.length, data });
+    }
+    if (kind === 'attr') {
+      const data = nodes.map(n => n.getAttribute(attr || 'href')).filter(Boolean);
+      return JSON.stringify({ ok: true, kind, count: data.length, data });
+    }
+    if (kind === 'html') {
+      const data = nodes.map(n => n.innerHTML).join('\\n---\\n').slice(0, 20000);
+      return JSON.stringify({ ok: true, kind, count: nodes.length, data });
+    }
+    const data = nodes.map(textOf).filter(Boolean).join('\\n').slice(0, 20000);
+    return JSON.stringify({ ok: true, kind, count: nodes.length, data });
+  } catch (e) {
+    return JSON.stringify({ ok: false, kind: ${JSON.stringify(kind)}, error: String(e && e.message ? e.message : e), url: typeof location !== 'undefined' ? location.href : '?' });
+  } })()`;
+}
+
+function assertJs(contains: string | null, selector: string | null, present: boolean): string {
+  return `(() => {
+    const txt = ${JSON.stringify(contains)};
+    const sel = ${JSON.stringify(selector)};
+    const wantPresent = ${JSON.stringify(present)};
+    let hay = null;
+    if (sel) { const n = document.querySelector(sel); hay = n ? (n.innerText || n.textContent || '') : null; }
+    else hay = document.body ? (document.body.innerText || '') : '';
+    // selector absent (and we asserted on a selector) => not present
+    if (sel && hay === null) return { ok: !wantPresent, found: false, reason: 'selector absent' };
+    const found = txt ? String(hay).toLowerCase().includes(String(txt).toLowerCase()) : true;
+    return { ok: wantPresent ? found : !found, found };
+  })()`;
+}
+
+function pressJs(key: string, selector: string | null): string {
+  return `(() => {
+    const el = ${JSON.stringify(selector)} ? document.querySelector(${JSON.stringify(selector)}) : (document.activeElement || document.body);
+    if (!el) return { ok: false };
+    const k = ${JSON.stringify(key)};
+    const opts = { key: k, bubbles: true, cancelable: true };
+    if (el.focus) el.focus();
+    el.dispatchEvent(new KeyboardEvent('keydown', opts));
+    el.dispatchEvent(new KeyboardEvent('keypress', opts));
+    el.dispatchEvent(new KeyboardEvent('keyup', opts));
+    return { ok: true };
+  })()`;
+}
+
+function scrollJs(selector: string | null): string {
+  return `(() => {
+    const s = ${JSON.stringify(selector)};
+    if (s) { const e = document.querySelector(s); if (e) e.scrollIntoView({ block: 'center' }); }
+    else window.scrollBy(0, Math.round(window.innerHeight * 0.9));
+    return { ok: true };
+  })()`;
+}
+
+function existsJs(a: SeqStep): string {
+  if (a.selector) return `!!document.querySelector(${JSON.stringify(a.selector)})`;
+  if (a.target) {
+    return `(() => {
+      const t = ${JSON.stringify(a.target.toLowerCase())};
+      return [...document.querySelectorAll('a,button,input,label,summary,[role=button],[onclick],[role=link],[role=tab]')]
+        .some(e => ((( e.innerText) || '') + ' ' + (e.value || '') + ' ' + (e.getAttribute && e.getAttribute('aria-label') || '')).toLowerCase().includes(t));
+    })()`;
+  }
+  if (a.contains) return `((document.body && document.body.innerText) || '').toLowerCase().includes(${JSON.stringify(a.contains.toLowerCase())})`;
+  return "true";
+}
+
+async function waitForGuest(handle: GuestHandle, a: SeqStep): Promise<{ ok: boolean }> {
+  const timeoutMs = Math.min(Math.max(a.timeoutMs ?? 5000, 0), 30_000);
+  const js = existsJs(a);
+  const deadline = Date.now() + timeoutMs;
+  // Always give at least one poll even for timeoutMs=0.
+  for (; ;) {
+    const hit = (await handle.executeJavaScript(js)) as boolean;
+    if (hit) return { ok: true };
+    if (Date.now() >= deadline) return { ok: false };
+    await sleep(250);
+  }
+}
+
+async function handleDelegateTask(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const goal = typeof o["goal"] === "string" ? o["goal"].trim() : "";
+  if (!goal) throw new Error("MCP_021: goal required");
+  if (goal.length > 4000) throw new Error("MCP_022: goal too long (max 4000)");
+  const dbg = process.env.HA_DEBUG === "1";
+  if (dbg) console.log("[debug] delegateTask goal: " + goal.slice(0, 300));
+
+  const plan = await planGoal(goal, {
+    ...(typeof o["baseUrl"] === "string" ? { baseUrl: o["baseUrl"] as string } : {}),
+    ...(typeof o["modelId"] === "string" ? { modelId: o["modelId"] as string } : {}),
+  });
+  if (dbg) console.log("[debug] delegateTask plan: " + JSON.stringify(plan).slice(0, 2000));
+
+  // Soft steps: a small local model often writes best-effort waitFor /
+  // extract steps; their failure must never abandon the whole goal.
+  plan.actions = plan.actions.map((a) =>
+    a["action"] === "waitFor" || a["action"] === "extract" ? { ...a, optional: true } : a,
+  );
+
+  // Surface: explicit > any open+attached browser page > a fresh one
+  // seeded at the plan's first navigate target (the sequence re-navigates
+  // anyway; seeding just satisfies the http(s) requirement).
+  let surfaceId = typeof o["surfaceId"] === "string" ? (o["surfaceId"] as string) : undefined;
+  if (surfaceId) {
+    try { resolveGuest(surfaceId); } catch { surfaceId = undefined; }
+  }
+  if (!surfaceId) {
+    const attached = new Set(listGuestSurfaceIds());
+    for (const [id, s] of openSurfaces.entries()) {
+      if (s.status === "open" && s.type === "browser" && attached.has(id)) {
+        surfaceId = id;
+        break;
+      }
+    }
+  }
+  if (!surfaceId) {
+    const firstNav = plan.actions.find(
+      (a) => a["action"] === "navigate" && typeof a["url"] === "string",
+    );
+    const seed = (firstNav?.["url"] as string | undefined) ?? "https://www.google.com/";
+    const opened = (await handleOpenBrowserSurface({ url: seed }, ctx)) as { surfaceId: string };
+    surfaceId = opened.surfaceId;
+    // Replay the push while waiting (late-connecting renderer race — see
+    // agentNavigateAndEval).
+    const rec = openSurfaces.get(surfaceId);
+    const pushed = rec
+      ? {
+          surfaceId,
+          type: rec.type,
+          payload: rec.payload,
+          status: "pushed",
+          ...(ctx?.agentClient
+            ? {
+                agent: {
+                  client: ctx.agentClient,
+                  agentSessionId: ctx.agentSessionId ?? null,
+                  ...(ctx.agentProject ? { agentProject: ctx.agentProject } : {}),
+                },
+              }
+            : {}),
+        }
+      : undefined;
+    for (let waited = 0; waited < 15_000; waited += 250) {
+      try { resolveGuest(surfaceId); break; } catch {
+        if (pushed && waited % 2_000 === 0) notifySurfacePush(pushed);
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    }
+  }
+
+  const exec = (await handleBrowserExecuteActions({ surfaceId, actions: plan.actions }, ctx)) as Record<string, unknown>;
+  if (dbg) console.log("[debug] delegateTask done: " + String(exec.status) + " steps=" + String((exec.steps as unknown[] | undefined)?.length ?? 0));
+  return {
+    ok: exec["ok"] === true,
+    tool: "delegateTask",
+    goal: goal.slice(0, 300),
+    summary: plan.summary,
+    surfaceId,
+    status: exec["status"],
+    denied: exec["denied"] ?? null,
+    steps: exec["steps"],
+    final: exec["final"],
+  };
+}
+
+async function handleBrowserExecuteActions(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const actions = normalizeBrowserActions(o["actions"]);
+  const surfaceArg = typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined;
+  const agent = {
+    agentClient: ctx?.agentClient,
+    agentSessionId: ctx?.agentSessionId,
+    agentProject: ctx?.agentProject,
+  };
+  // Wait (briefly) for the guest to attach: a sequence fired right
+  // after openBrowserSurface used to die with BROWSER_002 because the
+  // <webview> mount is async. Replays the push so a renderer that
+  // missed the original still mounts it.
+  let entry: { id: string; handle: GuestHandle } | undefined;
+  let lastGuestErr: unknown;
+  {
+    const t0 = Date.now();
+    for (;;) {
+      try {
+        entry = resolveGuestEntry(surfaceArg);
+        break;
+      } catch (e) {
+        lastGuestErr = e;
+        if (Date.now() - t0 > 12_000) break;
+        if (surfaceArg) {
+          const rec = openSurfaces.get(surfaceArg);
+          if (rec && (Date.now() - t0) % 2_000 < 300) {
+            notifySurfacePush({ surfaceId: surfaceArg, type: rec.type, payload: rec.payload, status: "pushed" });
+          }
+        }
+        await sleep(250);
+      }
+    }
+  }
+  if (!entry) throw lastGuestErr instanceof Error ? lastGuestErr : new Error("BROWSER_002: no attached surface");
+  const { id, handle } = entry;
+  assertHumanControlFree(id);
+
+  const steps: Array<Record<string, unknown>> = [];
+  let aborted = false;
+  let denied: string | null = null;
+
+  for (let i = 0; i < actions.length; i++) {
+    const a = actions[i];
+    const t0 = Date.now();
+    try {
+      assertHumanControlFree(id);
+      let r: Record<string, unknown>;
+      if (a.action === "navigate") {
+        const perm = await permissionBroker.ensure(a.url as string, "browserNavigate", agent);
+        if (!perm.allowed) {
+          denied = perm.decision;
+          r = { ok: false, status: "denied", reason: perm.decision };
+        } else {
+          try {
+            await loadUrlCapped(handle, a.url as string);
+          } catch (e) {
+            // A surface seeded at this exact URL (delegateTask) or a
+            // user-initiated nav in flight makes loadURL abort the
+            // duplicate load — that IS "already on our way".
+            if (!/\(-3\)|ERR_ABORTED/i.test((e as Error).message)) throw e;
+          }
+          await sleep(a.settleMs ?? 1_500);
+          r = { ok: true, url: a.url };
+        }
+      } else if (a.action === "click") {
+        if (!a.selector && !a.target) throw new Error("ACTION_006: click needs selector or target");
+        const res = (await handle.executeJavaScript(
+          clickJs(a.selector ?? null, a.target ?? null),
+        )) as { ok: boolean; desc?: string };
+        r = res.ok ? { ok: true, element: res.desc ?? null } : { ok: false, error: "element not found" };
+      } else if (a.action === "type") {
+        if (!a.selector) throw new Error("ACTION_007: type needs selector");
+        const res = (await handle.executeJavaScript(typeJs(a.selector, a.value ?? ""))) as { ok: boolean };
+        r = res.ok ? { ok: true } : { ok: false, error: "input element not found" };
+      } else if (a.action === "extract") {
+        const raw = await handle.executeJavaScript(extractJs(a.extract, a.selector));
+        r = (typeof raw === "string" ? JSON.parse(raw) : raw) as Record<string, unknown>;
+        if (typeof r.ok !== "boolean") r = { ok: true, ...r };
+      } else if (a.action === "assert") {
+        if (a.contains === undefined && !a.selector) throw new Error("ACTION_008: assert needs contains and/or selector");
+        const res = (await handle.executeJavaScript(
+          assertJs(a.contains ?? null, a.selector ?? null, a.present ?? true),
+        )) as { ok: boolean; found?: boolean };
+        r = res.ok ? { ok: true, found: res.found } : { ok: false, error: "assertion failed", found: res.found };
+      } else if (a.action === "waitFor") {
+        if (!a.selector && !a.target && !a.contains) throw new Error("ACTION_009: waitFor needs selector, target, or contains");
+        const res = await waitForGuest(handle, a);
+        r = res.ok ? { ok: true } : { ok: false, error: "timed out waiting" };
+      } else if (a.action === "press") {
+        const res = (await handle.executeJavaScript(pressJs(a.key ?? "Enter", a.selector ?? null))) as { ok: boolean };
+        r = res.ok ? { ok: true, key: a.key ?? "Enter" } : { ok: false, error: "no target to press" };
+      } else if (a.action === "scroll") {
+        await handle.executeJavaScript(scrollJs(a.selector ?? null));
+        r = { ok: true };
+      } else if (a.action === "snapshot") {
+        const snap = (await handle.executeJavaScript(SNAPSHOT_JS)) as Record<string, unknown>;
+        r = { ok: true, snapshot: { title: snap.title, url: snap.url, captchaDetected: snap.captchaDetected, text: String(snap.text ?? "").slice(0, 4000) } };
+      } else {
+        r = { ok: false, error: "unknown action" };
+      }
+      steps.push({ i, action: a.action, ok: r.ok === true, ms: Date.now() - t0, ...r });
+      if (r.ok !== true && !a.optional) {
+        aborted = true;
+        break;
+      }
+    } catch (e) {
+      steps.push({ i, action: a.action, ok: false, ms: Date.now() - t0, error: (e as Error).message });
+      if (!a.optional) {
+        aborted = true;
+        break;
+      }
+    }
+  }
+
+  let final: Record<string, unknown> | undefined;
+  try {
+    const snap = (await handle.executeJavaScript(SNAPSHOT_JS)) as Record<string, unknown>;
+    final = { title: snap.title, url: snap.url, captchaDetected: snap.captchaDetected, text: String(snap.text ?? "").slice(0, 4000) };
+  } catch {
+    /* guest may have navigated away / detached */
+  }
+
+  return {
+    status: denied ? "denied" : aborted ? "stopped" : "completed",
+    ok: !aborted && !denied,
+    surfaceId: id,
+    executed: steps.length,
+    total: actions.length,
+    denied,
+    steps,
+    final,
+  };
+}
+
+async function handleBrowserNavigate(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
   const o = (args ?? {}) as Record<string, unknown>;
   const url = typeof o["url"] === "string" ? o["url"] : "";
   if (!/^https?:\/\/.+/i.test(url)) throw new Error("BROWSER_006: url must be an absolute http(s) URL");
-  const perm = await permissionBroker.ensure(url, "browserNavigate");
+  const perm = await permissionBroker.ensure(url, "browserNavigate", {
+    agentClient: ctx?.agentClient,
+    agentSessionId: ctx?.agentSessionId,
+    agentProject: ctx?.agentProject,
+  });
   if (!perm.allowed) return { status: "denied", reason: perm.decision, url };
   const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
   assertHumanControlFree(id);
-  await handle.loadURL(url);
+  await loadUrlCapped(handle, url);
   return { status: "navigated", surfaceId: id, url, permission: perm.decision };
 }
 

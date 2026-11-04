@@ -3,6 +3,7 @@
 export interface AuthError {
   code: string;
   message: string;
+  retryable?: boolean;
 }
 
 export type AuthStatus = 'checking' | 'unauthorized' | 'authorized';

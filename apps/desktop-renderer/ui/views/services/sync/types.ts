@@ -42,4 +42,6 @@ export interface SessionDoc {
   /** Coding-agent linkage (pi / Claude Code session that created it). */
   agentSessionId?: string;
   agentClient?: string;
+  /** Repo-root project the session originated from (agent sessions). */
+  agentProject?: string;
 }

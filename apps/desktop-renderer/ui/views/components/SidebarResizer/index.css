@@ -1,40 +1,28 @@
+/* Aligned with the chat dock's resizer feel: transparent 7px hit zone,
+   slim rounded grip that turns primary on hover/drag — no background fill. */
 .ha-sidebar-resizer {
-  flex: 0 0 5px;
+  flex: 0 0 7px;
   cursor: col-resize;
   position: relative;
   background: transparent;
-  border-right: 1px solid var(--ha-border);
-  transition: background 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin-right: -1px;
 }
 
-.ha-sidebar-resizer:hover {
-  background: var(--ha-primary-light);
-}
-
-/* Active-drag indicator: strong accent + wider visual hit */
-.ha-sidebar-resizer--active {
-  background: var(--ha-primary);
-  box-shadow: 0 0 0 1px var(--ha-primary-hover);
-}
-
-.ha-sidebar-resizer-grip {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+.ha-sidebar-resizer::after {
+  content: "";
   width: 2px;
-  height: 26px;
-  border-radius: 1px;
-  background: var(--ha-border);
-  opacity: 0;
-  transition: opacity 0.12s;
+  height: 28px;
+  border-radius: 2px;
+  background: var(--ha-border, #333a45);
+  transition: background 0.12s;
 }
 
-.ha-sidebar-resizer:hover .ha-sidebar-resizer-grip,
-.ha-sidebar-resizer--active .ha-sidebar-resizer-grip {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.85);
+.ha-sidebar-resizer:hover::after,
+.ha-sidebar-resizer--active::after {
+  background: var(--ha-primary, #6366f8);
 }
 
 body.ha-resizing-sidebar {

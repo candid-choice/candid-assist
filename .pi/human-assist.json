@@ -1,0 +1,6 @@
+{
+  "_comment": "Human Assist pi extension config. All keys optional; env HARNESS_MCP_WS_URL overrides wsUrl.",
+  "wsUrl": "ws://127.0.0.1:43179/mcp",
+  "maxRetries": 5,
+  "footer": true
+}

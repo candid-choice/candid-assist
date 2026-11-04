@@ -1,4 +1,6 @@
-import { Controller, Post, Get, Headers, UseGuards, Req, Body, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Headers, UseGuards, Req, Res, Query, Body, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { Response } from 'express';
+import { randomBytes } from 'crypto';
 import { AuthService } from './auth.service';
 import { AuthGuard } from './auth.guard';
 import { UserRequest } from './interfaces';
@@ -15,11 +17,105 @@ export class AuthController {
   }
 
   /**
+   * Create an email/password account (public endpoint). Returns the same
+   * shape as /auth/verify so the desktop can treat it as a session.
+   */
+  @Post('register')
+  async register(
+    @Body('email') email: string,
+    @Body('password') password: string,
+    @Body('displayName') displayName?: string,
+  ) {
+    if (!email || !password) {
+      throw new BadRequestException('email and password are required');
+    }
+    if (password.length < 6) {
+      throw new BadRequestException('password must be at least 6 characters');
+    }
+    return this.authService.emailAuth('register', email, password, displayName);
+  }
+
+  /**
+   * Email/password sign-in (public endpoint).
+   */
+  @Post('login')
+  async login(@Body('email') email: string, @Body('password') password: string) {
+    if (!email || !password) {
+      throw new BadRequestException('email and password are required');
+    }
+    return this.authService.emailAuth('login', email, password);
+  }
+
+  // ── Google OAuth (public) ─────────────────────────────────────────────
+
+  /** Whether Google sign-in is configured (drives the button UI). */
+  @Get('google/status')
+  googleStatus() {
+    return { enabled: this.authService.googleAuthConfigured() };
+  }
+
+  /** Kick off the authorization-code flow (302 to Google). */
+  @Get('google/start')
+  googleStart(@Res() res: Response) {
+    if (!this.authService.googleAuthConfigured()) {
+      throw new UnauthorizedException(
+        'Google sign-in is not configured (set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)',
+      );
+    }
+    const state = randomBytes(16).toString('hex');
+    // Short-lived CSRF cookie; also sent back as the OAuth state param.
+    res.setHeader(
+      'Set-Cookie',
+      `ha_gstate=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`,
+    );
+    res.redirect(this.authService.googleAuthorizeUrl(state));
+  }
+
+  /** OAuth callback: exchange, federate into Firebase, bounce to renderer. */
+  @Get('google/callback')
+  async googleCallback(
+    @Req() req: { cookies?: Record<string, string>; headers: Record<string, unknown> },
+    @Res() res: Response,
+    @Query('code') code: string,
+    @Query('state') state: string,
+  ) {
+    const cookie =
+      req.cookies?.ha_gstate ??
+      String(req.headers.cookie ?? '')
+        .split(';')
+        .map((c) => c.trim())
+        .find((c) => c.startsWith('ha_gstate='))
+        ?.split('=')[1];
+    if (!code) {
+      throw new BadRequestException('code is required');
+    }
+    if (!state || !cookie || state !== cookie) {
+      throw new UnauthorizedException('OAuth state mismatch — please retry');
+    }
+
+    const { token, user } = await this.authService.googleAuth(code);
+    const rendererUrl = process.env.GOOGLE_RENDERER_URL || 'http://localhost:3616';
+    const frag = new URLSearchParams({
+      ha_auth: token,
+      ha_user: JSON.stringify(user),
+    });
+    res.clearCookie('ha_gstate');
+    res.redirect(`${rendererUrl}/?${new URLSearchParams({ via: 'google' }).toString()}#${frag.toString()}`);
+  }
+
+  /**
    * Verify a Firebase ID token (public endpoint).
    * Desktop signs in via Firebase client SDK, then exchanges the ID
    * token here for the user profile. Returns the same token back so
    * the renderer can use it as its Bearer credential.
    */
+  /** Silent re-mint of an expired (1h) Firebase ID token. Public (no auth
+   * header): the caller's ID token is exactly what expired. */
+  @Post('refresh-token')
+  async refreshToken(@Body('refreshToken') refreshToken: string) {
+    return this.authService.refreshIdToken(refreshToken);
+  }
+
   @Post('verify')
   async verifyToken(@Body('token') token: string) {
     if (!token) {

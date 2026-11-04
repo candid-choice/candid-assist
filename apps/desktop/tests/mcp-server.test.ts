@@ -122,7 +122,7 @@ describe('MCP tools/call router', () => {
       method: 'POST',
       body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
     }).then((r) => r.json());
-    expect(res.result.tools).toHaveLength(27);
+    expect(res.result.tools).toHaveLength(30);
     const names = res.result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain('openBrowserSurface');
     expect(names).toContain('openInputSurface');
@@ -333,7 +333,7 @@ describe('domain permission gate (tool integration)', () => {
   });
 });
 
-describe('domain recipes (googleSearch / readGoogleDriveDoc / scrapeSelective)', () => {
+describe('domain recipes (browserListSurfaces / readGoogleDriveDoc / scrapeSelective)', () => {
   async function callTool(name: string, args: Record<string, unknown>, id: number) {
     const { processMcpMessage } = await import('../src/mcp-server');
     const out = await processMcpMessage({
@@ -359,28 +359,28 @@ describe('domain recipes (googleSearch / readGoogleDriveDoc / scrapeSelective)',
     return calls;
   }
 
-  it('googleSearch returns parsed results through the consent-gated pipeline', async () => {
+  it('browserListSurfaces reports open surfaces with URL and guest state', async () => {
     const { permissionBroker } = await import('../src/mcp-server');
-    permissionBroker.syncGrants(['google.com']);
-    installFakeGuest(() => JSON.stringify({
-      pageTitle: 'mount sinai - Google Search',
-      url: 'https://www.google.com/search?q=mount+sinai',
-      loginRequired: false,
-      results: [{ title: 'Mount Sinai', link: 'https://www.mountsinai.org' }],
-      pageText: 'Mount Sinai is a hospital system…',
-    }));
-    const res = await callTool('googleSearch', { query: 'mount sinai', surfaceId: 'surf_recipe' }, 950);
-    expect(res.result.tool).toBe('googleSearch');
-    expect(res.result.query).toBe('mount sinai');
-    expect(res.result.results).toHaveLength(1);
-    expect(res.result.results[0].link).toBe('https://www.mountsinai.org');
+    permissionBroker.syncGrants(['gaswork.com']);
+    installFakeGuest(() => JSON.stringify({ ok: true, kind: 'text', count: 1, data: 'x' }));
+    const opened = await callTool('openBrowserSurface', { url: 'https://www.gaswork.com/' }, 949);
+    const id = opened.result.surfaceId as string;
+    registerGuest(id, 78);
+    const res = await callTool('browserListSurfaces', {}, 950);
+    expect(res.result.ok).toBe(true);
+    expect(res.result.count).toBeGreaterThanOrEqual(1);
+    const entry = (res.result.surfaces as Array<Record<string, unknown>>).find((s) => s.surfaceId === id);
+    expect(entry?.url).toBe('https://www.gaswork.com/');
+    expect(entry?.guestAttached).toBe(true);
   });
 
-  it('googleSearch rejects empty and oversized queries', async () => {
-    const res = await callTool('googleSearch', { query: '   ' }, 951);
-    expect(res.error.message).toMatch(/MCP_001/);
-    const big = await callTool('googleSearch', { query: 'x'.repeat(513) }, 952);
-    expect(big.error.message).toMatch(/MCP_012/);
+  it('browserListSurfaces lists non-browser surfaces too (process manager)', async () => {
+    const opened = await callTool('openProcessManager', {}, 951);
+    const res = await callTool('browserListSurfaces', {}, 952);
+    const entry = (res.result.surfaces as Array<Record<string, unknown>>).find(
+      (s) => s.surfaceId === opened.result.surfaceId,
+    );
+    expect(entry?.type).toBe('processManager');
   });
 
   it('readGoogleDriveDoc triggers handoff when sign-in is required', async () => {
@@ -415,39 +415,6 @@ describe('domain recipes (googleSearch / readGoogleDriveDoc / scrapeSelective)',
     expect(res.result.tool).toBe('scrapeSelective');
     expect(res.result.selector).toBe('.price-card');
     expect(res.result.text).toContain('Pro $30');
-  });
-});
-
-describe('googleSearch bot-check handoff', () => {
-  it('auto-hands-off when Google shows an unusual-traffic page', async () => {
-    const { permissionBroker } = await import('../src/mcp-server');
-    const { setGuestResolver, registerGuest } = await import('../src/guest-registry');
-    permissionBroker.syncGrants(['google.com']);
-    setGuestResolver(() => ({
-      executeJavaScript: async () => JSON.stringify({
-        pageTitle: 'https://www.google.com/sorry/index',
-        url: 'https://www.google.com/sorry/index',
-        loginRequired: false,
-        botCheck: true,
-        results: [],
-        pageText: 'Our systems have detected unusual traffic from your computer network.',
-      }),
-      loadURL: async () => {},
-      capturePage: async () => ({ toDataURL: () => 'data:,' }),
-      isDestroyed: () => false,
-      getURL: () => 'https://google.com/sorry',
-    }));
-    registerGuest('surf_bot', 78);
-    const { processMcpMessage } = await import('../src/mcp-server');
-    const out = await processMcpMessage({
-      jsonrpc: '2.0',
-      method: 'tools/call',
-      params: { name: 'googleSearch', arguments: { query: 'mount sinai', surfaceId: 'surf_bot' } },
-      id: 960,
-    } as never);
-    const res = (out as { response: Record<string, any> }).response;
-    expect(res.result.status).toBe('human-check-required');
-    expect(res.result.handoff).toBe(true);
   });
 });
 
@@ -509,8 +476,7 @@ describe('recipe loadURL abort tolerance', () => {
     permissionBroker.syncGrants(['google.com']);
     setGuestResolver(() => ({
       executeJavaScript: async () => JSON.stringify({
-        pageTitle: 'ok', url: 'https://ok', loginRequired: false,
-        results: [{ title: 'x', link: 'https://x' }], pageText: 'ok',
+        pageTitle: 'ok', url: 'https://ok', matched: 1, text: 'ok',
       }),
       loadURL: async () => { throw new Error(" (-3) loading 'https://www.google.com/search'"); },
       capturePage: async () => ({ toDataURL: () => 'data:,' }),
@@ -521,16 +487,16 @@ describe('recipe loadURL abort tolerance', () => {
     const { processMcpMessage } = await import('../src/mcp-server');
     const out = await processMcpMessage({
       jsonrpc: '2.0', method: 'tools/call',
-      params: { name: 'googleSearch', arguments: { query: 'x', surfaceId: 'surf_abort' } },
+      params: { name: 'scrapeSelective', arguments: { url: 'https://www.google.com/search?q=x', surfaceId: 'surf_abort' } },
       id: 985,
     } as never);
     const res = (out as { response: Record<string, any> }).response;
-    expect(res.result.results).toHaveLength(1);
+    expect(res.result.text).toBe('ok');
   });
 });
 
 describe('recipe dedupe (same task → same tab)', () => {
-  it('re-navigates the existing tab for an identical search query', { timeout: 20_000 }, async () => {
+  it('re-navigates the existing tab for an identical URL', { timeout: 20_000 }, async () => {
     const { permissionBroker, processMcpMessage, __resetSurfacesForTest } = await import('../src/mcp-server');
     const { setGuestResolver, registerGuest } = await import('../src/guest-registry');
     __resetSurfacesForTest();
@@ -545,7 +511,7 @@ describe('recipe dedupe (same task → same tab)', () => {
     const call = async (id: number) => {
       const out = await processMcpMessage({
         jsonrpc: '2.0', method: 'tools/call',
-        params: { name: 'googleSearch', arguments: { query: 'duplicate test' } }, id,
+        params: { name: 'scrapeSelective', arguments: { url: 'https://www.google.com/search?q=duplicate+test' } }, id,
       } as never);
       return (out as { response: Record<string, any> }).response;
     };
@@ -565,5 +531,163 @@ describe('recipe dedupe (same task → same tab)', () => {
     // second call must reuse the first surface, not open a twin
     expect(b.result!.surfaceId).toBe(a.result!.surfaceId);
     // (surface reused — no twin opened)
+  });
+
+  // ── browserExecuteActions (plan-then-run sequence) ────────────────────
+  async function seqCall(name: string, args: Record<string, unknown>, id: number) {
+    const { processMcpMessage } = await import('../src/mcp-server');
+    const out = await processMcpMessage({
+      jsonrpc: '2.0', method: 'tools/call', params: { name, arguments: args }, id,
+    } as never);
+    return (out as { response: Record<string, never> }).response as { result?: Record<string, any>; error?: { message: string } };
+  }
+  function installSeqGuest(behavior: (js: string) => unknown) {
+    setGuestResolver(() => ({
+      executeJavaScript: async (code: string) => behavior(code),
+      loadURL: async () => {},
+      capturePage: async () => ({ toDataURL: () => 'data:,' }),
+      isDestroyed: () => false,
+      getURL: () => 'https://gasworks.example',
+    }));
+  }
+
+  it('browserExecuteActions runs a click→extract→assert→waitFor→press sequence', async () => {
+    installSeqGuest((code) => {
+      if (code.includes('wantPresent')) return { ok: true, found: true };            // assert
+      if (code.includes('20000')) return { ok: true, kind: 'text', count: 1, data: 'locum anesthesiology' }; // extract
+      if (code.includes('el.click')) return { ok: true, desc: 'a#jobs' };             // click
+      if (code.includes('KeyboardEvent')) return { ok: true };                        // press
+      if (code.startsWith('!!')) return true;                                         // waitFor(exists)
+      if (code.includes('captchaDetected')) return { title: 'Gasworks', url: 'https://gasworks.example', text: 'openings', captchaDetected: false };
+      return { ok: true };
+    });
+    registerGuest('surf_seq', 88);
+    const res = await seqCall('browserExecuteActions', {
+      surfaceId: 'surf_seq',
+      actions: [
+        { action: 'click', selector: '#jobs' },
+        { action: 'extract', extract: { kind: 'text', selector: '.listing' } },
+        { action: 'assert', contains: 'anesthesiology' },
+        { action: 'waitFor', selector: '.listing', timeoutMs: 100 },
+        { action: 'press', key: 'Enter' },
+      ],
+    }, 1001);
+    expect(res.error).toBeUndefined();
+    expect(res.result!.status).toBe('completed');
+    expect(res.result!.ok).toBe(true);
+    expect(res.result!.total).toBe(5);
+    expect(res.result!.steps.every((s: { ok: boolean }) => s.ok)).toBe(true);
+    expect(res.result!.final.title).toBe('Gasworks');
+  });
+
+  it('browserExecuteActions stops at the first failed non-optional step', async () => {
+    installSeqGuest((code) => {
+      if (code.includes('el.click')) return { ok: false };                            // click fails
+      if (code.includes('captchaDetected')) return { title: 'x', url: 'u', text: '', captchaDetected: false };
+      return { ok: true };
+    });
+    registerGuest('surf_seq2', 89);
+    const res = await seqCall('browserExecuteActions', {
+      surfaceId: 'surf_seq2',
+      actions: [
+        { action: 'click', selector: '#nope' },
+        { action: 'extract', extract: { kind: 'text' } },
+      ],
+    }, 1002);
+    expect(res.result!.status).toBe('stopped');
+    expect(res.result!.ok).toBe(false);
+    expect(res.result!.executed).toBe(1);
+  });
+
+  it('browserExecuteActions continues past an optional step failure', async () => {
+    installSeqGuest((code) => {
+      if (code.includes('el.click')) return { ok: false };                            // optional click fails
+      if (code.includes('20000')) return { ok: true, kind: 'text', count: 1, data: 'ok' };
+      if (code.includes('captchaDetected')) return { title: 'x', url: 'u', text: '', captchaDetected: false };
+      return { ok: true };
+    });
+    registerGuest('surf_seq3', 90);
+    const res = await seqCall('browserExecuteActions', {
+      surfaceId: 'surf_seq3',
+      actions: [
+        { action: 'click', selector: '#maybe', optional: true },
+        { action: 'extract', extract: { kind: 'text' } },
+      ],
+    }, 1003);
+    expect(res.result!.status).toBe('completed');
+    expect(res.result!.executed).toBe(2);
+    expect(res.result!.steps[0].ok).toBe(false);
+    expect(res.result!.steps[1].ok).toBe(true);
+  });
+
+  it('browserExecuteActions rejects unknown action and empty list', async () => {
+    const bad = await seqCall('browserExecuteActions', { surfaceId: 'x', actions: [{ action: 'fly' }] }, 1004);
+    expect(bad.error?.message).toMatch(/ACTION_003/);
+    const empty = await seqCall('browserExecuteActions', { surfaceId: 'x', actions: [] }, 1005);
+    expect(empty.error?.message).toMatch(/ACTION_001/);
+  });
+
+});
+
+describe('delegateTask (internal-model planner → sequence engine)', () => {
+  async function callDT(args: Record<string, unknown>, id: number) {
+    const { processMcpMessage } = await import('../src/mcp-server');
+    const out = await processMcpMessage({
+      jsonrpc: '2.0', method: 'tools/call', params: { name: 'delegateTask', arguments: args }, id,
+    } as never);
+    return (out as { response: Record<string, never> }).response as { result?: Record<string, any>; error?: { message: string } };
+  }
+
+  it('plans a goal with the internal model and executes the actions on an attached surface', async () => {
+    const { permissionBroker } = await import('../src/mcp-server');
+    const { setGuestResolver, registerGuest } = await import('../src/guest-registry');
+    permissionBroker.syncGrants(['gaswork.com']);
+    const planJson = {
+      summary: 'open gaswork and extract listings',
+      actions: [
+        { action: 'navigate', url: 'https://www.gaswork.com/' },
+        { action: 'extract', extract: { kind: 'text' }, optional: true },
+      ],
+    };
+    const origFetch = global.fetch;
+    global.fetch = (async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith('/models')) {
+        return { ok: true, json: async () => ({ data: [{ id: 'planner' }] }) } as unknown as Response;
+      }
+      expect(JSON.parse(String(init?.body)).model).toBe('planner');
+      return {
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: JSON.stringify(planJson) } }] }),
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+    try {
+      setGuestResolver(() => ({
+        executeJavaScript: async (code: string) => {
+          if (code.includes('captchaDetected')) {
+            return { title: 'GasWork', url: 'https://www.gaswork.com/', text: 'Anesthesiologist', captchaDetected: false };
+          }
+          return { ok: true, kind: 'text', count: 1, data: 'locum listings' };
+        },
+        loadURL: async () => {},
+        capturePage: async () => ({ toDataURL: () => 'data:,' }),
+        isDestroyed: () => false,
+        getURL: () => 'https://www.gaswork.com/',
+      }));
+      registerGuest('surf_dt', 96);
+      const res = await callDT({ goal: 'open gaswork.com and pull the listings', surfaceId: 'surf_dt' }, 1050);
+      expect(res.error).toBeUndefined();
+      expect(res.result!.ok).toBe(true);
+      expect(res.result!.summary).toContain('gaswork');
+      expect(res.result!.status).toBe('completed');
+      expect(res.result!.steps.every((s: { ok: boolean }) => s.ok)).toBe(true);
+      expect(res.result!.final.title).toBe('GasWork');
+    } finally {
+      global.fetch = origFetch;
+    }
+  });
+
+  it('delegateTask requires a goal', async () => {
+    const res = await callDT({}, 1051);
+    expect(res.error!.message).toMatch(/MCP_021/);
   });
 });

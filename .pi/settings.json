@@ -1,15 +1,8 @@
 {
-  "defaultModel": "nvidia/Qwen3.8-Flash-Next-FP4-Local",
   "defaultProvider": "qwen38-next",
+  "defaultModel": "nvidia/Qwen3.8-Flash-Next-FP4-Local",
   "lastChangelogVersion": "1.2.0",
-  "packages": [
-    "npm:@0xkobold/pi-mcp@0.4.0",
-    "@anthropics/frontend-design",
-    "@anthropics/code-review",
-    "@anthropics/playwright",
-    "@anthropics/github",
-    "@anthropics/typescript-lsp"
-  ],
+  "packages": ["npm:pi-playwright", "npm:@sentiolabs/pi-frontend-design"],
   "permissions": {
     "deny": ["WebSearch"]
   }

@@ -15,7 +15,12 @@ describe('PermissionGate', () => {
   afterEach(() => {
     cleanup();
     act(() => {
-      useStore.setState({ pendingPermission: null, browserGrants: [] } as never);
+      useStore.setState({
+        pendingPermission: null,
+        browserGrants: [],
+        grantsByProject: {},
+        consentLog: [],
+      } as never);
     });
     vi.restoreAllMocks();
   });

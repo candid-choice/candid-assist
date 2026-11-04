@@ -10,7 +10,7 @@ user menu now.
 */
 
 import { useEffect, useRef } from "react";
-import { IconSettings, IconLogout, IconLogin, IconTrash } from "@tabler/icons-react";
+import { IconSettings, IconLogout, IconLogin, IconTrash, IconUserPlus } from "@tabler/icons-react";
 import { deleteSession } from "../../services/sync/sync-service";
 import "./index.css";
 
@@ -43,12 +43,18 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
   }, [open]);
 
   const signedIn = Boolean(authToken);
-  const displayName = authUser?.name || authUser?.email || "User";
-  const initial = displayName.charAt(0).toUpperCase();
+  const displayName = signedIn
+    ? authUser?.name || authUser?.email || "User"
+    : "Not signed in";
+  const initial = signedIn ? (authUser?.name || authUser?.email || "U").charAt(0).toUpperCase() : "?";
 
   const handleSignOut = () => {
     clearAuthStorage();
-    useStore.getState().logout();
+    // Sessions belong to the signed-in user — sign-out empties the
+    // workspace (MCP lockdown happens via the auth-provider sync).
+    const st = useStore.getState();
+    st.logout();
+    st.deleteAllSessions();
     setOpen(false);
   };
 
@@ -124,6 +130,20 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
             >
               <IconLogin size={14} />
               <span>Sign in</span>
+            </button>
+          )}
+
+          {!signedIn && (
+            <button
+              className="ha-usermenu-item"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                openSignIn("register");
+              }}
+            >
+              <IconUserPlus size={14} />
+              <span>Create account</span>
             </button>
           )}
 

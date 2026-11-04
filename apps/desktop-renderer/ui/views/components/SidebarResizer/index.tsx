@@ -61,9 +61,7 @@ export function SidebarResizer() {
         title="Drag to resize · double-click to reset"
         onMouseDown={onMouseDown}
         onDoubleClick={() => setSidebarWidth(240)}
-      >
-        <span className="ha-sidebar-resizer-grip" aria-hidden />
-      </div>
+      />
 
       {dragging && (
         // Pure frame lock: captures pointer events for the duration of

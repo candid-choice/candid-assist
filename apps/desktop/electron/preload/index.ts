@@ -30,6 +30,8 @@ export interface DesktopAPI {
     minimize: () => void;
     maximize: () => void;
     close: () => void;
+    /** Keep the native window background in sync with the app theme. */
+    setBackgroundColor: (color: string) => void;
   };
   view: {
     create: (id: string, url: string, bounds: ViewBounds) => void;
@@ -41,6 +43,10 @@ export interface DesktopAPI {
     unregisterGuest: (surfaceId: string) => void;
   };
   /** OS integrations (workspace folder picker etc.). */
+  /** Dev-only helpers (main returns null in packaged builds). */
+  dev?: {
+    getAutoLogin: () => Promise<{ email: string; password: string } | null>;
+  };
   system: {
     pickFolder: () => Promise<string | null>;
     checkForUpdates: () => Promise<{ phase: string; version?: string; error?: string }>;
@@ -51,6 +57,7 @@ export interface DesktopAPI {
   mcp: {
     getStatus: () => Promise<McpStatusPayload>;
     onStatus: (callback: (status: McpStatusPayload) => void) => () => void;
+    setSignedIn: (signedIn: boolean) => Promise<{ ok: boolean; signedIn: boolean }>;
   };
   /** Direct chat with the in-process pi agent (Electron only). */
   chat: {
@@ -65,6 +72,7 @@ export interface DesktopAPI {
       },
     ) => Promise<{ ok: boolean; error?: string }>;
     abort: (sessionId: string) => Promise<{ ok: boolean }>;
+    close?: (sessionId: string) => Promise<{ ok: boolean }>;
     listModels: (
       baseUrl?: string,
     ) => Promise<{ ok: boolean; baseUrl: string; models: string[]; error?: string }>;
@@ -79,6 +87,7 @@ const api: DesktopAPI = {
     minimize: () => ipcRenderer.send('desktop:window:minimize'),
     maximize: () => ipcRenderer.send('desktop:window:maximize'),
     close: () => ipcRenderer.send('desktop:window:close'),
+    setBackgroundColor: (color) => ipcRenderer.send('desktop:window:set-background', color),
   },
   view: {
     create: (id, url, bounds) =>
@@ -104,6 +113,7 @@ const api: DesktopAPI = {
         api: opts?.api,
       }),
     abort: (sessionId) => ipcRenderer.invoke('desktop:chat:abort', { sessionId }),
+    close: (sessionId) => ipcRenderer.invoke('desktop:chat:close', { sessionId }),
     listModels: (baseUrl) => ipcRenderer.invoke('desktop:chat:models', { baseUrl }),
     onEvent: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: { sessionId: string; kind: string; text: string }) =>
@@ -114,6 +124,7 @@ const api: DesktopAPI = {
   },
   mcp: {
     getStatus: () => ipcRenderer.invoke('desktop:mcp:status'),
+    setSignedIn: (signedIn: boolean) => ipcRenderer.invoke('desktop:mcp:set-signed-in', { signedIn }),
     onStatus: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, status: McpStatusPayload) =>
         callback(status);
@@ -122,6 +133,9 @@ const api: DesktopAPI = {
         ipcRenderer.removeListener('desktop:mcp:status', listener);
       };
     },
+  },
+  dev: {
+    getAutoLogin: () => ipcRenderer.invoke('desktop:dev:auto-login'),
   },
   system: {
     pickFolder: () => ipcRenderer.invoke('desktop:workspace:pick'),

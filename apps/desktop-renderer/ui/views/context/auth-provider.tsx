@@ -12,7 +12,8 @@ Usage:
 import { createContext, useContext, useEffect, useState } from 'react';
 
 import { useStore } from '../store';
-import { authService } from '../services/auth/auth-api';
+import { authService, consumeGoogleAuthHash, devAutoLogin, refreshAuthToken } from '../services/auth/auth-api';
+import { syncMcpSignedIn } from '../services/desktop-bridge';
 import type { AuthStatus, AuthUser } from '../services/auth/types';
 
 interface AuthContextValue {
@@ -21,6 +22,7 @@ interface AuthContextValue {
   isLoading: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
+  registerWithEmail: (email: string, password: string, displayName?: string) => Promise<void>;
   signOut: () => void;
 }
 
@@ -37,17 +39,87 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const authToken = useStore((s) => s.authToken);
+  // Signed-out harness owns no user: keep the MCP server locked (zero
+  // agent tools) until somebody signs in.
+  useEffect(() => {
+    syncMcpSignedIn(Boolean(authToken));
+  }, [authToken]);
+
   const storeLogin = useStore((s) => s.login);
   const storeLogout = useStore((s) => s.logout);
   const setAuthError = useStore((s) => s.setAuthError);
 
   // Check for existing token on mount
   useEffect(() => {
+    const unauthorizedFallback = async (
+      explicit?: { email: string; password: string } | null,
+    ) => {
+      authService.signOut();
+      const auto = await devAutoLogin(explicit ?? null);
+      if (auto) {
+        // eslint-disable-next-line no-console
+        console.log('[auth] dev auto-login succeeded');
+        setUser(auto.user);
+        storeLogin(auto.token, auto.user);
+        setStatus('authorized');
+        return;
+      }
+      storeLogout();
+      setStatus('unauthorized');
+    };
+
+    // Dev login via URL params (localhost only): ?ha_dev_email=..&ha_dev_password=..
+    // Electron appends these in dev from HA_DEV_AUTOLOGIN_* in the root .env.
+    const readDevLoginParams = (): { email: string; password: string } | null => {
+      if (typeof window === 'undefined' || !/localhost|127\.0\.0\.1/.test(window.location.hostname)) return null;
+      const params = new URLSearchParams(window.location.search);
+      const email = params.get('ha_dev_email');
+      const password = params.get('ha_dev_password');
+      if (!email || !password) return null;
+      params.delete('ha_dev_email');
+      params.delete('ha_dev_password');
+      const qs = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
+      return { email, password };
+    };
+
     const checkAuth = async () => {
+      // eslint-disable-next-line no-console
+      console.log('[auth] checkAuth start');
+      const devParams = readDevLoginParams();
+      if (devParams) {
+        const auto = await devAutoLogin(devParams);
+        if (auto) {
+          // eslint-disable-next-line no-console
+          console.log('[auth] URL dev auto-login succeeded');
+          setUser(auto.user);
+          storeLogin(auto.token, auto.user);
+          setStatus('authorized');
+          setIsLoading(false);
+          return;
+        }
+      }
       try {
+        // One-time Google OAuth handoff: backend redirected us back with
+        // #ha_auth=<token>&ha_user=<json> — adopt it as the session.
+        const googleHandoff = consumeGoogleAuthHash();
+        if (googleHandoff) {
+          setUser(googleHandoff.user);
+          storeLogin(googleHandoff.token, googleHandoff.user);
+          setStatus('authorized');
+          setIsLoading(false);
+          return;
+        }
+
         const token = authService.getStoredToken();
+        // eslint-disable-next-line no-console
+        console.log('[auth] stored token present:', !!token);
         if (!token) {
-          setStatus('unauthorized');
+          // Dev-only: Electron may supply emulator credentials (root .env
+          // HA_DEV_AUTOLOGIN_*) so inner app work skips the login screen;
+          // otherwise drop stale persisted auth so the splash can't be skipped.
+          await unauthorizedFallback();
           setIsLoading(false);
           return;
         }
@@ -65,21 +137,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           storeLogin(token, data.user as AuthUser);
           setStatus('authorized');
         } else {
-          // Invalid/expired token — clear and show sign-in
-          authService.signOut();
-          storeLogout();
-          setStatus('unauthorized');
+          // ID token expired (1h TTL) or invalid — try the silent refresh
+          // once before giving up. Without this, reloading the window an
+          // hour after sign-in logs the user out AND locks the harness
+          // (agent tools are gated on the renderer's reported auth state).
+          const refreshed = await refreshAuthToken();
+          if (refreshed) {
+            setUser(refreshed.user);
+            storeLogin(refreshed.token, refreshed.user);
+            setStatus('authorized');
+            return;
+          }
+          // Invalid/expired token — fall back to dev auto-login, then sign-in
+          await unauthorizedFallback();
         }
       } catch {
-        authService.signOut();
-        storeLogout();
-        setStatus('unauthorized');
+        // Transient backend outage (restart, network blip): do NOT punish an
+        // existing session — a stored token stays trusted until the backend
+        // explicitly rejects it; the periodic recheck will retry verification.
+        if (!authService.getStoredToken()) {
+          await unauthorizedFallback();
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
     checkAuth();
+    // Self-healing recheck: recovers without user action after a backend
+    // (re)start, a crashed-then-restored watch build, or a reload that
+    // landed while Nest was mid-compile.
+    const recheck = setInterval(() => void checkAuth(), 60_000);
+    return () => clearInterval(recheck);
   }, []);
 
   const signInWithGoogle = async () => {
@@ -118,6 +207,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const registerWithEmail = async (email: string, password: string, displayName?: string) => {
+    setIsLoading(true);
+    try {
+      const token = await authService.registerWithEmail(email, password, displayName);
+      const user = authService.getUser();
+      if (user) {
+        setUser(user);
+      }
+      storeLogin(token, user ?? undefined);
+      setStatus('authorized');
+    } catch (err: any) {
+      setAuthError(err.message || 'Registration failed');
+      setStatus('unauthorized');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const signOut = () => {
     authService.signOut();
     storeLogout();
@@ -127,7 +234,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ status, user, isLoading, signInWithGoogle, signInWithEmail, signOut }}
+      value={{ status, user, isLoading, signInWithGoogle, signInWithEmail, registerWithEmail, signOut }}
     >
       {children}
     </AuthContext.Provider>

@@ -1,0 +1,44 @@
+{
+  "project": "candid-assist",
+  "repo": "/Users/szhao/candid-choice/candid-assist",
+  "command": "pnpm run dev",
+  "ports": [
+    3600,
+    3601,
+    3602,
+    3604,
+    3613,
+    3614,
+    3615,
+    3616,
+    43179
+  ],
+  "emulatorPorts": [
+    3602,
+    3613
+  ],
+  "taskName": "candid-assist dev",
+  "openUrls": [
+    "http://localhost:3600/",
+    "http://localhost:3616/?viewPortal=1&wsPort=3614&mcpPort=3615&ha_dev_email=${HA_DEV_AUTOLOGIN_EMAIL}&ha_dev_password=${HA_DEV_AUTOLOGIN_PASSWORD}"
+  ],
+  "healthUrl": "http://127.0.0.1:3615/status",
+  "healthContains": [
+    "\"ok\":true"
+  ],
+  "teardownPorts": [
+    3607,
+    4400,
+    4401,
+    4500,
+    4501,
+    9151
+  ],
+  "slack": {
+    "botToken": "env:SLACK_BOT_TOKEN",
+    "appToken": "env:SLACK_APP_TOKEN",
+    "channel": "env:SLACK_CHANNEL",
+    "postOnComplete": true,
+    "inboundEnabled": true
+  }
+}

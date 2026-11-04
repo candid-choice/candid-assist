@@ -17,6 +17,7 @@ import {
   SignInScreen,
   ToastContainer,
   SessionHarnessBadge,
+  AddSurfaceMenu,
 } from "./components";
 import { useStoreSelector, useStore } from "./store";
 import { deriveSessionTabs, reopenRecordedSurface, pickVisibleSurface } from "./lib/session-tabs";
@@ -56,9 +57,27 @@ function App() {
     if (authToken && signInOpen) closeSignIn();
   }, [authToken, signInOpen, closeSignIn]);
 
-  // Apply theme to <html data-theme> (CSS variables swap)
+  // Apply theme to <html data-theme> (CSS variables swap), and keep the
+  // native Electron window background matching --ha-bg so fast-resize
+  // reveals don't flash a mismatched band.
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
+    try {
+      const bg = getComputedStyle(document.documentElement).getPropertyValue("--ha-bg").trim();
+      const c = document.createElement("canvas");
+      c.width = c.height = 1;
+      const ctx = c.getContext("2d");
+      if (ctx && bg) {
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+        const hex = "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
+        (window as unknown as { desktop?: { window?: { setBackgroundColor?: (c: string) => void } } })
+          .desktop?.window?.setBackgroundColor?.(hex);
+      }
+    } catch {
+      /* background sync is cosmetic only */
+    }
   }, [theme]);
 
   // ── View state ────────────────────────────────────────────────────────
@@ -94,6 +113,19 @@ function App() {
   ) as typeof views;
   const visibleSurface = pickVisibleSurface(activeSession, activeSurface, sessionOpenViews as never[]) as typeof activeSurface;
 
+  // Self-heal a dangling activeSessionId (persisted across restarts but
+  // no longer present in the synced sessions list): a ghost id hides the
+  // whole tab strip and every surface, with no way back for the user.
+  useEffect(() => {
+    if (!activeSessionId || activeSession) return;
+    const st = useStore.getState();
+    if (!st.sessions.some((s) => s.id === activeSessionId) && st.sessions.length > 0) {
+      // eslint-disable-next-line no-console
+      console.log("[app] clearing dangling activeSessionId " + activeSessionId);
+      st.setActiveSession(null);
+    }
+  }, [activeSessionId, activeSession]);
+
   const handleTabClick = useCallback(
     (id: string) => {
       if (id.startsWith("saved:")) {
@@ -115,6 +147,13 @@ function App() {
     () => closeHelpPalette(),
     [closeHelpPalette],
   );
+
+  // ── Auth gate ──────────────────────────────────────────────────────────
+  // Nothing in the workspace (sessions, surfaces, chat, MCP tools) exists
+  // before a signed-in user: show the splash → sign-in/registration card.
+  if (!authToken) {
+    return <SignInScreen />;
+  }
 
   return (
     <div className="human-assist-app h-full w-full">
@@ -144,24 +183,25 @@ function App() {
             {/* ── Chrome bar: only when there are tabs — an empty bar
                  would float a stray horizontal line beside the sidebar
                  divider ── */}
-            {addressBarTabs.length > 0 && (
+            {addressBarTabs.length > 0 || activeSession ? (
               <div className="ha-chrome-bar">
-                <AddressBar
-                  tabs={addressBarTabs}
-                  activeTabId={visibleSurface?.id ?? null}
-                  onTabClick={handleTabClick}
-                  onTabClose={closeView}
-                />
+                {addressBarTabs.length > 0 && (
+                  <AddressBar
+                    tabs={addressBarTabs}
+                    activeTabId={visibleSurface?.id ?? null}
+                    onTabClick={handleTabClick}
+                    onTabClose={closeView}
+                  />
+                )}
+                <AddSurfaceMenu />
                 <div className="ha-chrome-spacer" />
               </div>
-            )}
+            ) : null}
 
             {/* ── Content ── */}
             <div className="ha-chrome-content" style={{ overflow: "hidden" }}>
               {settingsOpen ? (
                 <SettingsScreen onBack={() => setSettingsOpen(false)} />
-              ) : signInOpen ? (
-                <SignInScreen onDismiss={closeSignIn} />
               ) : !activeSessionId ? (
                 <SessionEmptyGuide session={null} />
               ) : activeSession && sessionTabs.length === 0 ? (
@@ -175,6 +215,15 @@ function App() {
                       isViewActive={view.id === (visibleSurface?.id ?? activeViewId)}
                     />
                   ))}
+                  {/* Off-screen (100vh) retention for OTHER sessions' live
+                      surfaces: <webview> guests die on unmount, so hidden
+                      tabs would never be drivable again until re-visited —
+                      agent flows raced the human switching sessions. */}
+                  {(views as unknown as Array<{ id: string }>)
+                    .filter((v) => !sessionOpenViews.some((s) => s.id === v.id))
+                    .map((view) => (
+                      <SurfaceHost key={view.id} config={view as never} isViewActive={false} />
+                    ))}
                   {sessionOpenViews.length === 0 && <AppSessionDetail />}
                 </>
               )}

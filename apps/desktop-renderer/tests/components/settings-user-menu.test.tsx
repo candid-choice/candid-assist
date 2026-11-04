@@ -41,9 +41,9 @@ afterEach(() => {
 // ── UserMenu ───────────────────────────────────────────────────────────────
 
 describe('UserMenu', () => {
-  it('shows generic chip when signed out', () => {
+  it('shows a "Not signed in" chip when signed out', () => {
     render(<UserMenu onOpenSettings={() => {}} />);
-    expect(screen.getByLabelText('Account menu').textContent).toContain('User');
+    expect(screen.getByLabelText('Account menu').textContent).toContain('Not signed in');
   });
 
   it('shows user name + initial when signed in', () => {

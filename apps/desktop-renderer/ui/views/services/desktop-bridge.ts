@@ -20,6 +20,7 @@ export interface DesktopAPI {
     minimize: () => void;
     maximize: () => void;
     close: () => void;
+    setBackgroundColor?: (color: string) => void;
   };
   view: {
     create: (id: string, url: string, bounds: DesktopViewBounds) => void;
@@ -45,6 +46,7 @@ export interface DesktopAPI {
       },
     ) => Promise<{ ok: boolean; error?: string }>;
     abort: (sessionId: string) => Promise<{ ok: boolean }>;
+    close?: (sessionId: string) => Promise<{ ok: boolean }>;
     listModels?: (
       baseUrl?: string,
     ) => Promise<{ ok: boolean; baseUrl: string; models: string[]; error?: string }>;
@@ -53,6 +55,10 @@ export interface DesktopAPI {
   mcp?: {
     getStatus: () => Promise<McpStatusPayload>;
     onStatus: (callback: (status: McpStatusPayload) => void) => () => void;
+    setSignedIn?: (signedIn: boolean) => Promise<unknown>;
+  };
+  dev?: {
+    getAutoLogin: () => Promise<{ email: string; password: string } | null>;
   };
   system?: {
     pickFolder: () => Promise<string | null>;
@@ -70,7 +76,7 @@ export interface McpStatusPayload {
     agentConnected: boolean;
     agentCount: number;
     agents: Array<{ name: string; ip: string; lastSeen: number }>;
-    wsAgents?: Array<{ client: string; agentSessionId: string | null }>;
+    wsAgents?: Array<{ client: string; agentSessionId: string | null; project?: string | null }>;
   };
   ws: { clients: number };
 }
@@ -84,4 +90,15 @@ export function getDesktopBridge(): DesktopAPI | undefined {
   // a plain browser must never be able to observe MCP presence or
   // live surfaces. The desktop app is the only runtime that does.
   return api?.runtime === 'electron' ? api : undefined;
+}
+
+/** Tell the Electron main process whether a user is signed in, so the MCP
+ *  server can lock down agent tools while signed out (no owner → no tools).
+ *  No-op outside Electron / on older preload bridges. */
+export function syncMcpSignedIn(signedIn: boolean): void {
+  try {
+    void getDesktopBridge()?.mcp?.setSignedIn?.(signedIn);
+  } catch {
+    // bridge absent (tests/standalone browser) — nothing to sync
+  }
 }
