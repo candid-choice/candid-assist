@@ -69,6 +69,11 @@ const STATUS_KEY = "__haStackStatus";
 const LISTENERS_KEY = "__haStackStatusListeners";
 const PROBE_MS = 20_000;
 const CRASH_THROTTLE_MS = 90_000;
+/** Consecutive failed probes required before a crash is acted on.
+ *  Guards against transient windows (e.g. another session's keeper
+ *  restarting the stack, or Electron's single-instance lock churn) that
+ *  would otherwise tear down a healthy stack on one flaky sample. */
+const CRASH_CONFIRMATIONS = 2;
 const PROBE_TIMEOUT_MS = 1_200;
 
 function readJson(path: string): Record<string, unknown> | null {
@@ -264,6 +269,7 @@ export default function devStack(pi: ExtensionAPI) {
   let lastActionAt = 0;
   let urlsOpenedForThisLaunch = false;
   let startAttempts = 0;
+  let crashStreak = 0;
   let cfg: DevStackConfig | null = null;
 
   const send = (text: string) => {
@@ -336,6 +342,7 @@ export default function devStack(pi: ExtensionAPI) {
         const logPath = c.logFile || join(tmpdir(), `${c.project.replace(/[^\w.-]/g, "_")}-dev-stack.log`);
         setStackStatus({ alive: h.up, env: h.emu ? "dev" : "prod", partial: !h.up && h.any, logPath });
         if (h.up) {
+          crashStreak = 0;
           if (!wasHealthy) {
             startAttempts = 0;
             openConfiguredUrls(c);
@@ -344,6 +351,12 @@ export default function devStack(pi: ExtensionAPI) {
           return;
         }
         if (wasHealthy) {
+          crashStreak++;
+          if (crashStreak < CRASH_CONFIRMATIONS) {
+            setStackStatus({ partial: true });
+            return; // not yet confirmed — sample again next probe
+          }
+          crashStreak = 0;
           relaunch(c, "watchdog: components lost", c.ports.filter((_, i) => !h.all[i]));
         } else if (startAttempts === 0) {
           // Never up since session start and nothing managed → launch once.
