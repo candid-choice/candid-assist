@@ -132,7 +132,23 @@ function createWindow(): void {
         `&ha_dev_email=${encodeURIComponent(process.env.HA_DEV_AUTOLOGIN_EMAIL)}` +
         `&ha_dev_password=${encodeURIComponent(process.env.HA_DEV_AUTOLOGIN_PASSWORD)}`;
     }
-    void win.loadURL(url);
+    void win.loadURL(url).catch(() => { /* did-fail-load handles retry */ });
+    // Dev: the renderer is a Next dev server that may still be compiling
+    // (or restarting) when the window first navigates — a failed initial
+    // load used to leave a dead window (no WsService, no agents, no
+    // surfaces). Retry until the first successful load sticks.
+    let initialLoads = 0;
+    win.webContents.on('did-fail-load', (_e, code, desc, failedUrl) => {
+      console.error(`[window] did-fail-load ${code} ${desc} ${failedUrl}`);
+      if (!win?.webContents.isLoadingMainFrame() && initialLoads < 20 && win?.webContents.getURL().startsWith(baseUrl)) {
+        initialLoads++;
+        setTimeout(() => { void win?.loadURL(url).catch(() => { /* retried */ }); }, 1500);
+      } else if (initialLoads < 20 && !/favicon/.test(failedUrl || '')) {
+        // Mid-session failures (e.g. renderer restart) also self-heal.
+        initialLoads++;
+        setTimeout(() => { void win?.loadURL(url).catch(() => { /* retried */ }); }, 2000);
+      }
+    });
 
   // Debug mode (HA_DEBUG=1 pnpm run dev): detached DevTools + full
   // console stream — what the app received (tool calls, goals) is

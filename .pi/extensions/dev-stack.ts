@@ -63,6 +63,12 @@ interface DevStackConfig {
   taskName?: string;
   logFile?: string;
   openUrls?: string[];
+  /** Optional deep health: HTTP(S) URL that must answer 2xx once every
+   *  port is up. Catches "ports bound but the app is a zombie" (e.g.
+   *  Electron window failed its initial load). */
+  healthUrl?: string;
+  /** Substrings that must all appear in healthUrl's response body. */
+  healthContains?: string[];
 }
 
 const STATUS_KEY = "__haStackStatus";
@@ -167,6 +173,21 @@ function portOpen(port: number, timeoutMs = PROBE_TIMEOUT_MS): Promise<boolean> 
   });
 }
 
+async function deepHealth(cfg: DevStackConfig): Promise<boolean> {
+  if (!cfg.healthUrl) return true;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3_000);
+    const res = await fetch(cfg.healthUrl, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return false;
+    const body = await res.text();
+    return (cfg.healthContains ?? []).every((s) => body.includes(s));
+  } catch {
+    return false;
+  }
+}
+
 async function health(cfg: DevStackConfig) {
   const all = await Promise.all(cfg.ports.map((p) => portOpen(p)));
   let emu = false;
@@ -174,7 +195,9 @@ async function health(cfg: DevStackConfig) {
     const e = await Promise.all(cfg.emulatorPorts.map((p) => portOpen(p, 600)));
     emu = e.every(Boolean);
   }
-  return { up: all.every(Boolean), any: all.some(Boolean), all, emu };
+  const portsUp = all.every(Boolean);
+  const deep = portsUp ? await deepHealth(cfg) : false;
+  return { up: portsUp && deep, any: all.some(Boolean), all, emu };
 }
 
 // ── Managed process (detached, own group, logged) ─────────────────────────
