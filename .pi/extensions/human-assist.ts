@@ -535,8 +535,12 @@ export default function humanAssist(pi: ExtensionAPI) {
         const unsubStatus = conn.onStatus(() => tui.requestRender());
         const unsubBranch = footerData.onBranchChange(() => tui.requestRender());
         const unsubStack = onStackStatus(() => tui.requestRender());
+        // Context %/tokens shift continuously; refresh the footer even
+        // when no other event fires.
+        const tick = setInterval(() => tui.requestRender(), 10_000) as ReturnType<typeof setInterval> & { unref?: () => void };
+        tick.unref?.();
         return {
-          dispose: () => { unsubStatus(); unsubBranch(); unsubStack(); },
+          dispose: () => { unsubStatus(); unsubBranch(); unsubStack(); clearInterval(tick); },
           invalidate() { /* text derives from live state at render time */ },
           render(width: number): string[] {
             const st = conn.status;
@@ -555,9 +559,20 @@ export default function humanAssist(pi: ExtensionAPI) {
                 input += m.usage.input; output += m.usage.output; cost += m.usage.cost.total;
               }
             }
-            const fmt = (n: number) => (n < 1000 ? `${n}` : `${(n / 1000).toFixed(1)}k`);
-            const tokens = theme.fg("dim", ` ↑${fmt(input)} ↓${fmt(output)} $${cost.toFixed(3)}`);
-            const left = ha + tokens;
+            // Human-readable totals: k below 1M, M above (2 dp).
+            const fmt = (n: number) =>
+              n < 1000 ? `${n}`
+                : n < 1_000_000 ? `${(n / 1000).toFixed(1)}k`
+                  : `${(n / 1_000_000).toFixed(2)}M`;
+            const tokens = theme.fg("dim", ` ↑${fmt(input)} ↓${fmt(output)} $${cost.toFixed(cost < 1 ? 3 : 2)}`);
+            // Context-window usage (restores what the default footer
+            // shows that our custom footer replaces).
+            const usage = (ctx as unknown as { getContextUsage?: () => { tokens: number | null; contextWindow: number; percent: number | null } | undefined }).getContextUsage?.();
+            const ctxSeg = usage && usage.percent != null && usage.tokens != null
+              ? theme.fg(usage.percent > 85 ? "error" : usage.percent > 65 ? "warning" : "dim",
+                  ` ctx ${usage.percent.toFixed(0)}% (${fmt(usage.tokens)}/${fmt(usage.contextWindow)})`)
+              : "";
+            const left = ha + tokens + ctxSeg;
             const model = ctx.model?.id ?? "no-model";
             const branch = footerData.getGitBranch();
             const right = theme.fg("dim", `${model}${branch ? ` (${branch})` : ""}`);
