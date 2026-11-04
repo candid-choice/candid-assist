@@ -532,18 +532,27 @@ export default function humanAssist(pi: ExtensionAPI) {
     // Left = HA status dot + project + token stats, right = model (branch).
     if (cfg.footer !== false) try {
       ctx.ui?.setFooter?.((tui: { requestRender(): void }, theme: { fg(k: string, s: string): string }, footerData: { onBranchChange(cb: () => void): () => void; getGitBranch(): string | null }) => {
-        const unsubStatus = conn.onStatus(() => tui.requestRender());
-        const unsubBranch = footerData.onBranchChange(() => tui.requestRender());
-        const unsubStack = onStackStatus(() => tui.requestRender());
+        // /reload safety: the TUI instance may be torn down underneath us
+        // when pi reloads/replaces the UI — every callback below must be
+        // non-throwing (an uncaught exception in a timer/renderer kills
+        // the whole pi process).
+        const safeRender = () => { try { tui.requestRender(); } catch { /* TUI gone */ } };
+        const unsubStatus = conn.onStatus(safeRender);
+        const unsubBranch = (() => { try { return footerData.onBranchChange(safeRender); } catch { return () => { /* ok */ }; } })();
+        const unsubStack = onStackStatus(safeRender);
         // Context %/tokens shift continuously; refresh the footer even
         // when no other event fires.
-        const tick = setInterval(() => tui.requestRender(), 10_000) as ReturnType<typeof setInterval> & { unref?: () => void };
+        const tick = setInterval(safeRender, 10_000) as ReturnType<typeof setInterval> & { unref?: () => void };
         tick.unref?.();
         return {
-          dispose: () => { unsubStatus(); unsubBranch(); unsubStack(); clearInterval(tick); },
+          dispose: () => {
+            try { unsubStatus(); unsubBranch(); unsubStack(); } catch { /* ok */ }
+            clearInterval(tick);
+          },
           invalidate() { /* text derives from live state at render time */ },
           render(width: number): string[] {
-            const st = conn.status;
+            try {
+              const st = conn.status;
             const dot = st === "connected" ? "●" : st === "connecting" ? "◐" : "○";
             const proj = resolveProject();
             const haColor = st === "connected" ? "success" : st === "connecting" ? "warning" : "error";
@@ -578,6 +587,10 @@ export default function humanAssist(pi: ExtensionAPI) {
             const right = theme.fg("dim", `${model}${branch ? ` (${branch})` : ""}`);
             const pad = " ".repeat(Math.max(1, width - visibleWidth(left) - visibleWidth(right)));
             return [truncateToWidth(left + pad + right, width)];
+            } catch {
+              // Never let a footer render error take down the session.
+              try { return [truncateToWidth(" HA", width)]; } catch { return [""]; }
+            }
           },
         };
       });
