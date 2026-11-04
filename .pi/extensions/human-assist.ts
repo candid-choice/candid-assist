@@ -26,6 +26,7 @@ import { CONFIG_DIR_NAME, type ExtensionAPI } from "@earendil-works/pi-coding-ag
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { getStackStatus, onStackStatus } from "./stack-status";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
@@ -517,15 +518,20 @@ export default function humanAssist(pi: ExtensionAPI) {
       ctx.ui?.setFooter?.((tui: { requestRender(): void }, theme: { fg(k: string, s: string): string }, footerData: { onBranchChange(cb: () => void): () => void; getGitBranch(): string | null }) => {
         const unsubStatus = conn.onStatus(() => tui.requestRender());
         const unsubBranch = footerData.onBranchChange(() => tui.requestRender());
+        const unsubStack = onStackStatus(() => tui.requestRender());
         return {
-          dispose: () => { unsubStatus(); unsubBranch(); },
+          dispose: () => { unsubStatus(); unsubBranch(); unsubStack(); },
           invalidate() { /* text derives from live state at render time */ },
           render(width: number): string[] {
             const st = conn.status;
             const dot = st === "connected" ? "●" : st === "connecting" ? "◐" : "○";
             const proj = resolveProject();
             const haColor = st === "connected" ? "success" : st === "connecting" ? "warning" : "error";
-            const ha = theme.fg(haColor, ` HA ${dot}`) + theme.fg("dim", proj ? ` ${proj}` : "");
+            const stack = getStackStatus();
+            const stackSeg = stack.alive
+              ? theme.fg("success", ` ⌁${stack.env}`)
+              : theme.fg("error", " ⌁down");
+            const ha = theme.fg(haColor, ` HA ${dot}`) + stackSeg + theme.fg("dim", proj ? ` ${proj}` : "");
             let input = 0, output = 0, cost = 0;
             for (const e of ctx.sessionManager.getBranch()) {
               if (e.type === "message" && e.message.role === "assistant") {
