@@ -20,7 +20,8 @@
   "taskName": "candid-assist dev",
   "openUrls": [
     "http://localhost:3600/",
-    "http://localhost:3616/?viewPortal=1&wsPort=3614&mcpPort=3615&ha_dev_email=${HA_DEV_AUTOLOGIN_EMAIL}&ha_dev_password=${HA_DEV_AUTOLOGIN_PASSWORD}"
+    "http://localhost:3607/",
+    "http://localhost:3616/?viewPortal=1&wsPort=3614&mcpPort=3615&ha_dev_email=dev@candidchoice.ai&ha_dev_password=Dev!2345"
   ],
   "healthUrl": "http://127.0.0.1:3615/status",
   "healthContains": [
