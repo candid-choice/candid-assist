@@ -47,7 +47,7 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { connect } from "node:net";
-import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -202,7 +202,7 @@ function stopManaged(c: DevStackConfig): boolean {
     killGroup(pid);
     stopped = true;
   }
-  try { require("node:fs").unlinkSync(pf); } catch { /* ok */ }
+  try { unlinkSync(pf); } catch { /* ok */ }
   return stopped;
 }
 
@@ -237,6 +237,23 @@ function tailLog(path: string, n: number): string {
   } catch {
     return "(log not readable yet)";
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function logPathFor(c: DevStackConfig): string {
+  return c.logFile || join(tmpdir(), `${c.project.replace(/[^\w.-]/g, "_")}-dev-stack.log`);
+}
+
+/** Keep one previous generation so each session starts a clean log. */
+function rotateLog(path: string): void {
+  try {
+    if (existsSync(path) && readFileSync(path).length > 0) {
+      renameSync(path, `${path}.1`);
+    }
+  } catch { /* best effort */ }
 }
 
 // ── Extension ─────────────────────────────────────────────────────────────
@@ -284,6 +301,30 @@ export default function devStack(pi: ExtensionAPI) {
       `error, fix it (the watchdog will bring the stack back on its next healthy probe); if the crash loop exceeds ` +
       `${startAttempts} attempts, stop and ask me. Do not start another copy of the stack yourself.`,
     );
+  };
+
+  /** Kill the whole stack (managed group, or pattern fallback), wait for
+   *  ports to release, rotate the log, and bring it back fresh. Used on
+   *  session start so each pi session owns a synchronized log window. */
+  const teardownAndRelaunch = async (c: DevStackConfig): Promise<{ pid: number; logPath: string } | null> => {
+    const stopped = stopManaged(c);
+    if (!stopped) {
+      // Not ours (started by hand or an earlier process): best-effort
+      // pattern kill — scoped to this project's concurrently tree.
+      try {
+        const child = spawn("pkill", ["-f", `${c.project}.*concurrently`], { stdio: "ignore" });
+        child.on("error", () => { /* not found */ });
+      } catch { /* ignore */ }
+    }
+    const deadline = Date.now() + 12_000;
+    for (;;) {
+      const h = await health(c);
+      if (!h.any) break;
+      if (Date.now() > deadline) break;
+      await sleep(400);
+    }
+    rotateLog(logPathFor(c));
+    return startManaged(c);
   };
 
   const probe = () => {
@@ -338,9 +379,19 @@ export default function devStack(pi: ExtensionAPI) {
       const h = await health(cfg);
       setStackStatus({ alive: h.up, env: h.emu ? "dev" : "prod", partial: !h.up && h.any });
       if (h.up) {
-        wasHealthy = true;
-        ctx.ui?.notify?.(`dev-stack: "${cfg.project}" stack already running`, "info");
-        openConfiguredUrls(cfg);
+        // Session-start resync: kill whatever is running and relaunch, so
+        // this session's keeper owns a fresh log it can tail and act on.
+        wasHealthy = false;
+        urlsOpenedForThisLaunch = false;
+        setStackStatus({ alive: false, partial: false });
+        const spawned = await teardownAndRelaunch(cfg);
+        startAttempts = spawned ? 1 : 0;
+        lastActionAt = Date.now();
+        if (spawned) {
+          ctx.ui?.notify?.(`dev-stack: restarted for session sync (pid ${spawned.pid}) → ${spawned.logPath} (previous log kept as .1)`, "info");
+        } else {
+          ctx.ui?.notify?.(`dev-stack: stack was up but RESTART FAILED to spawn — check ${logPath}`, "error");
+        }
       } else {
         // Start it ourselves — no external supervisor required.
         const managed = readPid(pidFileFor(cfg));
