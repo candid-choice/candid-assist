@@ -25,6 +25,7 @@
 import { CONFIG_DIR_NAME, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { spawn } from "node:child_process";
 import { Type } from "typebox";
 
 // Stack status reader — reads the contract published by the dev-stack
@@ -537,6 +538,41 @@ export default function humanAssist(pi: ExtensionAPI) {
         // non-throwing (an uncaught exception in a timer/renderer kills
         // the whole pi process).
         const safeRender = () => { try { tui.requestRender(); } catch { /* TUI gone */ } };
+        // Columns of the "Dev …" segment recorded by the last render,
+        // so handleMouse can hit-test a click on it (pi routes
+        // fullscreen mouse events to footer components).
+        const devCols = { start: -1, end: -1 };
+        const openStackOutput = async () => {
+          try {
+            const actions = (globalThis as Record<string, unknown>).__haStackActions as
+              | { getOutputSnapshot?: () => { command: string; cwd: string; logPath: string; tail: string } | null }
+              | undefined;
+            const snap = actions?.getOutputSnapshot?.();
+            if (!snap) {
+              ctx.ui?.notify?.("dev-stack: nothing supervised (no config or keeper not started)", "warning");
+              return;
+            }
+            // Preferred: render the stack's own supervised output in
+            // the desktop app's terminal surface (the data is the
+            // command pi-dev-stack launched — not anything HA runs).
+            if (conn.status === "connected") {
+              try {
+                await conn.callTool("open_terminal_output", {
+                  command: `${snap.command}  ·  cwd ${snap.cwd}  ·  tail of ${snap.logPath}`,
+                  output: snap.tail,
+                });
+                ctx.ui?.notify?.("dev-stack: output opened in the desktop app", "info");
+                return;
+              } catch { /* app unavailable — fall through to OS open */ }
+            }
+            const child = spawn("open", [snap.logPath], { detached: true, stdio: "ignore" });
+            child.on("error", () => ctx.ui?.notify?.(`dev-stack log: ${snap.logPath}`, "info"));
+            child.unref();
+            ctx.ui?.notify?.(`dev-stack: opened ${snap.logPath}`, "info");
+          } catch (e) {
+            ctx.ui?.notify?.(`dev-stack: could not open output (${String(e)})`, "error");
+          }
+        };
         const unsubStatus = conn.onStatus(safeRender);
         const unsubBranch = (() => { try { return footerData.onBranchChange(safeRender); } catch { return () => { /* ok */ }; } })();
         const unsubStack = onStackStatus(safeRender);
@@ -550,6 +586,16 @@ export default function humanAssist(pi: ExtensionAPI) {
             clearInterval(tick);
           },
           invalidate() { /* text derives from live state at render time */ },
+          /** Fullscreen-mode mouse: a left-click on the Dev segment
+           *  opens the supervised stack output. */
+          handleMouse(ev: { type: string; button: string; x: number; y: number }): { handled?: boolean } | undefined {
+            if (ev.type === "click" && ev.button === "left" && ev.y === 0
+              && devCols.start >= 0 && ev.x >= devCols.start && ev.x < devCols.end) {
+              void openStackOutput();
+              return { handled: true };
+            }
+            return undefined;
+          },
           render(width: number): string[] {
             try {
               const st = conn.status;
@@ -560,6 +606,9 @@ export default function humanAssist(pi: ExtensionAPI) {
             const stackIcon = stack.alive ? "●" : stack.partial ? "◐" : "○";
             const stackColor = stack.alive ? "success" : stack.partial ? "warning" : "error";
             const stackSeg = theme.fg(stackColor, ` ${stack.env[0].toUpperCase() + stack.env.slice(1)} ${stackIcon}`);
+            // Record hit columns for the Dev segment (render-local).
+            devCols.start = visibleWidth(` HA ${dot}`);
+            devCols.end = devCols.start + visibleWidth(` ${stack.env[0].toUpperCase() + stack.env.slice(1)} ${stackIcon}`);
             const ha = theme.fg(haColor, ` HA ${dot}`) + stackSeg + theme.fg("dim", proj ? ` ${proj}` : "");
             let input = 0, output = 0, cost = 0;
             for (const e of ctx.sessionManager.getBranch()) {
