@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
-import { FirebaseService } from '../../firebase/firebase.service';
-import { SurfaceDoc, SurfaceStatus, SurfaceUserResponse } from '../../types/firestore';
+import { Injectable, NotFoundException, Logger } from "@nestjs/common";
+import { FirebaseService } from "../../firebase/firebase.service";
+import { SurfaceDoc, SurfaceStatus, SurfaceUserResponse } from "../../types/firestore";
 
 @Injectable()
 export class SurfaceService {
@@ -11,8 +11,8 @@ export class SurfaceService {
   private getDb() {
     const db = this.firebaseService.getFirestore();
     if (!db) {
-      this.logger.error('Firestore not available — Firebase not configured');
-      throw new Error('Firebase Firestore not available');
+      this.logger.error("Firestore not available — Firebase not configured");
+      throw new Error("Firebase Firestore not available");
     }
     return db;
   }
@@ -29,12 +29,12 @@ export class SurfaceService {
     const db = this.getDb();
     const now = new Date().toISOString();
 
-    const docRef = await db.collection('surfaces').add({
+    const docRef = await db.collection("surfaces").add({
       sessionId,
       type: surfaceType,
       prompt,
       url: url || null,
-      status: 'open',
+      status: "open",
       userResponse: null,
       claudeResponse: null,
       createdAt: now,
@@ -47,7 +47,7 @@ export class SurfaceService {
       type: surfaceType,
       prompt,
       url: url || null,
-      status: 'open',
+      status: "open",
       userResponse: null,
       claudeResponse: null,
       createdAt: now,
@@ -60,16 +60,16 @@ export class SurfaceService {
    */
   async getSurfacesBySession(sessionId: string): Promise<SurfaceDoc[]> {
     const db = this.getDb();
-    
+
     const snapshot = await db
-      .collection('surfaces')
-      .where('sessionId', '==', sessionId)
-      .orderBy('createdAt', 'asc')
+      .collection("surfaces")
+      .where("sessionId", "==", sessionId)
+      .orderBy("createdAt", "asc")
       .get();
 
-    return snapshot.docs.map(doc => ({
+    return snapshot.docs.map((doc) => ({
       id: doc.id,
-      ...doc.data() as Omit<SurfaceDoc, 'id'>,
+      ...(doc.data() as Omit<SurfaceDoc, "id">),
     }));
   }
 
@@ -78,7 +78,7 @@ export class SurfaceService {
    */
   async getSurface(surfaceId: string): Promise<SurfaceDoc | null> {
     const db = this.getDb();
-    const surfaceDoc = await db.collection('surfaces').doc(surfaceId).get();
+    const surfaceDoc = await db.collection("surfaces").doc(surfaceId).get();
 
     if (!surfaceDoc.exists) {
       return null;
@@ -86,7 +86,7 @@ export class SurfaceService {
 
     return {
       id: surfaceDoc.id,
-      ...surfaceDoc.data() as Omit<SurfaceDoc, 'id'>,
+      ...(surfaceDoc.data() as Omit<SurfaceDoc, "id">),
     };
   }
 
@@ -95,28 +95,25 @@ export class SurfaceService {
    */
   async getOpenSurfaces(sessionId: string): Promise<SurfaceDoc[]> {
     const db = this.getDb();
-    
+
     const snapshot = await db
-      .collection('surfaces')
-      .where('sessionId', '==', sessionId)
-      .where('status', '==', 'open')
+      .collection("surfaces")
+      .where("sessionId", "==", sessionId)
+      .where("status", "==", "open")
       .get();
 
-    return snapshot.docs.map(doc => ({
+    return snapshot.docs.map((doc) => ({
       id: doc.id,
-      ...doc.data() as Omit<SurfaceDoc, 'id'>,
+      ...(doc.data() as Omit<SurfaceDoc, "id">),
     }));
   }
 
   /**
    * Update surface status
    */
-  async updateSurfaceStatus(
-    surfaceId: string,
-    status: SurfaceStatus,
-  ): Promise<void> {
+  async updateSurfaceStatus(surfaceId: string, status: SurfaceStatus): Promise<void> {
     const db = this.getDb();
-    await db.collection('surfaces').doc(surfaceId).update({
+    await db.collection("surfaces").doc(surfaceId).update({
       status,
       updatedAt: new Date().toISOString(),
     });
@@ -125,20 +122,17 @@ export class SurfaceService {
   /**
    * Add user response to a surface (append-only)
    */
-  async addResponse(
-    surfaceId: string,
-    response: SurfaceUserResponse,
-  ): Promise<void> {
+  async addResponse(surfaceId: string, response: SurfaceUserResponse): Promise<void> {
     const db = this.getDb();
-    
+
     // Surfaces are append-only - create a new document with the response
-    const surfaceDoc = await db.collection('surfaces').doc(surfaceId).get();
+    const surfaceDoc = await db.collection("surfaces").doc(surfaceId).get();
     if (!surfaceDoc.exists) {
-      throw new NotFoundException('Surface not found');
+      throw new NotFoundException("Surface not found");
     }
 
     const currentData = surfaceDoc.data();
-    const newDocRef = await db.collection('surfaces').add({
+    const newDocRef = await db.collection("surfaces").add({
       ...currentData,
       id: undefined, // Firestore will assign new ID
       userResponse: response,
@@ -146,7 +140,7 @@ export class SurfaceService {
     });
 
     // Update original surface to point to latest response
-    await db.collection('surfaces').doc(surfaceId).update({
+    await db.collection("surfaces").doc(surfaceId).update({
       userResponse: response,
       updatedAt: new Date().toISOString(),
     });
@@ -160,8 +154,8 @@ export class SurfaceService {
     claudeResponse: any, // SurfaceClaudeResponse
   ): Promise<void> {
     const db = this.getDb();
-    
-    await db.collection('surfaces').doc(surfaceId).update({
+
+    await db.collection("surfaces").doc(surfaceId).update({
       claudeResponse,
       updatedAt: new Date().toISOString(),
     });
@@ -172,8 +166,8 @@ export class SurfaceService {
    */
   async dismissSurface(surfaceId: string): Promise<void> {
     const db = this.getDb();
-    await db.collection('surfaces').doc(surfaceId).update({
-      status: 'dismissed',
+    await db.collection("surfaces").doc(surfaceId).update({
+      status: "dismissed",
       updatedAt: new Date().toISOString(),
     });
   }

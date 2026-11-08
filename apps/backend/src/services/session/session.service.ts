@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
-import { FirebaseService } from '../../firebase/firebase.service';
-import { SessionDoc, EmbeddedSurface, SessionStatus } from '../../types/firestore';
+import { Injectable, NotFoundException, Logger } from "@nestjs/common";
+import { FirebaseService } from "../../firebase/firebase.service";
+import { SessionDoc, EmbeddedSurface, SessionStatus } from "../../types/firestore";
 
 @Injectable()
 export class SessionService {
@@ -11,8 +11,8 @@ export class SessionService {
   private getDb() {
     const db = this.firebaseService.getFirestore();
     if (!db) {
-      this.logger.error('Firestore not available — Firebase not configured');
-      throw new Error('Firebase Firestore not available');
+      this.logger.error("Firestore not available — Firebase not configured");
+      throw new Error("Firebase Firestore not available");
     }
     return db;
   }
@@ -44,7 +44,7 @@ export class SessionService {
     const docRef = await db.collection(this.sessionsPath(userId)).add({
       userId,
       title,
-      status: 'active',
+      status: "active",
       surfaces: [] as EmbeddedSurface[],
       createdAt: now,
       updatedAt: now,
@@ -58,7 +58,7 @@ export class SessionService {
       id: docRef.id,
       userId,
       title,
-      status: 'active',
+      status: "active",
       surfaces: [],
       createdAt: now,
       updatedAt: now,
@@ -74,14 +74,14 @@ export class SessionService {
 
     const snapshot = await db
       .collection(this.sessionsPath(userId))
-      .where('status', '==', 'active')
-      .orderBy('updatedAt', 'desc')
+      .where("status", "==", "active")
+      .orderBy("updatedAt", "desc")
       .limit(20)
       .get();
 
     return snapshot.docs.map((doc) => ({
       id: doc.id,
-      ...(doc.data() as Omit<SessionDoc, 'id'>),
+      ...(doc.data() as Omit<SessionDoc, "id">),
     }));
   }
 
@@ -93,13 +93,13 @@ export class SessionService {
 
     const snapshot = await db
       .collection(this.sessionsPath(userId))
-      .orderBy('updatedAt', 'desc')
+      .orderBy("updatedAt", "desc")
       .limit(20)
       .get();
 
     return snapshot.docs.map((doc) => ({
       id: doc.id,
-      ...(doc.data() as Omit<SessionDoc, 'id'>),
+      ...(doc.data() as Omit<SessionDoc, "id">),
     }));
   }
 
@@ -108,10 +108,7 @@ export class SessionService {
    */
   async getSession(userId: string, sessionId: string): Promise<SessionDoc | null> {
     const db = this.getDb();
-    const sessionDoc = await db
-      .collection(this.sessionsPath(userId))
-      .doc(sessionId)
-      .get();
+    const sessionDoc = await db.collection(this.sessionsPath(userId)).doc(sessionId).get();
 
     if (!sessionDoc.exists) {
       return null;
@@ -119,7 +116,7 @@ export class SessionService {
 
     return {
       id: sessionDoc.id,
-      ...(sessionDoc.data() as Omit<SessionDoc, 'id'>),
+      ...(sessionDoc.data() as Omit<SessionDoc, "id">),
     };
   }
 
@@ -128,27 +125,25 @@ export class SessionService {
    */
   async updateSessionTitle(userId: string, sessionId: string, title: string): Promise<void> {
     const db = this.getDb();
-    await db
-      .collection(this.sessionsPath(userId))
-      .doc(sessionId)
-      .update({
-        title,
-        updatedAt: new Date().toISOString(),
-      });
+    await db.collection(this.sessionsPath(userId)).doc(sessionId).update({
+      title,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   /**
    * Update session status
    */
-  async updateSessionStatus(userId: string, sessionId: string, status: SessionStatus): Promise<void> {
+  async updateSessionStatus(
+    userId: string,
+    sessionId: string,
+    status: SessionStatus,
+  ): Promise<void> {
     const db = this.getDb();
-    await db
-      .collection(this.sessionsPath(userId))
-      .doc(sessionId)
-      .update({
-        status,
-        updatedAt: new Date().toISOString(),
-      });
+    await db.collection(this.sessionsPath(userId)).doc(sessionId).update({
+      status,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   /**
@@ -156,14 +151,11 @@ export class SessionService {
    */
   async archiveSession(userId: string, sessionId: string): Promise<void> {
     const db = this.getDb();
-    await db
-      .collection(this.sessionsPath(userId))
-      .doc(sessionId)
-      .update({
-        status: 'done',
-        archivedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
+    await db.collection(this.sessionsPath(userId)).doc(sessionId).update({
+      status: "done",
+      archivedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   /**
@@ -171,10 +163,7 @@ export class SessionService {
    */
   async deleteSession(userId: string, sessionId: string): Promise<void> {
     const db = this.getDb();
-    await db
-      .collection(this.sessionsPath(userId))
-      .doc(sessionId)
-      .delete();
+    await db.collection(this.sessionsPath(userId)).doc(sessionId).delete();
   }
 
   /**
@@ -190,7 +179,7 @@ export class SessionService {
     const sessionRef = db.collection(this.sessionsPath(userId)).doc(sessionId);
     const sessionDoc = await sessionRef.get();
     if (!sessionDoc.exists) {
-      throw new NotFoundException('Session not found');
+      throw new NotFoundException("Session not found");
     }
 
     const currentSurfaces = sessionDoc.data()?.surfaces || [];
@@ -216,15 +205,12 @@ export class SessionService {
     const sessionRef = db.collection(this.sessionsPath(userId)).doc(sessionId);
     const sessionDoc = await sessionRef.get();
     if (!sessionDoc.exists) {
-      throw new NotFoundException('Session not found');
+      throw new NotFoundException("Session not found");
     }
 
-    const currentSurfaces: Array<Record<string, unknown>> =
-      sessionDoc.data()?.surfaces || [];
+    const currentSurfaces: Array<Record<string, unknown>> = sessionDoc.data()?.surfaces || [];
     const updatedSurfaces = currentSurfaces.map((surface) =>
-      surface["surfaceId"] === surfaceId
-        ? { ...surface, userResponse: response }
-        : surface,
+      surface["surfaceId"] === surfaceId ? { ...surface, userResponse: response } : surface,
     );
 
     await sessionRef.update({

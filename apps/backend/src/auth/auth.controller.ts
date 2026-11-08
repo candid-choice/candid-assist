@@ -1,17 +1,29 @@
-import { Controller, Post, Get, Headers, UseGuards, Req, Res, Query, Body, BadRequestException, UnauthorizedException } from '@nestjs/common';
-import { Response } from 'express';
-import { randomBytes } from 'crypto';
-import { AuthService } from './auth.service';
-import { AuthGuard } from './auth.guard';
-import { UserRequest } from './interfaces';
+import {
+  Controller,
+  Post,
+  Get,
+  Headers,
+  UseGuards,
+  Req,
+  Res,
+  Query,
+  Body,
+  BadRequestException,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { Response } from "express";
+import { randomBytes } from "crypto";
+import { AuthService } from "./auth.service";
+import { AuthGuard } from "./auth.guard";
+import { UserRequest } from "./interfaces";
 
-@Controller('auth')
+@Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   private getUser(req: UserRequest) {
     if (!req.user) {
-      throw new BadRequestException('User not authenticated');
+      throw new BadRequestException("User not authenticated");
     }
     return req.user;
   }
@@ -20,87 +32,86 @@ export class AuthController {
    * Create an email/password account (public endpoint). Returns the same
    * shape as /auth/verify so the desktop can treat it as a session.
    */
-  @Post('register')
+  @Post("register")
   async register(
-    @Body('email') email: string,
-    @Body('password') password: string,
-    @Body('displayName') displayName?: string,
+    @Body("email") email: string,
+    @Body("password") password: string,
+    @Body("displayName") displayName?: string,
   ) {
     if (!email || !password) {
-      throw new BadRequestException('email and password are required');
+      throw new BadRequestException("email and password are required");
     }
     if (password.length < 6) {
-      throw new BadRequestException('password must be at least 6 characters');
+      throw new BadRequestException("password must be at least 6 characters");
     }
-    return this.authService.emailAuth('register', email, password, displayName);
+    return this.authService.emailAuth("register", email, password, displayName);
   }
 
   /**
    * Email/password sign-in (public endpoint).
    */
-  @Post('login')
-  async login(@Body('email') email: string, @Body('password') password: string) {
+  @Post("login")
+  async login(@Body("email") email: string, @Body("password") password: string) {
     if (!email || !password) {
-      throw new BadRequestException('email and password are required');
+      throw new BadRequestException("email and password are required");
     }
-    return this.authService.emailAuth('login', email, password);
+    return this.authService.emailAuth("login", email, password);
   }
 
   // ── Google OAuth (public) ─────────────────────────────────────────────
 
   /** Whether Google sign-in is configured (drives the button UI). */
-  @Get('google/status')
+  @Get("google/status")
   googleStatus() {
     return { enabled: this.authService.googleAuthConfigured() };
   }
 
   /** Kick off the authorization-code flow (302 to Google). */
-  @Get('google/start')
+  @Get("google/start")
   googleStart(@Res() res: Response) {
     if (!this.authService.googleAuthConfigured()) {
       throw new UnauthorizedException(
-        'Google sign-in is not configured (set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)',
+        "Google sign-in is not configured (set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)",
       );
     }
-    const state = randomBytes(16).toString('hex');
+    const state = randomBytes(16).toString("hex");
     // Short-lived CSRF cookie; also sent back as the OAuth state param.
-    res.setHeader(
-      'Set-Cookie',
-      `ha_gstate=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`,
-    );
+    res.setHeader("Set-Cookie", `ha_gstate=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`);
     res.redirect(this.authService.googleAuthorizeUrl(state));
   }
 
   /** OAuth callback: exchange, federate into Firebase, bounce to renderer. */
-  @Get('google/callback')
+  @Get("google/callback")
   async googleCallback(
     @Req() req: { cookies?: Record<string, string>; headers: Record<string, unknown> },
     @Res() res: Response,
-    @Query('code') code: string,
-    @Query('state') state: string,
+    @Query("code") code: string,
+    @Query("state") state: string,
   ) {
     const cookie =
       req.cookies?.ha_gstate ??
-      String(req.headers.cookie ?? '')
-        .split(';')
+      String(req.headers.cookie ?? "")
+        .split(";")
         .map((c) => c.trim())
-        .find((c) => c.startsWith('ha_gstate='))
-        ?.split('=')[1];
+        .find((c) => c.startsWith("ha_gstate="))
+        ?.split("=")[1];
     if (!code) {
-      throw new BadRequestException('code is required');
+      throw new BadRequestException("code is required");
     }
     if (!state || !cookie || state !== cookie) {
-      throw new UnauthorizedException('OAuth state mismatch — please retry');
+      throw new UnauthorizedException("OAuth state mismatch — please retry");
     }
 
     const { token, user } = await this.authService.googleAuth(code);
-    const rendererUrl = process.env.GOOGLE_RENDERER_URL || 'http://localhost:3616';
+    const rendererUrl = process.env.GOOGLE_RENDERER_URL || "http://localhost:3616";
     const frag = new URLSearchParams({
       ha_auth: token,
       ha_user: JSON.stringify(user),
     });
-    res.clearCookie('ha_gstate');
-    res.redirect(`${rendererUrl}/?${new URLSearchParams({ via: 'google' }).toString()}#${frag.toString()}`);
+    res.clearCookie("ha_gstate");
+    res.redirect(
+      `${rendererUrl}/?${new URLSearchParams({ via: "google" }).toString()}#${frag.toString()}`,
+    );
   }
 
   /**
@@ -111,15 +122,15 @@ export class AuthController {
    */
   /** Silent re-mint of an expired (1h) Firebase ID token. Public (no auth
    * header): the caller's ID token is exactly what expired. */
-  @Post('refresh-token')
-  async refreshToken(@Body('refreshToken') refreshToken: string) {
+  @Post("refresh-token")
+  async refreshToken(@Body("refreshToken") refreshToken: string) {
     return this.authService.refreshIdToken(refreshToken);
   }
 
-  @Post('verify')
-  async verifyToken(@Body('token') token: string) {
+  @Post("verify")
+  async verifyToken(@Body("token") token: string) {
     if (!token) {
-      throw new BadRequestException('token is required');
+      throw new BadRequestException("token is required");
     }
 
     const decoded = await this.authService.verifyIdToken(token);
@@ -128,8 +139,8 @@ export class AuthController {
       token,
       user: {
         id: decoded.uid,
-        email: decoded.email ?? '',
-        name: decoded.name ?? decoded.email?.split('@')[0] ?? 'User',
+        email: decoded.email ?? "",
+        name: decoded.name ?? decoded.email?.split("@")[0] ?? "User",
         photoURL: decoded.picture ?? undefined,
       },
     };
@@ -138,13 +149,13 @@ export class AuthController {
   /**
    * Verify Firebase ID token and get user profile
    */
-  @Get('me')
+  @Get("me")
   @UseGuards(AuthGuard)
   async getCurrentUser(@Req() req: UserRequest) {
     const user = await this.authService.getUser(this.getUser(req).uid);
-    
+
     if (!user) {
-      throw new BadRequestException('User not found');
+      throw new BadRequestException("User not found");
     }
 
     return user;
@@ -153,7 +164,7 @@ export class AuthController {
   /**
    * Refresh user profile (sync with Firebase auth)
    */
-  @Post('refresh')
+  @Post("refresh")
   @UseGuards(AuthGuard)
   async refreshProfile(@Req() req: UserRequest) {
     // Get fresh user data from Firebase
@@ -164,15 +175,15 @@ export class AuthController {
   /**
    * Update user workspace
    */
-  @Post('workspace')
+  @Post("workspace")
   @UseGuards(AuthGuard)
   async updateWorkspace(
     @Req() req: UserRequest,
-    @Headers('x-workspace-path') workspacePath: string,
-    @Headers('x-git-url') gitUrl?: string,
+    @Headers("x-workspace-path") workspacePath: string,
+    @Headers("x-git-url") gitUrl?: string,
   ) {
     if (!workspacePath) {
-      throw new BadRequestException('Workspace path is required');
+      throw new BadRequestException("Workspace path is required");
     }
 
     await this.authService.updateUserWorkspace(this.getUser(req).uid, {
@@ -187,16 +198,16 @@ export class AuthController {
   /**
    * Update MCP configuration
    */
-  @Post('mcp')
+  @Post("mcp")
   @UseGuards(AuthGuard)
   async updateMcpConfig(
     @Req() req: UserRequest,
-    @Headers('x-mcp-endpoint') endpoint: string,
-    @Headers('x-mcp-active') isActive?: string,
+    @Headers("x-mcp-endpoint") endpoint: string,
+    @Headers("x-mcp-active") isActive?: string,
   ) {
     await this.authService.updateUserMcp(this.getUser(req).uid, {
       endpoint,
-      active: isActive === 'true',
+      active: isActive === "true",
     });
 
     return { success: true };
@@ -205,19 +216,19 @@ export class AuthController {
   /**
    * Update user preferences
    */
-  @Post('preferences')
+  @Post("preferences")
   @UseGuards(AuthGuard)
   async updatePreferences(
     @Req() req: UserRequest,
-    @Headers('x-theme') theme?: 'light' | 'dark',
-    @Headers('x-auto-minimize') autoMinimize?: string,
-    @Headers('x-show-notifications') showNotifications?: string,
+    @Headers("x-theme") theme?: "light" | "dark",
+    @Headers("x-auto-minimize") autoMinimize?: string,
+    @Headers("x-show-notifications") showNotifications?: string,
   ) {
     await this.authService.updateUserPreferences(this.getUser(req).uid, {
-      theme: theme || 'dark',
+      theme: theme || "dark",
       surfaces: {
-        autoMinimize: autoMinimize === 'true' || true,
-        showNotifications: showNotifications !== 'false',
+        autoMinimize: autoMinimize === "true" || true,
+        showNotifications: showNotifications !== "false",
       },
     });
 

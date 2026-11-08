@@ -57,7 +57,7 @@ export interface UserSurfacePreferences {
 
 /** User preferences snapshot. */
 export interface UserPreferences {
-  theme: 'light' | 'dark';
+  theme: "light" | "dark";
   surfaces: UserSurfacePreferences;
 }
 
@@ -84,17 +84,17 @@ export interface UserProfile {
 // ──────────────────────────────────────────────
 
 /** Session status values. */
-export type SessionStatus = 'active' | 'waiting' | 'done' | 'error' | 'dead';
+export type SessionStatus = "active" | "waiting" | "done" | "error" | "dead";
 
 /** User's response on a surface. */
 export interface SurfaceUserResponse {
-  type: 'feedback' | 'approval' | 'dismiss';
+  type: "feedback" | "approval" | "dismiss";
   text: string;
 }
 
 /** Claude / MCP response summary on a surface. */
 export interface SurfaceClaudeResponse {
-  type: 'action' | 'summary' | 'error';
+  type: "action" | "summary" | "error";
   text: string;
 }
 
@@ -145,7 +145,7 @@ export interface SessionDoc {
 // ──────────────────────────────────────────────
 
 /** Surface status values. */
-export type SurfaceStatus = 'open' | 'responding' | 'complete' | 'dismissed';
+export type SurfaceStatus = "open" | "responding" | "complete" | "dismissed";
 
 /**
  * Standalone surface document in the `surfaces` collection.
@@ -172,7 +172,7 @@ export interface SurfaceDoc {
 /** Notification message entry. */
 export interface NotificationMessage {
   id: string;
-  type: 'surface' | 'session' | 'system';
+  type: "surface" | "session" | "system";
   surfaceId: Nullable<string>;
   message: string;
   /** Arbitrary surface/session payload for toast/content. */
@@ -207,20 +207,20 @@ export interface NotificationDoc {
 /** Strongly-typed field path enums for queries. */
 export namespace Fields {
   // sessions
-  export const sessionIdUserId = 'userId' as const;
-  export const sessionIdStatus = 'status' as const;
-  export const sessionIdUpdatedAt = 'updatedAt' as const;
+  export const sessionIdUserId = "userId" as const;
+  export const sessionIdStatus = "status" as const;
+  export const sessionIdUpdatedAt = "updatedAt" as const;
 
   // surfaces
-  export const surfaceSessionId = 'sessionId' as const;
-  export const surfaceStatus = 'status' as const;
+  export const surfaceSessionId = "sessionId" as const;
+  export const surfaceStatus = "status" as const;
 
   // users
-  export const userIdField = 'id' as const;
+  export const userIdField = "id" as const;
 }
 
 /** Firestore index definitions for `firestore.indexes.json`. */
 export interface FirestoreIndexDefinition {
   collectionId: string;
-  fields: Array<{ fieldPath: string; mode: 'ASCENDING' | 'DESCENDING' | 'INDEX_DISABLE' }>;
+  fields: Array<{ fieldPath: string; mode: "ASCENDING" | "DESCENDING" | "INDEX_DISABLE" }>;
 }

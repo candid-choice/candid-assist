@@ -9,7 +9,14 @@ import LandingFooter from "@/components/landing/LandingFooter";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen flex-col bg-ha-bg text-ha-text" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif", WebkitFontSmoothing: "antialiased", MozOsxFontSmoothing: "grayscale" }}>
+    <div
+      className="flex min-h-screen flex-col bg-ha-bg text-ha-text"
+      style={{
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif",
+        WebkitFontSmoothing: "antialiased",
+        MozOsxFontSmoothing: "grayscale",
+      }}
+    >
       <LandingNav />
       <main className="flex-1">
         <LandingHero />

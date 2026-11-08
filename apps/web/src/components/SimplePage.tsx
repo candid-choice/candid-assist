@@ -41,17 +41,13 @@ export default function SimplePage({
             Last updated: {updated}
           </p>
         )}
-        <div className="mt-8 space-y-6 text-sm leading-relaxed [&_a]:underline">
-          {children}
-        </div>
+        <div className="mt-8 space-y-6 text-sm leading-relaxed [&_a]:underline">{children}</div>
         <footer
           className="mt-14 border-t pt-6 text-xs"
           style={{ borderColor: "#e8e4de", color: "#8a8178" }}
         >
-          © {new Date().getFullYear()} Candid Choice, Inc. ·{" "}
-          <Link href="/privacy">Privacy</Link> ·{" "}
-          <Link href="/terms">Terms</Link> ·{" "}
-          <Link href="/contact">Contact</Link>
+          © {new Date().getFullYear()} Candid Choice, Inc. · <Link href="/privacy">Privacy</Link> ·{" "}
+          <Link href="/terms">Terms</Link> · <Link href="/contact">Contact</Link>
         </footer>
       </article>
     </main>
