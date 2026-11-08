@@ -61,7 +61,9 @@
   border-radius: 6px;
   color: var(--ha-text-secondary);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .ha-sidebar-toggle:hover {
@@ -208,7 +210,9 @@
   font-size: 13px;
   color: var(--ha-text-secondary);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .ha-sidebar-footer-btn:hover {
@@ -245,7 +249,9 @@
 }
 
 /* Per-row delete (revealed on hover / focus) */
-.ha-sidebar-item { position: relative; }
+.ha-sidebar-item {
+  position: relative;
+}
 .ha-sidebar-item-delete {
   position: absolute;
   top: 6px;
@@ -264,7 +270,10 @@
   border-radius: 50%;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+  transition:
+    opacity 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
 }
 .ha-sidebar-item:hover .ha-sidebar-item-delete,
 .ha-sidebar-item-delete:focus-visible {
@@ -301,7 +310,10 @@
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    border-color 0.12s;
 }
 .ha-sidebar-search-add:hover {
   color: #fff;

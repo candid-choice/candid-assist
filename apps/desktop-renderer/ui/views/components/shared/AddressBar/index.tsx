@@ -13,12 +13,7 @@ export interface AddressBarProps {
   onTabClose?: (id: string) => void;
 }
 
-export function AddressBar({
-  tabs,
-  activeTabId,
-  onTabClick,
-  onTabClose,
-}: AddressBarProps) {
+export function AddressBar({ tabs, activeTabId, onTabClick, onTabClose }: AddressBarProps) {
   return (
     <div className="ha-address-bar">
       {/* Tab list */}

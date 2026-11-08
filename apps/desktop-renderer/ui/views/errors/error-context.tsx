@@ -9,10 +9,10 @@ Central error hub that:
 Used by all components to report errors consistently.
 */
 
-import { createContext, useContext, useReducer, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useReducer, useCallback, type ReactNode } from "react";
 
-import type { ErrorInfo } from './error-hierarchy';
-import { ErrorCode, ErrorSeverity, HAError, shouldToast } from './error-hierarchy';
+import type { ErrorInfo } from "./error-hierarchy";
+import { ErrorCode, ErrorSeverity, HAError, shouldToast } from "./error-hierarchy";
 
 // ── Error Log Entry ────────────────────────────────────────────────────────
 
@@ -36,14 +36,14 @@ interface ErrorState {
 }
 
 type ErrorAction =
-  | { type: 'ADD_ERROR'; error: ErrorInfo }
-  | { type: 'DISMISS_TOAST'; index: number }
-  | { type: 'CLEAR_INLINE' }
-  | { type: 'DISMISS_OVERLAY'; index: number };
+  | { type: "ADD_ERROR"; error: ErrorInfo }
+  | { type: "DISMISS_TOAST"; index: number }
+  | { type: "CLEAR_INLINE" }
+  | { type: "DISMISS_OVERLAY"; index: number };
 
 function errorReducer(state: ErrorState, action: ErrorAction): ErrorState {
   switch (action.type) {
-    case 'ADD_ERROR': {
+    case "ADD_ERROR": {
       const info = action.error;
       const entry: ErrorLogEntry = {
         id: `err_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -70,13 +70,13 @@ function errorReducer(state: ErrorState, action: ErrorAction): ErrorState {
       return nextState;
     }
 
-    case 'DISMISS_TOAST':
+    case "DISMISS_TOAST":
       return { ...state, toasts: state.toasts.filter((_, idx) => idx !== action.index) };
 
-    case 'CLEAR_INLINE':
+    case "CLEAR_INLINE":
       return { ...state, inline: null };
 
-    case 'DISMISS_OVERLAY':
+    case "DISMISS_OVERLAY":
       return { ...state, overlays: state.overlays.filter((_, idx) => idx !== action.index) };
 
     default:
@@ -116,9 +116,9 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
   const report = useCallback(
     (error: HAError | ErrorInfo) => {
       if (error instanceof HAError) {
-        dispatch({ type: 'ADD_ERROR', error: error.toInfo() });
+        dispatch({ type: "ADD_ERROR", error: error.toInfo() });
       } else {
-        dispatch({ type: 'ADD_ERROR', error });
+        dispatch({ type: "ADD_ERROR", error });
       }
     },
     [dispatch],
@@ -129,8 +129,8 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
       new HAError(
         ErrorCode.SURFACE_RENDER_FAILED,
         ErrorSeverity.P1,
-        'A surface was left hanging — please close it',
-        { recovery: 'Close the surface from the sidebar' },
+        "A surface was left hanging — please close it",
+        { recovery: "Close the surface from the sidebar" },
       ),
     );
   }, [report]);
@@ -141,8 +141,8 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
         new HAError(
           ErrorCode.SURFACE_RENDER_FAILED,
           ErrorSeverity.P1,
-          `Surface ${type} failed to render${details ? `: ${details}` : ''}`,
-          { recovery: 'Close and retry, or open a new surface' },
+          `Surface ${type} failed to render${details ? `: ${details}` : ""}`,
+          { recovery: "Close and retry, or open a new surface" },
         ),
       );
     },
@@ -152,12 +152,9 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
   const reportSessionError = useCallback(
     (msg: string, code?: ErrorCode) => {
       report(
-        new HAError(
-          code ?? ErrorCode.SESSION_UPDATE_FAILED,
-          ErrorSeverity.P1,
-          msg,
-          { recovery: 'Try again or restart the session' },
-        ),
+        new HAError(code ?? ErrorCode.SESSION_UPDATE_FAILED, ErrorSeverity.P1, msg, {
+          recovery: "Try again or restart the session",
+        }),
       );
     },
     [report],
@@ -170,11 +167,11 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
           code ?? ErrorCode.NETWORK_OFFLINE,
           ErrorSeverity.P2,
           code === ErrorCode.NETWORK_OFFLINE
-            ? 'No internet — actions queued locally'
+            ? "No internet — actions queued locally"
             : code === ErrorCode.NETWORK_TIMEOUT
-              ? 'Request timed out'
-              : 'Connection lost',
-          { recovery: 'Check your network and retry' },
+              ? "Request timed out"
+              : "Connection lost",
+          { recovery: "Check your network and retry" },
         ),
       );
     },
@@ -187,8 +184,8 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
         new HAError(
           code ?? ErrorCode.APP_CRASH,
           ErrorSeverity.P0,
-          'Application error — please restart',
-          { recovery: 'Restart the app' },
+          "Application error — please restart",
+          { recovery: "Restart the app" },
         ),
       );
     },
@@ -196,24 +193,24 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
   );
 
   const dismissToast = useCallback((index: number) => {
-    dispatch({ type: 'DISMISS_TOAST', index });
+    dispatch({ type: "DISMISS_TOAST", index });
   }, []);
 
   const dismissInline = useCallback(() => {
-    dispatch({ type: 'CLEAR_INLINE' });
+    dispatch({ type: "CLEAR_INLINE" });
   }, []);
 
   const dismissOverlay = useCallback((index: number) => {
-    dispatch({ type: 'DISMISS_OVERLAY', index });
+    dispatch({ type: "DISMISS_OVERLAY", index });
   }, []);
 
   const clearAll = useCallback(() => {
     state.toasts.forEach((_, index) => {
-      dispatch({ type: 'DISMISS_TOAST', index });
+      dispatch({ type: "DISMISS_TOAST", index });
     });
-    dispatch({ type: 'CLEAR_INLINE' });
+    dispatch({ type: "CLEAR_INLINE" });
     state.overlays.forEach((_, index) => {
-      dispatch({ type: 'DISMISS_OVERLAY', index });
+      dispatch({ type: "DISMISS_OVERLAY", index });
     });
   }, [state.toasts, state.overlays]);
 
@@ -248,6 +245,6 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
  */
 export function useErrors(): ErrorContextValue {
   const ctx = useContext(ErrorContext);
-  if (!ctx) throw new Error('useErrors must be used within ErrorProvider');
+  if (!ctx) throw new Error("useErrors must be used within ErrorProvider");
   return ctx;
 }

@@ -14,25 +14,20 @@ Persistence (offline-first):
   authError, callbacks) is intentionally excluded.
 */
 
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 
-import { idbStorage, PERSIST_KEY } from './persist-middleware';
+import { idbStorage, PERSIST_KEY } from "./persist-middleware";
 
-import type {
-  SurfaceConfig,
-  SurfaceResult,
-  SurfacePayload,
-  BrowserPayload,
-} from '../types';
+import type { SurfaceConfig, SurfaceResult, SurfacePayload, BrowserPayload } from "../types";
 
-import type { AuthUser } from '../services/auth/types';
-import type { SessionDoc } from '../services/sync/types';
+import type { AuthUser } from "../services/auth/types";
+import type { SessionDoc } from "../services/sync/types";
 
 // ── Connection ─────────────────────────────────────────────────────────
 
 /** Runtime WS connection state (never persisted). */
-export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
+export type ConnectionState = "disconnected" | "connecting" | "connected";
 
 /** A live consent prompt awaiting the human's answer. Carries the asking
  * agent + project so the UI can focus the right session and record the
@@ -84,7 +79,7 @@ function unionGrants(grantsByProject: Record<string, string[]>): string[] {
 
 /** User-adjustable preferences (persisted). */
 export interface AppSettings {
-  theme: 'light' | 'dark';
+  theme: "light" | "dark";
   autoMinimize: boolean;
   desktopNotifications: boolean;
   autoCloseSurfaces: boolean;
@@ -93,10 +88,10 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  theme: 'light',
+  theme: "light",
   autoMinimize: true,
   desktopNotifications: true,
-  workspacePath: '',
+  workspacePath: "",
   autoCloseSurfaces: true,
 };
 
@@ -130,13 +125,13 @@ interface AppState {
   // ── UI overlays (transient, not persisted) ────────────────────────────
   composerOpen: boolean;
   signInOpen: boolean;
-  signInMode: 'signin' | 'register';
+  signInMode: "signin" | "register";
   userMenuOpen: boolean;
   settingsOpen: boolean;
   openComposer: () => void;
   closeComposer: () => void;
-  openSignIn: (mode?: 'signin' | 'register') => void;
-  setSignInMode: (mode: 'signin' | 'register') => void;
+  openSignIn: (mode?: "signin" | "register") => void;
+  setSignInMode: (mode: "signin" | "register") => void;
   closeSignIn: () => void;
   setUserMenuOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -163,7 +158,9 @@ interface AppState {
   /** Live WebSocket MCP agents (harness identities) — drives sidebar
    * graying of sessions whose agent has disconnected. */
   mcpAgents: Array<{ client: string; agentSessionId: string | null; project?: string | null }>;
-  setMcpAgents: (agents: Array<{ client: string; agentSessionId: string | null; project?: string | null }>) => void;
+  setMcpAgents: (
+    agents: Array<{ client: string; agentSessionId: string | null; project?: string | null }>,
+  ) => void;
 
   /** Direct-chat transcripts keyed by harness session id. */
   chatBySession: Record<string, ChatMessage[]>;
@@ -178,7 +175,7 @@ interface AppState {
   /** Predefined OpenAI-compatible chat endpoint. */
   chatBaseUrl: string;
   /** Wire protocol for the chat endpoint (endpoint serves both). */
-  chatApi: 'auto' | 'openai-completions' | 'anthropic-messages';
+  chatApi: "auto" | "openai-completions" | "anthropic-messages";
   chatBusy: Record<string, boolean>;
   setChatOpen: (open: boolean) => void;
   setChatWidth: (width: number) => void;
@@ -191,7 +188,7 @@ interface AppState {
   setChatModel: (model: string | null) => void;
   setChatModels: (models: string[]) => void;
   setChatBaseUrl: (url: string) => void;
-  setChatApi: (api: 'auto' | 'openai-completions' | 'anthropic-messages') => void;
+  setChatApi: (api: "auto" | "openai-completions" | "anthropic-messages") => void;
   /** Domains the human granted "always" for agent web access — the
    * flattened union across every project (source the broker enforces).
    * Prefer grantsByProject for review/authoring. */
@@ -222,14 +219,29 @@ interface AppState {
   setPendingPermission: (p: PendingPermission | null) => void;
   setMcpStandalone: (v: boolean) => void;
 
-  /** Browser automation handoffs: surfaceId -> reason while the human
-   *  has control (agent tools blocked). Volatile. */
-  browserHandoffs: Record<string, { reason: string | null }>;
-  setBrowserHandoff: (surfaceId: string, reason: string | null) => void;
+  /** Browser automation handoffs: surfaceId -> reason (plus what the blocker
+   *  detector saw) while the human has control (agent tools blocked). Volatile. */
+  browserHandoffs: Record<
+    string,
+    {
+      reason: string | null;
+      blockers?: { kind: string; severity: "hard" | "soft"; confidence?: number }[];
+    }
+  >;
+  setBrowserHandoff: (
+    surfaceId: string,
+    reason: string | null,
+    blockers?: { kind: string; severity: "hard" | "soft"; confidence?: number }[],
+  ) => void;
 
   // ── UI messages (pi → toast via MCP showMessage) ─────────────────────
-  uiMessages: { id: string; type: 'info' | 'success' | 'warning' | 'error'; message: string }[];
-  pushUiMessage: (msg: { message: string; type?: 'info' | 'success' | 'warning' | 'error'; title?: string; ttlMs?: number }) => void;
+  uiMessages: { id: string; type: "info" | "success" | "warning" | "error"; message: string }[];
+  pushUiMessage: (msg: {
+    message: string;
+    type?: "info" | "success" | "warning" | "error";
+    title?: string;
+    ttlMs?: number;
+  }) => void;
   dismissUiMessage: (id: string) => void;
 
   // ── Session state (synced with backend/Firestore) ─────────────────────
@@ -239,7 +251,7 @@ interface AppState {
   addSession: (session: SessionDoc) => void;
   updateSession: (
     id: string,
-    patch: Partial<Pick<SessionDoc, 'title' | 'status' | 'surfaces'>>,
+    patch: Partial<Pick<SessionDoc, "title" | "status" | "surfaces">>,
   ) => void;
   removeSession: (id: string) => void;
   setActiveSession: (id: string | null) => void;
@@ -336,8 +348,7 @@ export const useStore = create<AppState>()(
       closeView: (id: string) =>
         set((state) => {
           const remaining = state.views.filter((v) => v.id !== id);
-          const wasActive =
-            state.activeSurface?.id === id || state.activeViewId === id;
+          const wasActive = state.activeSurface?.id === id || state.activeViewId === id;
           const next = remaining[remaining.length - 1];
           return {
             views: remaining,
@@ -358,25 +369,23 @@ export const useStore = create<AppState>()(
 
       cancelSurface: () => set({ activeSurface: null }),
 
-      toggleHelpPalette: () =>
-        set((s) => ({ helpPaletteOpen: !s.helpPaletteOpen })),
+      toggleHelpPalette: () => set((s) => ({ helpPaletteOpen: !s.helpPaletteOpen })),
 
       closeHelpPalette: () => set({ helpPaletteOpen: false }),
 
-      registerOnComplete: (fn: (result: SurfaceResult) => void) =>
-        set({ onSurfaceComplete: fn }),
+      registerOnComplete: (fn: (result: SurfaceResult) => void) => set({ onSurfaceComplete: fn }),
 
       composerOpen: false,
       signInOpen: false,
-      signInMode: 'signin' as 'signin' | 'register',
+      signInMode: "signin" as "signin" | "register",
       userMenuOpen: false,
       settingsOpen: false,
 
       openComposer: () => set({ composerOpen: true }),
       closeComposer: () => set({ composerOpen: false }),
-      openSignIn: (mode?: 'signin' | 'register') =>
-        set({ signInOpen: true, signInMode: mode ?? 'signin' }),
-      setSignInMode: (mode: 'signin' | 'register') => set({ signInMode: mode }),
+      openSignIn: (mode?: "signin" | "register") =>
+        set({ signInOpen: true, signInMode: mode ?? "signin" }),
+      setSignInMode: (mode: "signin" | "register") => set({ signInMode: mode }),
       closeSignIn: () => set({ signInOpen: false }),
       setUserMenuOpen: (open: boolean) => set({ userMenuOpen: open }),
       setSettingsOpen: (open: boolean) => set({ settingsOpen: open }),
@@ -393,16 +402,14 @@ export const useStore = create<AppState>()(
           authError: null,
         }),
 
-      logout: () =>
-        set({ authToken: null, authUser: null, authError: null }),
+      logout: () => set({ authToken: null, authUser: null, authError: null }),
 
       setAuthError: (message: string | null) => set({ authError: message }),
 
       // ── Connection state ───────────────────────────────────────────────
-      connectionState: 'disconnected',
+      connectionState: "disconnected",
 
-      setConnectionState: (state: ConnectionState) =>
-        set({ connectionState: state }),
+      setConnectionState: (state: ConnectionState) => set({ connectionState: state }),
 
       mcpAgentCount: 0,
       mcpAgents: [],
@@ -414,8 +421,8 @@ export const useStore = create<AppState>()(
       chatIds: {},
       chatModel: null,
       chatModels: [],
-      chatBaseUrl: 'http://100.83.1.126:1234/v1',
-      chatApi: 'auto',
+      chatBaseUrl: "http://100.83.1.126:1234/v1",
+      chatApi: "auto",
       chatBusy: {},
       setChatOpen: (open) => set({ chatOpen: open }),
       setChatWidth: (width: number) =>
@@ -451,8 +458,7 @@ export const useStore = create<AppState>()(
       browserGrants: [],
       grantsByProject: {},
       consentLog: [],
-      addBrowserGrant: (domain: string) =>
-        get().grantForProject(UNASSIGNED_PROJECT, domain),
+      addBrowserGrant: (domain: string) => get().grantForProject(UNASSIGNED_PROJECT, domain),
       grantForProject: (project, domain, meta) =>
         set((state) => {
           const d = normalizeGrantDomain(domain);
@@ -481,8 +487,7 @@ export const useStore = create<AppState>()(
             browserGrants: unionGrants(grantsByProject),
           };
         }),
-      clearBrowserGrants: () =>
-        set({ browserGrants: [], grantsByProject: {}, consentLog: [] }),
+      clearBrowserGrants: () => set({ browserGrants: [], grantsByProject: {}, consentLog: [] }),
       removeBrowserGrant: (domain: string) =>
         set((state) => {
           const d = normalizeGrantDomain(domain);
@@ -507,9 +512,7 @@ export const useStore = create<AppState>()(
           const grantsByProject = { ...state.grantsByProject };
           if (kept.length) grantsByProject[key] = kept;
           else delete grantsByProject[key];
-          const consentLog = state.consentLog.filter(
-            (c) => !(c.project === key && c.domain === d),
-          );
+          const consentLog = state.consentLog.filter((c) => !(c.project === key && c.domain === d));
           return {
             grantsByProject,
             consentLog,
@@ -534,11 +537,15 @@ export const useStore = create<AppState>()(
 
       browserHandoffs: {},
 
-      setBrowserHandoff: (surfaceId: string, reason: string | null) =>
+      setBrowserHandoff: (
+        surfaceId: string,
+        reason: string | null,
+        blockers?: { kind: string; severity: "hard" | "soft"; confidence?: number }[],
+      ) =>
         set((s) => {
           const next = { ...s.browserHandoffs };
           if (reason === null) delete next[surfaceId];
-          else next[surfaceId] = { reason };
+          else next[surfaceId] = { reason, blockers: blockers ?? [] };
           return { browserHandoffs: next };
         }),
 
@@ -547,13 +554,13 @@ export const useStore = create<AppState>()(
 
       uiMessages: [],
 
-      pushUiMessage: ({ message, type = 'info', title, ttlMs }) => {
+      pushUiMessage: ({ message, type = "info", title, ttlMs }) => {
         const id = `ui-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const text = title ? `${title}: ${message}` : message;
         set((s) => ({
           uiMessages: [...s.uiMessages, { id, type, message: text }].slice(-4),
         }));
-        const ttl = ttlMs ?? (type === 'error' ? 6000 : type === 'success' ? 3000 : 4000);
+        const ttl = ttlMs ?? (type === "error" ? 6000 : type === "success" ? 3000 : 4000);
         setTimeout(() => get().dismissUiMessage(id), ttl);
       },
 
@@ -571,14 +578,14 @@ export const useStore = create<AppState>()(
 
       setSessions: (sessions: SessionDoc[]) => set({ sessions }),
 
-      addSession: (session: SessionDoc) =>
-        set((s) => ({ sessions: [session, ...s.sessions] })),
+      addSession: (session: SessionDoc) => set((s) => ({ sessions: [session, ...s.sessions] })),
 
-      updateSession: (id: string, patch: Partial<Pick<SessionDoc, 'title' | 'status' | 'surfaces'>>) =>
+      updateSession: (
+        id: string,
+        patch: Partial<Pick<SessionDoc, "title" | "status" | "surfaces">>,
+      ) =>
         set((s) => ({
-          sessions: s.sessions.map((sess) =>
-            sess.id === id ? { ...sess, ...patch } : sess,
-          ),
+          sessions: s.sessions.map((sess) => (sess.id === id ? { ...sess, ...patch } : sess)),
         })),
 
       deleteAllSessions: () =>
@@ -620,9 +627,7 @@ export const useStore = create<AppState>()(
             activeViewId = views.length > 0 ? views[views.length - 1].id : null;
           }
           const activeSurface =
-            s.activeSurface && removed.has(s.activeSurface.id)
-              ? null
-              : s.activeSurface;
+            s.activeSurface && removed.has(s.activeSurface.id) ? null : s.activeSurface;
           // Chat belongs to the session: delete the conversation with it.
           const chatIds = { ...s.chatIds };
           const chatId = chatIds[id];
@@ -692,9 +697,7 @@ export const useStore = create<AppState>()(
 
       updateViewUrl: (id: string, url: string) =>
         set((s) => ({
-          views: s.views.map((v) =>
-            v.id === id ? { ...v, payload: { url } } : v,
-          ),
+          views: s.views.map((v) => (v.id === id ? { ...v, payload: { url } } : v)),
         })),
     }),
     {

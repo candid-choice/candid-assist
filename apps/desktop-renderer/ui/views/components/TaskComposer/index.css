@@ -46,7 +46,9 @@
   border-radius: 6px;
   color: var(--ha-text-tertiary);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .ha-composer-close:hover {

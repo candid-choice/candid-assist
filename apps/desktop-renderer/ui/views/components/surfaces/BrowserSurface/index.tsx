@@ -10,7 +10,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 
-import { IconLock } from "@tabler/icons-react";
+import { IconLock, IconRefreshDot } from "@tabler/icons-react";
 
 import { SurfaceFrame } from "../../shared/SurfaceFrame";
 import { getDesktopBridge } from "../../../services/desktop-bridge";
@@ -31,9 +31,7 @@ export interface BrowserSurfaceProps {
 export function BrowserSurface({ url, onUrlChange, surfaceId, warning }: BrowserSurfaceProps) {
   const [urlInput, setUrlInput] = useState(url);
   const desktop = getDesktopBridge();
-  const handoff = useStore((s) =>
-    surfaceId ? s.browserHandoffs[surfaceId] : undefined,
-  );
+  const handoff = useStore((s) => (surfaceId ? s.browserHandoffs[surfaceId] : undefined));
   // Electrobun-only native-view hiding (toggleHidden) intentionally not
   // wired here — Electron is the forward runtime; see <webview> below.
   const webviewRef = useRef<{
@@ -41,10 +39,7 @@ export function BrowserSurface({ url, onUrlChange, surfaceId, warning }: Browser
   } | null>(null);
 
   // Electron <webview> element — registered as an agent-driven guest.
-  const webviewElRef = useRef<
-    | (HTMLElement & { getWebContentsId?: () => number })
-    | null
-  >(null);
+  const webviewElRef = useRef<(HTMLElement & { getWebContentsId?: () => number }) | null>(null);
 
   // Register the guest webContents with the desktop main process so
   // MCP browser tools (navigate/snapshot/click/type/screenshot/handoff)
@@ -55,10 +50,7 @@ export function BrowserSurface({ url, onUrlChange, surfaceId, warning }: Browser
     if (!el) return;
     const attach = () => {
       try {
-        const wcId =
-          typeof el.getWebContentsId === "function"
-            ? el.getWebContentsId()
-            : undefined;
+        const wcId = typeof el.getWebContentsId === "function" ? el.getWebContentsId() : undefined;
         if (typeof wcId === "number" && Number.isFinite(wcId)) {
           desktop.view.registerGuest(surfaceId, wcId);
         }
@@ -84,11 +76,7 @@ export function BrowserSurface({ url, onUrlChange, surfaceId, warning }: Browser
 
   const handleNavigate = useCallback(() => {
     let newUrl = urlInput.trim();
-    if (
-      newUrl &&
-      !newUrl.startsWith("http://") &&
-      !newUrl.startsWith("https://")
-    ) {
+    if (newUrl && !newUrl.startsWith("http://") && !newUrl.startsWith("https://")) {
       newUrl = "https://" + newUrl;
     }
     onUrlChange(newUrl);
@@ -100,6 +88,35 @@ export function BrowserSurface({ url, onUrlChange, surfaceId, warning }: Browser
     },
     [handleNavigate],
   );
+
+  // “Blocked here but fine in Chrome?” — a WAF decision usually rides on a
+  // poisoned cookie or a cached challenge for that origin. Clearing just this
+  // site (not the whole profile) and reloading is the first thing to try.
+  const [clearing, setClearing] = useState(false);
+  const clearThisSite = useCallback(async () => {
+    const bridge = getDesktopBridge();
+    const target = urlInput.trim();
+    if (!bridge?.system?.clearSiteData || !target) return;
+    setClearing(true);
+    try {
+      const res = await bridge.system.clearSiteData({ url: target });
+      useStore.getState().pushUiMessage({
+        title: "Site data cleared",
+        message: `${res.host ?? target} — ${(res.cleared ?? []).join(", ") || "storage"}. Reloading…`,
+        type: "info",
+      });
+      const el = webviewElRef.current as
+        (HTMLElement & { reload?: () => void; loadURL?: (u: string) => void }) | null;
+      if (el?.reload) el.reload();
+      else if (el?.loadURL) void el.loadURL(target);
+    } catch (e) {
+      useStore
+        .getState()
+        .pushUiMessage({ title: "Clear failed", message: (e as Error).message, type: "error" });
+    } finally {
+      setClearing(false);
+    }
+  }, [urlInput]);
 
   // Sync local input when URL prop changes
   useEffect(() => {
@@ -119,6 +136,18 @@ export function BrowserSurface({ url, onUrlChange, surfaceId, warning }: Browser
         spellCheck={false}
         autoComplete="off"
       />
+      {desktop && (
+        <button
+          type="button"
+          className="ha-browser-url-action"
+          onClick={clearThisSite}
+          disabled={clearing}
+          title="Clear this site’s cookies, storage and cache, then reload — try this when a page shows a block page here but loads fine in Chrome"
+          aria-label="Clear site data and reload"
+        >
+          <IconRefreshDot size={15} stroke={1.75} className={clearing ? "ha-spin" : undefined} />
+        </button>
+      )}
     </div>
   );
 
@@ -130,7 +159,10 @@ export function BrowserSurface({ url, onUrlChange, surfaceId, warning }: Browser
         </div>
       )}
       {!url ? (
-        <div className="ha-browser-empty" style={{ padding: 24, color: "var(--ha-text-secondary)", fontSize: 13 }}>
+        <div
+          className="ha-browser-empty"
+          style={{ padding: 24, color: "var(--ha-text-secondary)", fontSize: 13 }}
+        >
           No URL for this browser surface yet.
         </div>
       ) : desktop ? (
@@ -150,14 +182,30 @@ export function BrowserSurface({ url, onUrlChange, surfaceId, warning }: Browser
               <div className="ha-webview-handoff-text">
                 <strong>{handoff.reason ?? "Your turn"}</strong>
                 <span>Agent automation is paused until you click Done.</span>
+                {/* Blocker chips: name WHAT is blocking the agent (hard = only a
+                    person can do it; soft = the human's call to make). */}
+                {handoff.blockers && handoff.blockers.length > 0 && (
+                  <span className="ha-webview-handoff-chips">
+                    {handoff.blockers.slice(0, 4).map((b) => (
+                      <span
+                        key={`${b.kind}-${b.severity}`}
+                        className={`ha-handoff-chip ha-handoff-chip--${b.severity}`}
+                        title={
+                          typeof b.confidence === "number"
+                            ? `${b.severity} blocker · confidence ${b.confidence}`
+                            : b.severity + " blocker"
+                        }
+                      >
+                        {b.severity === "hard" ? "✋" : "❓"} {b.kind}
+                      </span>
+                    ))}
+                  </span>
+                )}
               </div>
               <button
                 type="button"
                 className="ha-webview-handoff-done"
-                onClick={() =>
-                  surfaceId &&
-                  wsService.send({ type: "handoff:complete", surfaceId })
-                }
+                onClick={() => surfaceId && wsService.send({ type: "handoff:complete", surfaceId })}
               >
                 Done — hand back
               </button>

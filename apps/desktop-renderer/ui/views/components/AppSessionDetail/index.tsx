@@ -6,14 +6,8 @@ offline queue; delete is server-only for now).
 */
 
 import { useStore } from "../../store";
-import {
-  SessionDetail,
-  type SessionSurfaceView,
-} from "../SessionDetail";
-import {
-  archiveSession,
-  deleteSession,
-} from "../../services/sync/sync-service";
+import { SessionDetail, type SessionSurfaceView } from "../SessionDetail";
+import { archiveSession, deleteSession } from "../../services/sync/sync-service";
 import { queueAction } from "../../errors/offline-queue";
 import type { SessionDoc } from "../../services/sync/types";
 
@@ -32,7 +26,14 @@ export function toSurfaceViews(doc: SessionDoc): SessionSurfaceView[] {
 /** Live open tabs for a session, mapped to detail rows. This is the
  * same source the chrome bar uses, so badge == tabs == list. */
 export function toLiveSurfaceViews(
-  views: ReadonlyArray<{ id: string; type: SessionSurfaceView["type"]; title: string; instruction?: string; createdAt: number; sessionId?: string }>,
+  views: ReadonlyArray<{
+    id: string;
+    type: SessionSurfaceView["type"];
+    title: string;
+    instruction?: string;
+    createdAt: number;
+    sessionId?: string;
+  }>,
   sessionId: string,
 ): SessionSurfaceView[] {
   return views
@@ -49,9 +50,7 @@ export function toLiveSurfaceViews(
 
 export function AppSessionDetail() {
   const activeSessionId = useStore((s) => s.activeSessionId);
-  const session = useStore((s) =>
-    s.sessions.find((sess) => sess.id === s.activeSessionId) ?? null,
-  );
+  const session = useStore((s) => s.sessions.find((sess) => sess.id === s.activeSessionId) ?? null);
   const views = useStore((s) => s.views);
   const removeSession = useStore((s) => s.removeSession);
 

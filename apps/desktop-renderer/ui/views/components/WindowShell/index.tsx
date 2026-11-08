@@ -27,7 +27,9 @@ export function WindowShell({
   const { maximized, toggleMaximize } = useWindowMaximize();
   const titlebarRef = useRef<HTMLDivElement>(null);
 
-  const [drag, setDrag] = useState<{ startX: number; startY: number; x: number; y: number } | null>(null);
+  const [drag, setDrag] = useState<{ startX: number; startY: number; x: number; y: number } | null>(
+    null,
+  );
 
   // Mouse down: record position and window position
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -76,12 +78,12 @@ export function WindowShell({
         onDoubleClick={toggleMaximize}
       >
         <div className="ha-titlebar-label">
-          <span className="ha-titlebar-label-icon"><ClaudeMark /></span>
+          <span className="ha-titlebar-label-icon">
+            <ClaudeMark />
+          </span>
           {title}
         </div>
-        {userStatus && (
-          <div className="ha-titlebar-status">{userStatus}</div>
-        )}
+        {userStatus && <div className="ha-titlebar-status">{userStatus}</div>}
       </div>
       <div className="ha-body">{children}</div>
       {footer && <div className="ha-footer">{footer}</div>}

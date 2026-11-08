@@ -27,9 +27,7 @@ const ROOT_CLASS = "ha-native-hidden";
 /** True while any DOM overlay (user menu / composer / settings /
  *  sign-in) is open and native webviews must not be visible. */
 export function useNativeViewsHidden(): boolean {
-  return useStore(
-    (s) => s.userMenuOpen || s.composerOpen || s.signInOpen || s.settingsOpen,
-  );
+  return useStore((s) => s.userMenuOpen || s.composerOpen || s.signInOpen || s.settingsOpen);
 }
 
 /** Toggles the root-level `ha-native-hidden` class while overlays are open. */

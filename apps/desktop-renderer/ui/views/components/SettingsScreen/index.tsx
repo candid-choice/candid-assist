@@ -87,9 +87,7 @@ function GeneralSettings() {
           <select
             className="ha-settings-select"
             value={settings.theme}
-            onChange={(e) =>
-              set({ theme: e.target.value === "dark" ? "dark" : "light" })
-            }
+            onChange={(e) => set({ theme: e.target.value === "dark" ? "dark" : "light" })}
           >
             <option value="light">Light</option>
             <option value="dark">Dark</option>
@@ -137,9 +135,11 @@ function GeneralSettings() {
               type="button"
               className="ha-settings-workspace-browse"
               onClick={async () => {
-                const pick = (window as unknown as {
-                  desktop?: { system?: { pickFolder?: () => Promise<string | null> } };
-                }).desktop?.system?.pickFolder;
+                const pick = (
+                  window as unknown as {
+                    desktop?: { system?: { pickFolder?: () => Promise<string | null> } };
+                  }
+                ).desktop?.system?.pickFolder;
                 if (typeof pick === "function") {
                   const dir = await pick();
                   if (dir) set({ workspacePath: dir });
@@ -246,18 +246,14 @@ function McpSettings() {
       <div className="ha-settings-row">
         <label className="ha-settings-label">
           <span>Server URL</span>
-          <span className="ha-settings-value ha-settings-value--mono">
-            http://localhost:3615
-          </span>
+          <span className="ha-settings-value ha-settings-value--mono">http://localhost:3615</span>
         </label>
       </div>
 
       <div className="ha-settings-row">
         <label className="ha-settings-label">
           <span>WebSocket URL</span>
-          <span className="ha-settings-value ha-settings-value--mono">
-            ws://localhost:3614
-          </span>
+          <span className="ha-settings-value ha-settings-value--mono">ws://localhost:3614</span>
         </label>
       </div>
 
@@ -297,13 +293,15 @@ function AboutSettings() {
   const [busy, setBusy] = useState(false);
 
   const check = async () => {
-    const api = (window as unknown as {
-      desktop?: {
-        system?: {
-          checkForUpdates?: () => Promise<{ phase: string; version?: string; error?: string }>;
+    const api = (
+      window as unknown as {
+        desktop?: {
+          system?: {
+            checkForUpdates?: () => Promise<{ phase: string; version?: string; error?: string }>;
+          };
         };
-      };
-    }).desktop?.system;
+      }
+    ).desktop?.system;
     if (!api?.checkForUpdates) {
       setUpdater({ phase: "unavailable" });
       return;
@@ -350,15 +348,21 @@ function AboutSettings() {
   );
 }
 
-export { SettingsScreen, GeneralSettings, AccountSettings, McpSettings, AboutSettings, WebAccessSettings };
-
+export {
+  SettingsScreen,
+  GeneralSettings,
+  AccountSettings,
+  McpSettings,
+  AboutSettings,
+  WebAccessSettings,
+};
 
 // ── Web Access (consent grants + saved sign-ins) ─────────────────────────
 
 function mcpHttpUrl(): string {
   const port =
     typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("mcpPort") ?? "3615"
+      ? (new URLSearchParams(window.location.search).get("mcpPort") ?? "3615")
       : "3615";
   return `http://localhost:${port}/mcp`;
 }
@@ -430,7 +434,11 @@ function WebAccessSettings() {
       });
       setSite("");
     } catch {
-      toast({ message: "Desktop app not reachable — open from it directly.", type: "error", title: "Web Access" });
+      toast({
+        message: "Desktop app not reachable — open from it directly.",
+        type: "error",
+        title: "Web Access",
+      });
     }
   };
 
@@ -444,11 +452,19 @@ function WebAccessSettings() {
     const bridge = getDesktopBridge();
     if (bridge?.system?.clearWebProfile) {
       await bridge.system.clearWebProfile();
-      toast({ message: "Saved sign-ins and grants cleared.", type: "success", title: "Web Access" });
+      toast({
+        message: "Saved sign-ins and grants cleared.",
+        type: "success",
+        title: "Web Access",
+      });
     } else {
       clearGrants();
       syncToServer({});
-      toast({ message: "Grants cleared (no desktop bridge — profile not wiped).", type: "warning", title: "Web Access" });
+      toast({
+        message: "Grants cleared (no desktop bridge — profile not wiped).",
+        type: "warning",
+        title: "Web Access",
+      });
     }
   };
 
@@ -458,9 +474,8 @@ function WebAccessSettings() {
         <label className="ha-settings-label">
           <span>Saved sign-ins</span>
           <span className="ha-settings-help">
-            The embedded browser keeps one persistent profile
-            (persist:harness-web). Sign into Google, ChatGPT, GitHub… once —
-            future agent sessions reuse the login.
+            The embedded browser keeps one persistent profile (persist:harness-web). Sign into
+            Google, ChatGPT, GitHub… once — future agent sessions reuse the login.
           </span>
         </label>
       </div>
@@ -470,8 +485,7 @@ function WebAccessSettings() {
           <span>Allowed domains ({totalGrants.length})</span>
           {projects.length === 0 ? (
             <span className="ha-settings-help">
-              No domains granted yet — the agent will ask you the first time
-              it wants to visit one.
+              No domains granted yet — the agent will ask you the first time it wants to visit one.
             </span>
           ) : (
             <span className="ha-web-grants">
@@ -496,7 +510,10 @@ function WebAccessSettings() {
                         <span key={`${project}::${d}`} className="ha-web-grant-chip">
                           <code>{d}</code>
                           {audit?.agentClient ? (
-                            <span className="ha-web-grant-via" title={`Granted for ${audit.agentClient}${audit.tool ? ` via ${audit.tool}` : ""}`}>
+                            <span
+                              className="ha-web-grant-via"
+                              title={`Granted for ${audit.agentClient}${audit.tool ? ` via ${audit.tool}` : ""}`}
+                            >
                               {audit.agentClient}
                             </span>
                           ) : null}
@@ -544,11 +561,14 @@ function WebAccessSettings() {
         <label className="ha-settings-label">
           <span>Start over</span>
           <span className="ha-settings-help">
-            Wipes the browser profile (all saved logins/cookies) and every
-            domain grant.
+            Wipes the browser profile (all saved logins/cookies) and every domain grant.
           </span>
         </label>
-        <button type="button" className="ha-settings-btn ha-settings-btn--danger" onClick={wipeProfile}>
+        <button
+          type="button"
+          className="ha-settings-btn ha-settings-btn--danger"
+          onClick={wipeProfile}
+        >
           Clear saved sign-ins &amp; grants
         </button>
       </div>

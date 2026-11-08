@@ -11,11 +11,11 @@ Usage:
   }
 */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef } from "react";
 
-import { ErrorCode, ErrorSeverity, HAError } from './error-hierarchy';
-import { useErrors } from './error-context';
-import { onDisconnect, onReconnect } from './offline-queue';
+import { ErrorCode, ErrorSeverity, HAError } from "./error-hierarchy";
+import { useErrors } from "./error-context";
+import { onDisconnect, onReconnect } from "./offline-queue";
 
 interface NetworkStatus {
   online: boolean;
@@ -52,11 +52,13 @@ export function useNetworkStatus(): NetworkStatus {
         if (!offlineRef.current) return;
 
         offlineRef.current = false;
-        bannerRef.current = 'Reconnecting...';
+        bannerRef.current = "Reconnecting...";
 
         // Report reconnection
         report(
-          new HAError(ErrorCode.NETWORK_RECONNECTED, ErrorSeverity.P3, 'Reconnected', { showToast: false }),
+          new HAError(ErrorCode.NETWORK_RECONNECTED, ErrorSeverity.P3, "Reconnected", {
+            showToast: false,
+          }),
         );
 
         // Trigger offline queue replay
@@ -73,7 +75,7 @@ export function useNetworkStatus(): NetworkStatus {
       offlineRef.current = true;
 
       // Immediate banner
-      bannerRef.current = 'Connection lost — reconnecting...';
+      bannerRef.current = "Connection lost — reconnecting...";
 
       // Report network error
       const offlineError = onDisconnect();
@@ -82,17 +84,17 @@ export function useNetworkStatus(): NetworkStatus {
       // After 10s, change to "Working offline"
       offlineTimeoutRef.current = setTimeout(() => {
         if (offlineRef.current) {
-          bannerRef.current = 'Working offline — queued locally';
+          bannerRef.current = "Working offline — queued locally";
         }
       }, 10000);
     };
 
-    window.addEventListener('online', handleOnline, false);
-    window.addEventListener('offline', handleOffline, false);
+    window.addEventListener("online", handleOnline, false);
+    window.addEventListener("offline", handleOffline, false);
 
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
       if (offlineTimeoutRef.current) {
         clearTimeout(offlineTimeoutRef.current);
       }

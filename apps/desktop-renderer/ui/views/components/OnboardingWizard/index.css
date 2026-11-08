@@ -136,7 +136,7 @@
 
 .ha-onboarding-code code {
   color: #c9d1d9;
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-family: "SF Mono", "Fira Code", monospace;
   font-size: 13px;
 }
 
@@ -222,5 +222,7 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }

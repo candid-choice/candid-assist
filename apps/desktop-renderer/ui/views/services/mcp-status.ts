@@ -27,7 +27,12 @@ function apply(status: McpStatusPayload | undefined): void {
   // Connected+bound agent ⇒ new session: show its row right away
   // (don't wait for the first surface push).
   for (const a of agents) {
-    if (a.agentSessionId) ensureAgentSessionFor({ client: a.client, agentSessionId: a.agentSessionId, agentProject: a.project });
+    if (a.agentSessionId)
+      ensureAgentSessionFor({
+        client: a.client,
+        agentSessionId: a.agentSessionId,
+        agentProject: a.project,
+      });
   }
 }
 
@@ -42,7 +47,9 @@ export function startMcpStatusPolling(intervalMs = 5_000): void {
     const port = new URLSearchParams(window.location.search).get("mcpPort") ?? "3615";
     const poll = async () => {
       try {
-        const res = await fetch(`http://localhost:${port}/status`, { signal: AbortSignal.timeout(3000) });
+        const res = await fetch(`http://localhost:${port}/status`, {
+          signal: AbortSignal.timeout(3000),
+        });
         apply((await res.json()) as McpStatusPayload);
       } catch {
         useStore.getState().setMcpAgentCount(0);
@@ -68,12 +75,18 @@ export function startMcpStatusPolling(intervalMs = 5_000): void {
   }
 
   // Initial fetch + event stream from main.
-  void bridge.mcp.getStatus().then(apply).catch(() => apply(undefined));
+  void bridge.mcp
+    .getStatus()
+    .then(apply)
+    .catch(() => apply(undefined));
   unsubscribe = bridge.mcp.onStatus(apply);
 
   // Slow safety net in case an event was missed (e.g. window reload).
   timer = setInterval(() => {
-    void bridge.mcp?.getStatus().then(apply).catch(() => apply(undefined));
+    void bridge.mcp
+      ?.getStatus()
+      .then(apply)
+      .catch(() => apply(undefined));
   }, intervalMs);
 }
 

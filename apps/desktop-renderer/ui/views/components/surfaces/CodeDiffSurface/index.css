@@ -164,7 +164,9 @@
   font-size: 13px;
   resize: vertical;
   font-family: inherit;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .ha-cd-comment:focus {

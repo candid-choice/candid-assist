@@ -74,8 +74,7 @@ const SECTIONS: Section[] = [
   {
     icon: "⚖️",
     heading: "You stay in the loop",
-    blurb:
-      "Surfaces that demand a human decision — not just output to look at.",
+    blurb: "Surfaces that demand a human decision — not just output to look at.",
     tier: "unique",
     hints: [
       {
@@ -116,8 +115,14 @@ const SECTIONS: Section[] = [
     blurb: "Next up on the surfaces roadmap.",
     tier: "roadmap",
     hints: [
-      { title: "🔌 Circuit JSON / E-CAD preview", try: ["“preview this netlist/circuit JSON as a schematic”"] },
-      { title: "🖥️ Live webdev preview", try: ["“run the landing page and let me review it side-by-side”"] },
+      {
+        title: "🔌 Circuit JSON / E-CAD preview",
+        try: ["“preview this netlist/circuit JSON as a schematic”"],
+      },
+      {
+        title: "🖥️ Live webdev preview",
+        try: ["“run the landing page and let me review it side-by-side”"],
+      },
     ],
   },
   {
@@ -126,7 +131,10 @@ const SECTIONS: Section[] = [
     blurb: "Fine for convenience — not why you’d open this app.",
     tier: "utility",
     hints: [
-      { title: "🖼️ Images · 🎨 Canvas prompts · 📸 screen capture · 🖥️ terminal echoes", try: ["“toast ‘build done’”, “show this chart”, “capture my screen”"] },
+      {
+        title: "🖼️ Images · 🎨 Canvas prompts · 📸 screen capture · 🖥️ terminal echoes",
+        try: ["“toast ‘build done’”, “show this chart”, “capture my screen”"],
+      },
     ],
   },
 ];
@@ -159,9 +167,7 @@ export function SessionEmptyGuide({ session }: SessionEmptyGuideProps) {
         <section key={section.heading} className="ha-guide-section" data-tier={section.tier}>
           <h3 className="ha-guide-section-head">
             <span aria-hidden>{section.icon}</span> {section.heading}
-            {section.tier === "roadmap" && (
-              <span className="ha-guide-badge">coming soon</span>
-            )}
+            {section.tier === "roadmap" && <span className="ha-guide-badge">coming soon</span>}
           </h3>
           <p className="ha-guide-blurb">{section.blurb}</p>
           <div className="ha-guide-grid">
@@ -184,9 +190,7 @@ export function SessionEmptyGuide({ session }: SessionEmptyGuideProps) {
 
 export function useActiveSession(): SessionDoc | null {
   return useStore((s) =>
-    s.activeSessionId
-      ? (s.sessions.find((x) => x.id === s.activeSessionId) ?? null)
-      : null,
+    s.activeSessionId ? (s.sessions.find((x) => x.id === s.activeSessionId) ?? null) : null,
   );
 }
 

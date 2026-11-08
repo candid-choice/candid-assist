@@ -15,7 +15,7 @@ When back online:
 Capacity: 500 queued actions, oldest dropped on overflow.
 */
 
-import { ErrorCode, ErrorSeverity, HAError } from './error-hierarchy';
+import { ErrorCode, ErrorSeverity, HAError } from "./error-hierarchy";
 
 // ── Queue Entry ─────────────────────────────────────────────────────────────
 
@@ -23,7 +23,14 @@ export interface QueuedAction {
   id: string;
   timestamp: number;
   /** Operation type */
-  op: 'createSession' | 'updateSession' | 'pushSurface' | 'completeSurface' | 'archiveSession' | 'saveSettings' | 'sendMessage';
+  op:
+    | "createSession"
+    | "updateSession"
+    | "pushSurface"
+    | "completeSurface"
+    | "archiveSession"
+    | "saveSettings"
+    | "sendMessage";
   /** Data for this operation */
   data: Record<string, unknown>;
   /** Retry attempts */
@@ -33,9 +40,9 @@ export interface QueuedAction {
 
 // ── Queue State ─────────────────────────────────────────────────────────────
 
-const DB_NAME = 'humanAssistOfflineQueue';
+const DB_NAME = "humanAssistOfflineQueue";
 const DB_VERSION = 1;
-const STORE_NAME = 'queuedActions';
+const STORE_NAME = "queuedActions";
 const MAX_QUEUE_SIZE = 500;
 
 let db: IDBDatabase | null = null;
@@ -44,7 +51,7 @@ let replayTimer: ReturnType<typeof setTimeout> | null = null;
 /** Check if IndexedDB is available. */
 export function isIndexedDBAvailable(): boolean {
   try {
-    return 'indexedDB' in window;
+    return "indexedDB" in window;
   } catch {
     return false;
   }
@@ -53,7 +60,7 @@ export function isIndexedDBAvailable(): boolean {
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (!isIndexedDBAvailable()) {
-      reject(new Error('IndexedDB not available'));
+      reject(new Error("IndexedDB not available"));
       return;
     }
 
@@ -62,8 +69,8 @@ function openDB(): Promise<IDBDatabase> {
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-        store.createIndex('timestamp', 'timestamp', { unique: false });
+        const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
+        store.createIndex("timestamp", "timestamp", { unique: false });
       }
     };
 
@@ -81,7 +88,7 @@ function getDB(): Promise<IDBDatabase> {
     return openDB().catch(() => {
       // Fallback: no IndexedDB — silently fail
       db = null as any;
-      throw new Error('IndexedDB unavailable');
+      throw new Error("IndexedDB unavailable");
     });
   }
   return Promise.resolve(db);
@@ -95,12 +102,12 @@ function getDB(): Promise<IDBDatabase> {
  * The action will be replayed when the app reconnects.
  */
 export async function queueAction(
-  op: QueuedAction['op'],
+  op: QueuedAction["op"],
   data: Record<string, unknown>,
 ): Promise<string> {
   try {
     const db = await getDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const tx = db.transaction(STORE_NAME, "readwrite");
     const store = tx.objectStore(STORE_NAME);
 
     // Get count
@@ -111,7 +118,7 @@ export async function queueAction(
 
     // If full, drop oldest
     if (count >= MAX_QUEUE_SIZE) {
-      const oldestReq = store.index('timestamp').openCursor(null, 'prev');
+      const oldestReq = store.index("timestamp").openCursor(null, "prev");
       let oldestKey: string | null = null;
       await new Promise<void>((resolve) => {
         oldestReq.onsuccess = () => {
@@ -189,7 +196,7 @@ function scheduleReplay(): void {
 export async function replayQueue(): Promise<void> {
   try {
     const db = await getDB();
-    const tx = db.transaction(STORE_NAME, 'readonly');
+    const tx = db.transaction(STORE_NAME, "readonly");
     const store = tx.objectStore(STORE_NAME);
     const request = store.getAll();
 
@@ -226,7 +233,7 @@ export async function replayQueue(): Promise<void> {
 
     // Remove successfully replayed items, keep failed ones
     if (actions.length > 0) {
-      const writeTx = db.transaction(STORE_NAME, 'readwrite');
+      const writeTx = db.transaction(STORE_NAME, "readwrite");
       const writeStore = writeTx.objectStore(STORE_NAME);
 
       // Clear all
@@ -236,7 +243,7 @@ export async function replayQueue(): Promise<void> {
       });
 
       // Re-add remaining
-      const writeTx2 = db.transaction(STORE_NAME, 'readwrite');
+      const writeTx2 = db.transaction(STORE_NAME, "readwrite");
       const writeStore2 = writeTx2.objectStore(STORE_NAME);
       for (const action of remaining) {
         writeStore2.add(action);
@@ -265,7 +272,7 @@ async function executeQueuedAction(): Promise<void> {
 export async function getQueueSize(): Promise<number> {
   try {
     const db = await getDB();
-    const tx = db.transaction(STORE_NAME, 'readonly');
+    const tx = db.transaction(STORE_NAME, "readonly");
     const store = tx.objectStore(STORE_NAME);
     const request = store.count();
 
@@ -281,9 +288,9 @@ export async function getQueueSize(): Promise<number> {
 export async function clearQueue(): Promise<void> {
   try {
     const db = await getDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const tx = db.transaction(STORE_NAME, "readwrite");
     const store = tx.objectStore(STORE_NAME);
-    await new Promise<void>((resolve) => store.clear().onsuccess = () => resolve());
+    await new Promise<void>((resolve) => (store.clear().onsuccess = () => resolve()));
   } catch {
     // Ignore
   }
@@ -293,7 +300,7 @@ export async function clearQueue(): Promise<void> {
 export async function getPendingActions(): Promise<QueuedAction[]> {
   try {
     const db = await getDB();
-    const tx = db.transaction(STORE_NAME, 'readonly');
+    const tx = db.transaction(STORE_NAME, "readonly");
     const store = tx.objectStore(STORE_NAME);
     const request = store.getAll();
 
@@ -323,8 +330,8 @@ export function onDisconnect(): HAError {
   return new HAError(
     ErrorCode.NETWORK_OFFLINE,
     ErrorSeverity.P2,
-    'No internet — actions queued locally',
-    { recovery: 'Check your network and retry' },
+    "No internet — actions queued locally",
+    { recovery: "Check your network and retry" },
   );
 }
 

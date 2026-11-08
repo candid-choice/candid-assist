@@ -31,7 +31,11 @@ export function CodeDiffSurface({ config, onComplete }: CodeDiffSurfaceProps) {
     setDecision("decline");
     onComplete({
       completed: true,
-      data: { decision: "changes_requested", comment: comment.trim() || undefined, surfaceId: config.id },
+      data: {
+        decision: "changes_requested",
+        comment: comment.trim() || undefined,
+        surfaceId: config.id,
+      },
     });
   };
 

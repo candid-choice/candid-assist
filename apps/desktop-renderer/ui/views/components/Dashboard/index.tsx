@@ -17,8 +17,14 @@ export interface DashboardProps {
   onConnectMCP?: () => void;
 }
 
-function Dashboard({ active, sessionCount = 0, recentSessions = [], onSessionClick, onNewTask, onConnectMCP }: DashboardProps) {
-
+function Dashboard({
+  active,
+  sessionCount = 0,
+  recentSessions = [],
+  onSessionClick,
+  onNewTask,
+  onConnectMCP,
+}: DashboardProps) {
   if (!active) return null;
 
   return (
@@ -26,7 +32,14 @@ function Dashboard({ active, sessionCount = 0, recentSessions = [], onSessionCli
       {/* ── Idle State ─────────────────────────────────────────────── */}
       <div className="ha-dashboard-idle">
         <div className="ha-dashboard-idle-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
             <circle cx="12" cy="12" r="3" />
             <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
           </svg>

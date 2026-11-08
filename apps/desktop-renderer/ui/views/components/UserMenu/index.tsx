@@ -43,10 +43,10 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
   }, [open]);
 
   const signedIn = Boolean(authToken);
-  const displayName = signedIn
-    ? authUser?.name || authUser?.email || "User"
-    : "Not signed in";
-  const initial = signedIn ? (authUser?.name || authUser?.email || "U").charAt(0).toUpperCase() : "?";
+  const displayName = signedIn ? authUser?.name || authUser?.email || "User" : "Not signed in";
+  const initial = signedIn
+    ? (authUser?.name || authUser?.email || "U").charAt(0).toUpperCase()
+    : "?";
 
   const handleSignOut = () => {
     clearAuthStorage();
@@ -74,13 +74,11 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
       {open && (
         <div className="ha-usermenu-dropdown" role="menu">
           <div className="ha-usermenu-identity">
-            <span className="ha-usermenu-avatar ha-usermenu-avatar--lg">
-              {initial}
-            </span>
+            <span className="ha-usermenu-avatar ha-usermenu-avatar--lg">{initial}</span>
             <div className="ha-usermenu-identity-text">
               <span className="ha-usermenu-identity-name">{displayName}</span>
               <span className="ha-usermenu-identity-email">
-                {signedIn ? authUser?.email ?? "Signed in" : "Signed out"}
+                {signedIn ? (authUser?.email ?? "Signed in") : "Signed out"}
               </span>
             </div>
           </div>
@@ -117,7 +115,6 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
               <span>Clear all sessions</span>
             </button>
           )}
-
 
           {!signedIn && (
             <button

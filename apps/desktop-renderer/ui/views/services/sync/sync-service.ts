@@ -11,20 +11,15 @@ Responsibilities:
      writes made while offline are delivered when connectivity returns.
 */
 
-import { useStore } from '../../store';
+import { useStore } from "../../store";
 
-import type {
-  SessionDoc,
-  SessionStatus,
-  SurfaceUserResponse,
-  EmbeddedSurface,
-} from './types';
+import type { SessionDoc, SessionStatus, SurfaceUserResponse, EmbeddedSurface } from "./types";
 
 // ── Backend URL ──────────────────────────────────────────────────────────
 
 const BACKEND_URL = import.meta.env?.VITE_BACKEND_URL
   ? import.meta.env.VITE_BACKEND_URL
-  : 'http://localhost:3601';
+  : "http://localhost:3601";
 
 export const getBackendUrl = () => BACKEND_URL;
 
@@ -36,18 +31,15 @@ export interface ApiError extends Error {
 }
 
 /** Low-level fetch with Bearer auth from the store. */
-export async function apiFetch<T>(
-  path: string,
-  init: RequestInit = {},
-): Promise<T> {
+export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = useStore.getState().authToken;
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
     ...(init.headers as Record<string, string> | undefined),
   };
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   let response: Response;
@@ -55,7 +47,7 @@ export async function apiFetch<T>(
     response = await fetch(`${BACKEND_URL}${path}`, { ...init, headers });
   } catch (err) {
     const e = new Error(`Network error: ${String(err)}`) as ApiError;
-    e.code = 'NETWORK_ERROR';
+    e.code = "NETWORK_ERROR";
     throw e;
   }
 
@@ -76,12 +68,12 @@ export async function apiFetch<T>(
 
 /** Fetch all active sessions for the current user. */
 export function fetchSessions(): Promise<SessionDoc[]> {
-  return apiFetch<SessionDoc[]>('/sessions');
+  return apiFetch<SessionDoc[]>("/sessions");
 }
 
 /** Fetch all sessions including archived. */
 export function fetchAllSessions(): Promise<SessionDoc[]> {
-  return apiFetch<SessionDoc[]>('/sessions/all');
+  return apiFetch<SessionDoc[]>("/sessions/all");
 }
 
 export function fetchSession(sessionId: string): Promise<SessionDoc> {
@@ -90,11 +82,11 @@ export function fetchSession(sessionId: string): Promise<SessionDoc> {
 
 export function createSession(
   title: string,
-  workspacePath = useStore.getState().settings.workspacePath ?? '',
+  workspacePath = useStore.getState().settings.workspacePath ?? "",
   meta?: { agentSessionId?: string; agentClient?: string; agentProject?: string },
 ): Promise<SessionDoc> {
-  return apiFetch<SessionDoc>('/sessions', {
-    method: 'POST',
+  return apiFetch<SessionDoc>("/sessions", {
+    method: "POST",
     body: JSON.stringify({ title, workspacePath, ...(meta ?? {}) }),
   });
 }
@@ -104,7 +96,7 @@ export function updateSessionTitle(
   title: string,
 ): Promise<{ success: boolean }> {
   return apiFetch(`/sessions/${sessionId}/title`, {
-    method: 'PATCH',
+    method: "PATCH",
     body: JSON.stringify({ title }),
   });
 }
@@ -114,21 +106,17 @@ export function updateSessionStatus(
   status: SessionStatus,
 ): Promise<{ success: boolean }> {
   return apiFetch(`/sessions/${sessionId}/status`, {
-    method: 'PATCH',
+    method: "PATCH",
     body: JSON.stringify({ status }),
   });
 }
 
-export function archiveSession(
-  sessionId: string,
-): Promise<{ success: boolean }> {
-  return apiFetch(`/sessions/${sessionId}/archive`, { method: 'POST' });
+export function archiveSession(sessionId: string): Promise<{ success: boolean }> {
+  return apiFetch(`/sessions/${sessionId}/archive`, { method: "POST" });
 }
 
-export function deleteSession(
-  sessionId: string,
-): Promise<{ success: boolean }> {
-  return apiFetch(`/sessions/${sessionId}`, { method: 'DELETE' });
+export function deleteSession(sessionId: string): Promise<{ success: boolean }> {
+  return apiFetch(`/sessions/${sessionId}`, { method: "DELETE" });
 }
 
 // ── Surface API ──────────────────────────────────────────────────────────
@@ -139,7 +127,7 @@ export function addSurfaceToSession(
   surface: EmbeddedSurface,
 ): Promise<{ success: boolean }> {
   return apiFetch(`/sessions/${sessionId}/surfaces`, {
-    method: 'POST',
+    method: "POST",
     body: JSON.stringify(surface),
   });
 }
@@ -151,7 +139,7 @@ export function sendSurfaceResponse(
   response: SurfaceUserResponse,
 ): Promise<{ success: boolean }> {
   return apiFetch(`/sessions/${sessionId}/surfaces/${surfaceId}/response`, {
-    method: 'POST',
+    method: "POST",
     body: JSON.stringify(response),
   });
 }
@@ -201,18 +189,18 @@ export async function executeSyncAction(action: {
   data: Record<string, unknown>;
 }): Promise<void> {
   switch (action.op) {
-    case 'createSession': {
+    case "createSession": {
       await createSession(
-        String(action.data['title'] ?? 'Untitled'),
-        String(action.data['workspacePath'] ?? ''),
+        String(action.data["title"] ?? "Untitled"),
+        String(action.data["workspacePath"] ?? ""),
         {
-          agentSessionId: action.data['agentSessionId'] as string | undefined,
-          agentClient: action.data['agentClient'] as string | undefined,
+          agentSessionId: action.data["agentSessionId"] as string | undefined,
+          agentClient: action.data["agentClient"] as string | undefined,
         },
       );
       break;
     }
-    case 'updateSession': {
+    case "updateSession": {
       const { sessionId, title, status } = action.data as {
         sessionId: string;
         title?: string;
@@ -222,15 +210,15 @@ export async function executeSyncAction(action: {
       if (status) await updateSessionStatus(sessionId, status);
       break;
     }
-    case 'deleteSession': {
-      await deleteSession(String(action.data['sessionId'] ?? ''));
+    case "deleteSession": {
+      await deleteSession(String(action.data["sessionId"] ?? ""));
       break;
     }
-    case 'archiveSession': {
-      await archiveSession(String(action.data['sessionId']));
+    case "archiveSession": {
+      await archiveSession(String(action.data["sessionId"]));
       break;
     }
-    case 'pushSurface': {
+    case "pushSurface": {
       // Surface was pushed while offline — embed it into the session.
       const { sessionId, surface } = action.data as {
         sessionId?: string;
@@ -241,7 +229,7 @@ export async function executeSyncAction(action: {
       }
       break;
     }
-    case 'completeSurface': {
+    case "completeSurface": {
       // Responses were already POSTed at submit time when online; when
       // offline they arrive via the queue with session+surface ids.
       const { sessionId, surfaceId, response } = action.data as {
@@ -254,8 +242,8 @@ export async function executeSyncAction(action: {
       }
       break;
     }
-    case 'saveSettings':
-    case 'sendMessage':
+    case "saveSettings":
+    case "sendMessage":
       // Settings/message ops have no backend endpoint yet — drop.
       break;
     default:

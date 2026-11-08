@@ -123,3 +123,76 @@
   color: #ffd54f;
   border-bottom-color: #6d5520;
 }
+
+/* Blocker chips in the handoff banner: name WHAT is blocking the agent, so the
+   ask is never a mystery. hard (✋) = only a person can do it (CAPTCHA, 2FA,
+   passkey, identity check); soft (❓) = a decision that is the human's to make
+   (which account, cookies, paywall). */
+.ha-webview-handoff-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.ha-handoff-chip,
+.ha-webview-handoff-text .ha-handoff-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--ha-border);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-transform: lowercase;
+  color: var(--ha-text);
+  background: var(--ha-surface);
+}
+
+.ha-handoff-chip--hard {
+  border-color: var(--ha-primary);
+  color: var(--ha-primary);
+}
+
+.ha-handoff-chip--soft {
+  border-style: dashed;
+  color: var(--ha-text-secondary);
+}
+
+/* Per-site reset in the address bar (WAF block pages, stale logins). */
+.ha-browser-url-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--ha-radius-sm);
+  background: transparent;
+  color: var(--ha-text-secondary, #6b6b6b);
+  cursor: pointer;
+}
+
+.ha-browser-url-action:hover:not(:disabled) {
+  background: var(--ha-primary-light, rgba(0, 0, 0, 0.05));
+  color: var(--ha-text);
+}
+
+.ha-browser-url-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ha-spin {
+  animation: ha-spin 0.9s linear infinite;
+}
+
+@keyframes ha-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

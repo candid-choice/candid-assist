@@ -134,7 +134,7 @@
 }
 
 .ha-settings-value--mono {
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-family: "SF Mono", "Fira Code", monospace;
   font-size: 12px;
 }
 
@@ -222,7 +222,12 @@
 }
 
 /* Web Access grants chips */
-.ha-web-grants { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ha-web-grants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
 .ha-web-project-group {
   display: flex;
   flex-direction: column;
@@ -253,7 +258,9 @@
   cursor: pointer;
   text-decoration: underline;
 }
-.ha-web-project-revoke-all:hover { color: var(--ha-danger, #b42318); }
+.ha-web-project-revoke-all:hover {
+  color: var(--ha-danger, #b42318);
+}
 .ha-web-grant-via {
   font-size: 10px;
   color: var(--ha-text-muted, #6b7280);
@@ -271,7 +278,9 @@
   background: var(--ha-surface, #fff);
   font-size: 11px;
 }
-.ha-web-grant-chip code { color: var(--ha-text); }
+.ha-web-grant-chip code {
+  color: var(--ha-text);
+}
 .ha-web-grant-revoke {
   width: 16px;
   height: 16px;
@@ -283,4 +292,7 @@
   cursor: pointer;
   font-size: 10px;
 }
-.ha-web-grant-revoke:hover { background: #dc2626; color: #fff; }
+.ha-web-grant-revoke:hover {
+  background: #dc2626;
+  color: #fff;
+}

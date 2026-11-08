@@ -44,7 +44,8 @@ export function parseSceneSpec(input: unknown): SceneSpec {
     if (!KINDS.has(type)) {
       throw new Error(`3D_003: primitive[${i}] type must be one of ${[...KINDS].join(", ")}`);
     }
-    const color = typeof p["color"] === "string" && HEX.test(p["color"]) ? p["color"] : DEFAULT_COLOR;
+    const color =
+      typeof p["color"] === "string" && HEX.test(p["color"]) ? p["color"] : DEFAULT_COLOR;
     return {
       type,
       position: vec3(p["position"], [0, 0, 0]),

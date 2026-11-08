@@ -75,10 +75,10 @@ class WsService {
     const wsUrl = wsPort
       ? `ws://${location.hostname}:${wsPort}`
       : import.meta.env?.VITE_WS_URL
-          ? import.meta.env.VITE_WS_URL
-          : window.__electrobun
-              ? `ws://${location.hostname}:3614`
-              : `ws://localhost:3614`;
+        ? import.meta.env.VITE_WS_URL
+        : window.__electrobun
+          ? `ws://${location.hostname}:3614`
+          : `ws://localhost:3614`;
 
     try {
       this.ws = new WebSocket(wsUrl);
@@ -151,7 +151,10 @@ class WsService {
 
   /** Send a JSON message to the desktop MCP server (renderer → main),
    *  e.g. { type: 'handoff:complete', surfaceId } to release browser
-   *  automation lock after the human finished a verification. */
+   *  automation lock, { type: 'input:respond', surfaceId, answer } to answer a
+   *  question, { type: 'canvas:respond', surfaceId, markup, note } to return a
+   *  marked-up image. All are agent-visible: main stores them and readSurface
+   *  digests them, so the human's response reaches the agent that asked. */
   send(message: Record<string, unknown>): boolean {
     // View portal is observation-only: never let a debugging tab answer
     // consent, control processes, or release handoffs.
@@ -160,7 +163,13 @@ class WsService {
       typeof window !== "undefined" &&
       new URLSearchParams(window.location.search).has("viewPortal") &&
       process.env.NODE_ENV !== "production" &&
-      ["permission:respond", "process:control", "handoff:complete"].includes(type)
+      [
+        "permission:respond",
+        "process:control",
+        "handoff:complete",
+        "input:respond",
+        "canvas:respond",
+      ].includes(type)
     ) {
       console.warn("[ws] view portal is read-only — refused", type);
       return false;

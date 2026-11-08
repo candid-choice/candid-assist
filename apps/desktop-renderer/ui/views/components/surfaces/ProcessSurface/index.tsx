@@ -52,9 +52,7 @@ export function ProcessSurface({ processes }: ProcessSurfaceProps) {
       <div className="ha-process-summary">
         {running} running · {crashed} crashed
       </div>
-      {processes.length === 0 && (
-        <div className="ha-process-empty">No processes yet.</div>
-      )}
+      {processes.length === 0 && <div className="ha-process-empty">No processes yet.</div>}
       {processes.map((p) => (
         <div key={p.id} className="ha-process-card">
           <div className="ha-process-head">
@@ -76,18 +74,24 @@ export function ProcessSurface({ processes }: ProcessSurfaceProps) {
               {expanded === p.id ? "Hide Log" : "View Log"}
             </button>
             {p.status === "running" && (
-              <button type="button" className="ha-process-btn" onClick={() => control(p.id, "kill")}>
+              <button
+                type="button"
+                className="ha-process-btn"
+                onClick={() => control(p.id, "kill")}
+              >
                 ⏹ Stop
               </button>
             )}
-            <button type="button" className="ha-process-btn" onClick={() => control(p.id, "restart")}>
+            <button
+              type="button"
+              className="ha-process-btn"
+              onClick={() => control(p.id, "restart")}
+            >
               ↻ Restart
             </button>
           </div>
           {expanded === p.id && (
-            <pre className="ha-process-log">
-              {p.output.slice(-100).join("\n") || "(no output)"}
-            </pre>
+            <pre className="ha-process-log">{p.output.slice(-100).join("\n") || "(no output)"}</pre>
           )}
         </div>
       ))}

@@ -68,18 +68,10 @@ export function TerminalSurface({ config, onComplete }: TerminalSurfaceProps) {
           >
             🔍
           </button>
-          <button
-            className="ha-btn ha-btn--sm ha-btn--icon"
-            title="Copy"
-            onClick={handleCopy}
-          >
+          <button className="ha-btn ha-btn--sm ha-btn--icon" title="Copy" onClick={handleCopy}>
             📋
           </button>
-          <button
-            className="ha-btn ha-btn--sm"
-            title="Re-run"
-            onClick={handleReRun}
-          >
+          <button className="ha-btn ha-btn--sm" title="Re-run" onClick={handleReRun}>
             ↻ Re-run
           </button>
           <button className="ha-btn ha-btn--sm ha-btn--primary" onClick={handleSend}>
@@ -99,11 +91,18 @@ export function TerminalSurface({ config, onComplete }: TerminalSurfaceProps) {
             autoFocus
           />
           <span className="ha-term-search-count">
-            {searchText ? output.split("\n").filter((l) => l.toLowerCase().includes(searchText.toLowerCase())).length : 0} results
+            {searchText
+              ? output.split("\n").filter((l) => l.toLowerCase().includes(searchText.toLowerCase()))
+                  .length
+              : 0}{" "}
+            results
           </span>
           <button
             className="ha-btn ha-btn--sm ha-btn--icon"
-            onClick={() => { setSearchOpen(false); setSearchText(""); }}
+            onClick={() => {
+              setSearchOpen(false);
+              setSearchText("");
+            }}
           >
             ✕
           </button>
@@ -115,7 +114,9 @@ export function TerminalSurface({ config, onComplete }: TerminalSurfaceProps) {
         {searchText ? (
           <pre className="ha-term-output ha-term-output--filtered">{filteredLines}</pre>
         ) : (
-          <pre className="ha-term-output">{output || <span className="ha-term-placeholder">Waiting for output...</span>}</pre>
+          <pre className="ha-term-output">
+            {output || <span className="ha-term-placeholder">Waiting for output...</span>}
+          </pre>
         )}
       </div>
     </div>

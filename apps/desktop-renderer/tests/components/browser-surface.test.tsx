@@ -5,8 +5,8 @@ overlays are open; visibility is controlled via Electrobun's
 toggleHidden() on the element.
 */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, cleanup, act, fireEvent, screen } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { render, cleanup, act, fireEvent, screen } from "@testing-library/react";
 
 // Stub the Electrobun custom element so toggleHidden is observable.
 class FakeWebview extends HTMLElement {
@@ -15,20 +15,20 @@ class FakeWebview extends HTMLElement {
     this.toggleHiddenCalls.push(Boolean(hidden));
   }
 }
-if (!customElements.get('electrobun-webview')) {
-  customElements.define('electrobun-webview', FakeWebview);
+if (!customElements.get("electrobun-webview")) {
+  customElements.define("electrobun-webview", FakeWebview);
 }
 
-import { BrowserSurface } from '@/views/components/surfaces/BrowserSurface';
-import { useStore } from '@/views/store';
+import { BrowserSurface } from "@/views/components/surfaces/BrowserSurface";
+import { useStore } from "@/views/store";
 
 function getWebview(): FakeWebview {
-  return document.querySelector('electrobun-webview') as FakeWebview;
+  return document.querySelector("electrobun-webview") as FakeWebview;
 }
 
 beforeEach(() => {
   cleanup();
-  document.documentElement.classList.remove('ha-native-hidden');
+  document.documentElement.classList.remove("ha-native-hidden");
   useStore.setState({
     userMenuOpen: false,
     composerOpen: false,
@@ -38,17 +38,17 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  document.documentElement.classList.remove('ha-native-hidden');
+  document.documentElement.classList.remove("ha-native-hidden");
   vi.unstubAllGlobals();
 });
 
-describe('BrowserSurface', () => {
-  it('renders the native webview element', () => {
+describe("BrowserSurface", () => {
+  it("renders the native webview element", () => {
     render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
     expect(getWebview()).not.toBeNull();
   });
 
-  it('never unmounts the webview when overlays open (page stays loaded)', () => {
+  it("never unmounts the webview when overlays open (page stays loaded)", () => {
     render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
     const el = getWebview();
 
@@ -63,9 +63,9 @@ describe('BrowserSurface', () => {
     expect(getWebview()).toBe(el);
   });
 
-  it('keeps the address bar interactive', () => {
+  it("keeps the address bar interactive", () => {
     render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
-    expect(document.querySelector('.ha-browser-url-input')).not.toBeNull();
+    expect(document.querySelector(".ha-browser-url-input")).not.toBeNull();
   });
 });
 
@@ -82,11 +82,11 @@ function stubDesktop() {
       registerGuest: vi.fn(),
       unregisterGuest: vi.fn(),
     },
-    runtime: 'electron' as const,
+    runtime: "electron" as const,
   };
-  vi.stubGlobal('desktop', api);
+  vi.stubGlobal("desktop", api);
   vi.stubGlobal(
-    'ResizeObserver',
+    "ResizeObserver",
     class {
       observe() {}
       unobserve() {}
@@ -96,118 +96,116 @@ function stubDesktop() {
   return api;
 }
 
-describe('BrowserSurface (Electron mode)', () => {
-  it('renders an Electron <webview> in the DOM (not the electrobun element, not a native view)', () => {
+describe("BrowserSurface (Electron mode)", () => {
+  it("renders an Electron <webview> in the DOM (not the electrobun element, not a native view)", () => {
     const api = stubDesktop();
     render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
 
-    expect(document.querySelector('electrobun-webview')).toBeNull();
-    const wv = document.querySelector('webview');
+    expect(document.querySelector("electrobun-webview")).toBeNull();
+    const wv = document.querySelector("webview");
     expect(wv).not.toBeNull();
-    expect(wv!.getAttribute('src')).toBe('https://claude.ai');
+    expect(wv!.getAttribute("src")).toBe("https://claude.ai");
     // No native-view IPC anymore — the page lives in the DOM z-order.
     expect(api.view.create).not.toHaveBeenCalled();
   });
 
-  it('stays mounted and visible when overlays open (no hiding)', () => {
+  it("stays mounted and visible when overlays open (no hiding)", () => {
     const api = stubDesktop();
     render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
 
     act(() => {
       useStore.setState({ userMenuOpen: true });
     });
-    expect(document.querySelector('webview')).not.toBeNull();
+    expect(document.querySelector("webview")).not.toBeNull();
     expect(api.view.setVisible).not.toHaveBeenCalled();
 
     act(() => {
       useStore.setState({ userMenuOpen: false });
     });
-    expect(document.querySelector('webview')).not.toBeNull();
+    expect(document.querySelector("webview")).not.toBeNull();
   });
 
-  it('updates the webview src when the url prop changes', () => {
+  it("updates the webview src when the url prop changes", () => {
     stubDesktop();
-    const { rerender } = render(
-      <BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />,
-    );
+    const { rerender } = render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
     rerender(<BrowserSurface url="https://example.com" onUrlChange={() => {}} />);
 
-    const wv = document.querySelector('webview');
-    expect(wv!.getAttribute('src')).toBe('https://example.com');
+    const wv = document.querySelector("webview");
+    expect(wv!.getAttribute("src")).toBe("https://example.com");
   });
 
-  it('keeps the address bar interactive in Electron mode', () => {
+  it("keeps the address bar interactive in Electron mode", () => {
     stubDesktop();
     render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} />);
-    expect(document.querySelector('.ha-browser-url-input')).not.toBeNull();
+    expect(document.querySelector(".ha-browser-url-input")).not.toBeNull();
   });
 });
 
-import { useWindowMaximize } from '@/views/services/window-controls';
+import { useWindowMaximize } from "@/views/services/window-controls";
 
 function MaxHarness() {
   const { toggleMaximize } = useWindowMaximize();
   return <button onClick={toggleMaximize}>max</button>;
 }
 
-describe('useWindowMaximize (Electron mode)', () => {
-  it('routes to the desktop bridge', () => {
+describe("useWindowMaximize (Electron mode)", () => {
+  it("routes to the desktop bridge", () => {
     const api = stubDesktop();
     render(<MaxHarness />);
-    fireEvent.click(screen_get('max'));
+    fireEvent.click(screen_get("max"));
     expect(api.window.maximize).toHaveBeenCalled();
 
     function screen_get(t: string) {
       // local helper to avoid importing screen at top while unused elsewhere
-      return document.querySelector('button')!;
+      return document.querySelector("button")!;
     }
   });
 });
 
 // ── Agent handoff overlay ─────────────────────────────────────────────────
 
-import { wsService } from '@/views/services/ws-service';
+import { wsService } from "@/views/services/ws-service";
 
-vi.mock('@/views/services/ws-service', () => ({
+vi.mock("@/views/services/ws-service", () => ({
   wsService: { send: vi.fn(() => true) },
 }));
 
-describe('BrowserSurface (agent handoff)', () => {
+describe("BrowserSurface (agent handoff)", () => {
   beforeEach(() => {
     useStore.setState({ browserHandoffs: {} });
   });
 
-  it('shows the handoff banner with reason and releases on Done', () => {
+  it("shows the handoff banner with reason and releases on Done", () => {
     stubDesktop();
     useStore.setState({
-      browserHandoffs: { 'surf-x': { reason: 'solve the CAPTCHA' } },
+      browserHandoffs: { "surf-x": { reason: "solve the CAPTCHA" } },
     });
-    render(
-      <BrowserSurface url="https://claude.ai" onUrlChange={() => {}} surfaceId="surf-x" />,
-    );
+    render(<BrowserSurface url="https://claude.ai" onUrlChange={() => {}} surfaceId="surf-x" />);
 
-    expect(screen.getByText('solve the CAPTCHA')).toBeTruthy();
-    fireEvent.click(screen.getByText('Done — hand back'));
+    expect(screen.getByText("solve the CAPTCHA")).toBeTruthy();
+    fireEvent.click(screen.getByText("Done — hand back"));
     expect(wsService.send).toHaveBeenCalledWith({
-      type: 'handoff:complete',
-      surfaceId: 'surf-x',
+      type: "handoff:complete",
+      surfaceId: "surf-x",
     });
   });
 
-  it('shows no banner when there is no handoff', () => {
+  it("shows no banner when there is no handoff", () => {
     stubDesktop();
     const { container } = render(
       <BrowserSurface url="https://claude.ai" onUrlChange={() => {}} surfaceId="surf-z" />,
     );
-    expect(container.querySelector('.ha-webview-handoff')).toBeNull();
+    expect(container.querySelector(".ha-webview-handoff")).toBeNull();
   });
 
-  it('is StrictMode-safe: keeps guest registration across remounts', () => {
+  it("is StrictMode-safe: keeps guest registration across remounts", () => {
     const api = stubDesktop();
     const { unmount, rerender } = render(
       <BrowserSurface url="https://example.com" onUrlChange={() => {}} surfaceId="surf-y" />,
     );
-    rerender(<BrowserSurface url="https://example.com" onUrlChange={() => {}} surfaceId="surf-y" />);
+    rerender(
+      <BrowserSurface url="https://example.com" onUrlChange={() => {}} surfaceId="surf-y" />,
+    );
     unmount();
     // Registration must survive unmounts (server prunes dead guests via
     // isDestroyed); accidental unregister here was the original bug.

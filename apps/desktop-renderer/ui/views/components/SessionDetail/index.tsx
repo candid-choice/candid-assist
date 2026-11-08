@@ -33,7 +33,14 @@ export interface SessionDetailProps {
   onBack?: () => void;
 }
 
-function SessionDetail({ session, surfaces = [], onSurfaceClick, onArchive, onDelete, onBack }: SessionDetailProps) {
+function SessionDetail({
+  session,
+  surfaces = [],
+  onSurfaceClick,
+  onArchive,
+  onDelete,
+  onBack,
+}: SessionDetailProps) {
   return (
     <div className="ha-session-detail">
       {/* ── Header ─────────────────────────────────────────────────── */}
@@ -50,7 +57,10 @@ function SessionDetail({ session, surfaces = [], onSurfaceClick, onArchive, onDe
             </button>
           )}
           {onDelete && (
-            <button className="ha-session-detail-action ha-session-detail-action--danger" onClick={onDelete}>
+            <button
+              className="ha-session-detail-action ha-session-detail-action--danger"
+              onClick={onDelete}
+            >
               <IconTrash size={14} />
               Delete
             </button>
@@ -69,7 +79,9 @@ function SessionDetail({ session, surfaces = [], onSurfaceClick, onArchive, onDe
           <span className={`ha-session-detail-status ha-session-detail-status--${session.status}`}>
             {session.status}
           </span>
-          <span>{session.surfaceCount} surface{session.surfaceCount !== 1 ? "s" : ""}</span>
+          <span>
+            {session.surfaceCount} surface{session.surfaceCount !== 1 ? "s" : ""}
+          </span>
         </div>
       </div>
 

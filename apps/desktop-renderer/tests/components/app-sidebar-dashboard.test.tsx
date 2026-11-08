@@ -5,30 +5,24 @@ session selection, and New Task (server-first create + offline queue
 fallback).
 */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 
-import {
-  AppSidebar,
-  toSidebarSession,
-} from '@/views/components/AppSidebar';
-import { AppDashboard } from '@/views/components/AppDashboard';
-import { useStore } from '@/views/store';
-import { getQueueSize, clearQueue } from '@/views/errors/offline-queue';
-import type { SessionDoc } from '@/views/services/sync/types';
+import { AppSidebar, toSidebarSession } from "@/views/components/AppSidebar";
+import { AppDashboard } from "@/views/components/AppDashboard";
+import { useStore } from "@/views/store";
+import { getQueueSize, clearQueue } from "@/views/errors/offline-queue";
+import type { SessionDoc } from "@/views/services/sync/types";
 
-function makeSession(
-  id: string,
-  overrides: Partial<SessionDoc> = {},
-): SessionDoc {
+function makeSession(id: string, overrides: Partial<SessionDoc> = {}): SessionDoc {
   return {
     id,
-    userId: 'user-1',
+    userId: "user-1",
     title: `Session ${id}`,
-    status: 'active',
+    status: "active",
     surfaces: [],
-    createdAt: '2025-01-01T00:00:00Z',
-    updatedAt: '2025-01-01T00:00:00Z',
+    createdAt: "2025-01-01T00:00:00Z",
+    updatedAt: "2025-01-01T00:00:00Z",
     archivedAt: null,
     ...overrides,
   };
@@ -36,7 +30,7 @@ function makeSession(
 
 function mockFetch(impl: (url: string, init?: RequestInit) => Promise<any>) {
   const fn = vi.fn(impl);
-  vi.stubGlobal('fetch', fn);
+  vi.stubGlobal("fetch", fn);
   return fn;
 }
 
@@ -46,7 +40,7 @@ beforeEach(async () => {
   useStore.setState({
     sessions: [],
     activeSessionId: null,
-    authToken: 'test-token',
+    authToken: "test-token",
     composerOpen: false,
   });
 });
@@ -55,54 +49,44 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('AppSidebar per-row delete', () => {
-  it('renders a delete button that removes the session after confirm', async () => {
-    useStore.getState().setSessions([makeSession('a'), makeSession('b')]);
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+describe("AppSidebar per-row delete", () => {
+  it("renders a delete button that removes the session after confirm", async () => {
+    useStore.getState().setSessions([makeSession("a"), makeSession("b")]);
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const fetchFn = mockFetch(async () => ({ ok: true, json: async () => ({}) }));
     render(<AppSidebar />);
 
-    const buttons = await screen.findAllByRole('button', { name: /delete session a/i });
+    const buttons = await screen.findAllByRole("button", { name: /delete session a/i });
     fireEvent.click(buttons[0]!);
     expect(confirmSpy).toHaveBeenCalled();
-    await waitFor(() =>
-      expect(useStore.getState().sessions.map((s) => s.id)).toEqual(['b']),
-    );
-    expect(fetchFn.mock.calls.some((call) => String(call[0]).includes('sessions/a'))).toBe(true);
+    await waitFor(() => expect(useStore.getState().sessions.map((s) => s.id)).toEqual(["b"]));
+    expect(fetchFn.mock.calls.some((call) => String(call[0]).includes("sessions/a"))).toBe(true);
     confirmSpy.mockRestore();
   });
 });
 
 // ── Mapping ────────────────────────────────────────────────────────────────
 
-describe('toSidebarSession', () => {
-  it('maps active and waiting statuses through', () => {
-    expect(toSidebarSession(makeSession('a', { status: 'active' })).status).toBe(
-      'active',
-    );
-    expect(toSidebarSession(makeSession('b', { status: 'waiting' })).status).toBe(
-      'waiting',
-    );
+describe("toSidebarSession", () => {
+  it("maps active and waiting statuses through", () => {
+    expect(toSidebarSession(makeSession("a", { status: "active" })).status).toBe("active");
+    expect(toSidebarSession(makeSession("b", { status: "waiting" })).status).toBe("waiting");
   });
 
-  it('buckets done and error as archived', () => {
-    expect(toSidebarSession(makeSession('c', { status: 'done' })).status).toBe(
-      'archived',
-    );
-    expect(toSidebarSession(makeSession('d', { status: 'error' })).status).toBe(
-      'archived',
-    );
+  it("buckets done and error as archived", () => {
+    expect(toSidebarSession(makeSession("c", { status: "done" })).status).toBe("archived");
+    expect(toSidebarSession(makeSession("d", { status: "error" })).status).toBe("archived");
   });
 
-  it('counts embedded surfaces', () => {
-    const doc = makeSession('e', {
+  it("counts embedded surfaces", () => {
+    const doc = makeSession("e", {
       surfaces: [
         {
-          surfaceId: 's1',
-          type: 'input',
+          surfaceId: "s1",
+          type: "input",
           url: null,
-          prompt: 'p',
-          createdAt: '',
+          prompt: "p",
+          createdAt: "",
           userResponse: null,
           claudeResponse: null,
           closedAt: null,
@@ -115,87 +99,105 @@ describe('toSidebarSession', () => {
 
 // ── AppSidebar ─────────────────────────────────────────────────────────────
 
-describe('AppSidebar', () => {
-  it('renders sessions from the store', () => {
+describe("AppSidebar", () => {
+  it("renders sessions from the store", () => {
     useStore.setState({
-      sessions: [makeSession('a', { title: 'Alpha task' })],
+      sessions: [makeSession("a", { title: "Alpha task" })],
     });
     render(<AppSidebar open width={240} />);
 
-    expect(screen.getByText('Alpha task')).toBeDefined();
+    expect(screen.getByText("Alpha task")).toBeDefined();
   });
 
-  it('clicking a session sets activeSessionId', () => {
-    useStore.setState({ sessions: [makeSession('a', { title: 'Alpha task' })] });
+  it("clicking a session sets activeSessionId", () => {
+    useStore.setState({ sessions: [makeSession("a", { title: "Alpha task" })] });
     render(<AppSidebar open width={240} />);
 
-    fireEvent.click(screen.getByText('Alpha task'));
-    expect(useStore.getState().activeSessionId).toBe('a');
+    fireEvent.click(screen.getByText("Alpha task"));
+    expect(useStore.getState().activeSessionId).toBe("a");
   });
 
-  it('has no New Task button — tasks arrive via MCP', () => {
+  it("has no New Task button — tasks arrive via MCP", () => {
     useStore.setState({ composerOpen: false });
     render(<AppSidebar open width={240} />);
-    expect(screen.queryByText('New Task')).toBeNull();
+    expect(screen.queryByText("New Task")).toBeNull();
     expect(useStore.getState().composerOpen).toBe(false);
   });
 });
 
 // ── AppDashboard ───────────────────────────────────────────────────────────
 
-describe('AppDashboard', () => {
-  it('renders recent sessions from the store', () => {
+describe("AppDashboard", () => {
+  it("renders recent sessions from the store", () => {
     useStore.setState({
-      sessions: [makeSession('a', { title: 'Dashboard session' })],
+      sessions: [makeSession("a", { title: "Dashboard session" })],
     });
     render(<AppDashboard active />);
 
-    expect(screen.getByText('Recent Sessions')).toBeDefined();
-    expect(screen.getByText('Dashboard session')).toBeDefined();
+    expect(screen.getByText("Recent Sessions")).toBeDefined();
+    expect(screen.getByText("Dashboard session")).toBeDefined();
   });
 
-  it('clicking a recent session activates it', () => {
+  it("clicking a recent session activates it", () => {
     useStore.setState({
-      sessions: [makeSession('a', { title: 'Dashboard session' })],
+      sessions: [makeSession("a", { title: "Dashboard session" })],
     });
     render(<AppDashboard active />);
 
-    fireEvent.click(screen.getByText('Dashboard session'));
-    expect(useStore.getState().activeSessionId).toBe('a');
+    fireEvent.click(screen.getByText("Dashboard session"));
+    expect(useStore.getState().activeSessionId).toBe("a");
   });
 
-  it('has no New Task button — tasks arrive via MCP', () => {
+  it("has no New Task button — tasks arrive via MCP", () => {
     useStore.setState({ composerOpen: false });
     render(<AppDashboard active />);
-    expect(screen.queryByText('New Task')).toBeNull();
+    expect(screen.queryByText("New Task")).toBeNull();
     expect(useStore.getState().composerOpen).toBe(false);
   });
 
-  it('renders nothing when inactive', () => {
+  it("renders nothing when inactive", () => {
     const { container } = render(<AppDashboard active={false} />);
-    expect(container.innerHTML).toBe('');
+    expect(container.innerHTML).toBe("");
   });
 });
 
-describe('AppSidebar session switching follows content', () => {
-  it('clicking a session selects its last surface or clears the pane', async () => {
-    useStore.getState().setSessions([makeSession('a'), makeSession('b')]);
+describe("AppSidebar session switching follows content", () => {
+  it("clicking a session selects its last surface or clears the pane", async () => {
+    useStore.getState().setSessions([makeSession("a"), makeSession("b")]);
     useStore.setState({
       views: [
-        { id: 'va', label: 'A', type: 'browser', title: 't', payload: {}, source: 'mcp', createdAt: 1, sessionId: 'a' },
-        { id: 'va2', label: 'A2', type: 'browser', title: 't', payload: {}, source: 'mcp', createdAt: 2, sessionId: 'a' },
+        {
+          id: "va",
+          label: "A",
+          type: "browser",
+          title: "t",
+          payload: {},
+          source: "mcp",
+          createdAt: 1,
+          sessionId: "a",
+        },
+        {
+          id: "va2",
+          label: "A2",
+          type: "browser",
+          title: "t",
+          payload: {},
+          source: "mcp",
+          createdAt: 2,
+          sessionId: "a",
+        },
       ],
       activeSurface: null,
       activeViewId: null,
     } as never);
     render(<AppSidebar />);
 
-    fireEvent.click(await screen.findByText('Session a'));
-    expect(useStore.getState().activeSessionId).toBe('a');
-    expect(useStore.getState().activeSurface?.id).toBe('va2'); // last owned view
+    fireEvent.click(await screen.findByText("Session a"));
+    expect(useStore.getState().activeSessionId).toBe("a");
+    expect(useStore.getState().activeSurface?.id).toBe("va2"); // last owned view
 
-    fireEvent.click(screen.getByText('Session b'));
-    expect(useStore.getState().activeSessionId).toBe('b');
+    fireEvent.click(screen.getByText("Session b"));
+    expect(useStore.getState().activeSessionId).toBe("b");
     expect(useStore.getState().activeSurface).toBeNull(); // empty session → guide
   });
 });

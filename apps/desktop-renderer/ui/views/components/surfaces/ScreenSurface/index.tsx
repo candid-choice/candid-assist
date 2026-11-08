@@ -50,7 +50,11 @@ export function ScreenSurface({ config, onDone, onCancel }: ScreenSurfaceProps) 
           <div className="ha-screen-preview-placeholder">
             <IconDeviceDesktop className="size-6 text-muted-foreground/50" strokeWidth={1.5} />
             <p className="ha-screen-preview-title">
-              {selectedMode === "region" ? "Drag to select a region" : selectedMode === "window" ? "Click a window to capture" : "Capturing full screen"}
+              {selectedMode === "region"
+                ? "Drag to select a region"
+                : selectedMode === "window"
+                  ? "Click a window to capture"
+                  : "Capturing full screen"}
             </p>
             <p className="ha-screen-preview-sub">
               {selectedMode === "screen" ? "" : "Click the window or region to capture"}
@@ -59,8 +63,12 @@ export function ScreenSurface({ config, onDone, onCancel }: ScreenSurfaceProps) 
         </div>
       </div>
       <div className="ha-screen-actions">
-        <button className="ha-btn ha-btn--sm" onClick={onCancel} type="button">Cancel</button>
-        <button className="ha-btn ha-btn--sm ha-btn--primary" onClick={handleCapture} type="button">Send</button>
+        <button className="ha-btn ha-btn--sm" onClick={onCancel} type="button">
+          Cancel
+        </button>
+        <button className="ha-btn ha-btn--sm ha-btn--primary" onClick={handleCapture} type="button">
+          Send
+        </button>
       </div>
     </div>
   );

@@ -15,13 +15,7 @@ export interface ActionButtonProps {
   onClick: () => void;
 }
 
-export function ActionButton({
-  type,
-  label,
-  icon,
-  active = false,
-  onClick,
-}: ActionButtonProps) {
+export function ActionButton({ type, label, icon, active = false, onClick }: ActionButtonProps) {
   return (
     <button
       className={`ha-action-btn${active ? " ha-action-btn--active" : ""}`}
