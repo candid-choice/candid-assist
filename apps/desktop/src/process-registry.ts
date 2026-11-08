@@ -96,7 +96,8 @@ export function startProcess(opts: {
   });
   child.on("exit", (code) => {
     proc.exitCode = code;
-    proc.status = code === 0 ? "exited" : code === null ? "crashed" : code > 128 ? "crashed" : "stopped";
+    proc.status =
+      code === 0 ? "exited" : code === null ? "crashed" : code > 128 ? "crashed" : "stopped";
     proc.stoppedAt = Date.now();
     proc.child = undefined;
     emit(proc);

@@ -62,7 +62,9 @@ async function discoverModel(
     const res = await doFetch(`${base}/models`, { signal });
     if (res.ok) {
       const json = (await res.json()) as { data?: Array<{ id?: string }> };
-      const first = Array.isArray(json?.data) ? json.data.find((m) => typeof m.id === "string")?.id : undefined;
+      const first = Array.isArray(json?.data)
+        ? json.data.find((m) => typeof m.id === "string")?.id
+        : undefined;
       if (first) return first;
     }
   } catch {
@@ -75,12 +77,18 @@ async function discoverModel(
 export async function planGoal(goal: string, opts: PlanOptions = {}): Promise<PlannedTask> {
   const trimmed = goal.trim();
   if (!trimmed) throw new Error("PLAN_001: goal required");
-  const base = (opts.baseUrl || process.env.HA_AGENT_BASE_URL || PLAN_DEFAULT_BASE_URL).replace(/\/+$/, "");
+  const base = (opts.baseUrl || process.env.HA_AGENT_BASE_URL || PLAN_DEFAULT_BASE_URL).replace(
+    /\/+$/,
+    "",
+  );
   const doFetch = opts.fetchImpl ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 45_000);
   try {
-    const modelId = opts.modelId || process.env.HA_AGENT_MODEL || (await discoverModel(base, doFetch, controller.signal));
+    const modelId =
+      opts.modelId ||
+      process.env.HA_AGENT_MODEL ||
+      (await discoverModel(base, doFetch, controller.signal));
     const res = await doFetch(`${base}/chat/completions`, {
       method: "POST",
       signal: controller.signal,
@@ -95,7 +103,12 @@ export async function planGoal(goal: string, opts: PlanOptions = {}): Promise<Pl
       }),
     });
     if (!res.ok) {
-      throw new Error(`PLAN_002: planner endpoint ${res.status} ${await res.text().catch(() => "")}`.slice(0, 300));
+      throw new Error(
+        `PLAN_002: planner endpoint ${res.status} ${await res.text().catch(() => "")}`.slice(
+          0,
+          300,
+        ),
+      );
     }
     const json = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
@@ -114,8 +127,11 @@ export async function planGoal(goal: string, opts: PlanOptions = {}): Promise<Pl
     if (!Array.isArray(p.actions) || p.actions.length === 0) {
       throw new Error("PLAN_005: planner produced no actions");
     }
-    if (p.actions.length > 25) throw new Error("PLAN_006: planner produced too many actions (max 25)");
-    const actions = p.actions.filter((a) => a && typeof a === "object") as Array<Record<string, unknown>>;
+    if (p.actions.length > 25)
+      throw new Error("PLAN_006: planner produced too many actions (max 25)");
+    const actions = p.actions.filter((a) => a && typeof a === "object") as Array<
+      Record<string, unknown>
+    >;
     if (actions.length === 0) throw new Error("PLAN_005: planner produced no actions");
     return {
       summary: typeof p.summary === "string" ? p.summary.slice(0, 500) : trimmed.slice(0, 200),

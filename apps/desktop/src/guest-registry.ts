@@ -16,10 +16,7 @@ export interface GuestHandle {
   getURL: () => string;
 }
 
-export type GuestResolver = (
-  surfaceId: string,
-  webContentsId: number,
-) => GuestHandle | undefined;
+export type GuestResolver = (surfaceId: string, webContentsId: number) => GuestHandle | undefined;
 
 /** surfaceId -> webContentsId (reported by the renderer). */
 const surfaceToWcId = new Map<string, number>();

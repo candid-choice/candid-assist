@@ -16,7 +16,13 @@ connection state: socket open + initialized + heartbeat-alive.
 import { randomUUID } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 
-import { processMcpMessage, setWsPresenceProvider, setWsAgentsProvider, broadcastAgentPresence, type McpAgentCtx } from "./mcp-server";
+import {
+  processMcpMessage,
+  setWsPresenceProvider,
+  setWsAgentsProvider,
+  broadcastAgentPresence,
+  type McpAgentCtx,
+} from "./mcp-server";
 
 const HEARTBEAT_MS = 15_000;
 const MAX_PAYLOAD = 1024 * 1024;
@@ -43,7 +49,11 @@ function firePresence(): void {
 /** Live initialized agents, with their bound harness identity (ctx).
  * Deduped by bound agentSessionId — one agent may hold several sockets
  * (e.g. pi-mcp transport + the extension's presence hello channel). */
-export function getLiveAgentInfos(): Array<{ client: string; agentSessionId: string | null; project?: string | null }> {
+export function getLiveAgentInfos(): Array<{
+  client: string;
+  agentSessionId: string | null;
+  project?: string | null;
+}> {
   const out: Array<{ client: string; agentSessionId: string | null; project?: string | null }> = [];
   const seen = new Set<string>();
   for (const c of connections.values()) {
@@ -96,7 +106,11 @@ export function startMcpWebSocketServer(opts: WsMcpStartOptions = {}): void {
         parsed = JSON.parse(data.toString());
       } catch {
         socket.send(
-          JSON.stringify({ jsonrpc: "2.0", error: { code: -32700, message: "Parse error" }, id: null }),
+          JSON.stringify({
+            jsonrpc: "2.0",
+            error: { code: -32700, message: "Parse error" },
+            id: null,
+          }),
         );
         return;
       }
@@ -145,7 +159,9 @@ export function startMcpWebSocketServer(opts: WsMcpStartOptions = {}): void {
     socket.on("close", (code, reason) => {
       firePresence();
       connections.delete(id);
-      console.log(`[mcp-ws] - closed ${id} (${code}${reason.length ? ": " + reason.toString() : ""})`);
+      console.log(
+        `[mcp-ws] - closed ${id} (${code}${reason.length ? ": " + reason.toString() : ""})`,
+      );
     });
 
     socket.on("error", (err) => {

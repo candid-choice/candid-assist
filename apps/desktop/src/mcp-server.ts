@@ -9,7 +9,13 @@ Starts on port 3615, retries 3616–3624 if in use.
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 
-import { resolveGuestEntry, resolveGuest, listGuestSurfaceIds, unregisterGuest, type GuestHandle } from "./guest-registry";
+import {
+  resolveGuestEntry,
+  resolveGuest,
+  listGuestSurfaceIds,
+  unregisterGuest,
+  type GuestHandle,
+} from "./guest-registry";
 import { checkForUpdates, onUpdaterState } from "./updater";
 import {
   startProcess as registryStart,
@@ -22,6 +28,26 @@ import {
 } from "./process-registry";
 import { v4 as uuidv4 } from "uuid";
 import { planGoal } from "./task-service";
+import {
+  BLOCKER_FACTS_JS,
+  captchaLike,
+  classifyBlockers,
+  hardBlockers,
+  handoffPrompt,
+  type Blocker,
+  type BlockerFacts,
+} from "./browser-blockers";
+import {
+  acquire as throttleAcquire,
+  forgive as throttleForgive,
+  hostOf as throttleHostOf,
+  penalize as throttlePenalize,
+  resetHosts as throttleResetHosts,
+  resetPolicy as throttleResetPolicy,
+  setPolicy as throttleSetPolicy,
+  snapshot as throttleSnapshot,
+  RateLimitedError,
+} from "./browser-throttle";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -70,7 +96,7 @@ interface AgentRecord {
 const agents = new Map<string, AgentRecord>();
 
 function touchAgent(params: unknown, ip: string): void {
-  let name = 'client';
+  let name = "client";
   const p = params as Record<string, unknown> | undefined;
   const ci = p?.["clientInfo"] as Record<string, unknown> | undefined;
   if (ci && typeof ci["name"] === "string" && ci["name"].length > 0) {
@@ -155,6 +181,20 @@ function requireUrl(value: unknown, code = "MCP_001"): string {
   return value;
 }
 
+/** An image to mark up: a normal http(s) URL, or an inline data: URI (agents
+ *  often pass a screenshot they just captured). */
+function requireImageSrc(value: unknown): string {
+  const v = typeof value === "string" ? value.trim() : "";
+  if (!v) throw new Error("MCP_016: imageSrc must be a non-empty string");
+  if (v.startsWith("data:image/")) {
+    if (v.length > MAX_URL_LEN) {
+      throw new Error("MCP_011: imageSrc exceeds " + MAX_URL_LEN + " characters");
+    }
+    return v;
+  }
+  return requireUrl(v, "MCP_016");
+}
+
 function optPrompt(value: unknown, truncate = false): string | undefined {
   if (typeof value !== "string") return undefined;
   const p = value.trim();
@@ -208,6 +248,13 @@ function generateSurfaceId(): string {
 export interface UiControlHandlers {
   reloadUI?: () => Record<string, unknown>;
   restartApp?: () => Record<string, unknown>;
+  /** Wipe cookies/storage/cache for one site (or all) in the browsing
+   *  partition. Provided by the Electron main process; absent under node. */
+  clearSiteData?: (opts: {
+    url?: string;
+    host?: string;
+    what?: string[];
+  }) => Promise<Record<string, unknown>> | Record<string, unknown>;
 }
 let uiControls: UiControlHandlers = {};
 
@@ -229,11 +276,23 @@ function handleRestartApp(): Record<string, unknown> {
 
 onUpdaterState((st) => {
   if (st.phase === "available") {
-    notifyUiMessage({ message: `Version ${st.version ?? "?"} is available — downloading in background…`, level: "info", title: "Updater" });
+    notifyUiMessage({
+      message: `Version ${st.version ?? "?"} is available — downloading in background…`,
+      level: "info",
+      title: "Updater",
+    });
   } else if (st.phase === "ready") {
-    notifyUiMessage({ message: `Version ${st.version ?? "?"} downloaded — restart to install (Settings ▸ About ▸ Restart Now).`, level: "success", title: "Updater" });
+    notifyUiMessage({
+      message: `Version ${st.version ?? "?"} downloaded — restart to install (Settings ▸ About ▸ Restart Now).`,
+      level: "success",
+      title: "Updater",
+    });
   } else if (st.phase === "error") {
-    notifyUiMessage({ message: st.error ?? "update check failed", level: "error", title: "Updater" });
+    notifyUiMessage({
+      message: st.error ?? "update check failed",
+      level: "error",
+      title: "Updater",
+    });
   }
 });
 
@@ -329,7 +388,7 @@ function handleGetProcessLog(args: unknown): Record<string, unknown> {
   const id = typeof obj["id"] === "string" ? obj["id"] : "";
   if (!id) throw new Error("MCP_019: id required");
   const proc = registryGet(id);
-  if (!proc) throw new Error("PROC_002: unknown process \"" + id + "\"");
+  if (!proc) throw new Error('PROC_002: unknown process "' + id + '"');
   return {
     processId: proc.id,
     name: proc.name,
@@ -377,24 +436,76 @@ async function handleOpenBrowserSurface(
   return { surfaceId: id, status: "opened" };
 }
 
-function handleOpenCanvasSurface(args: unknown): Record<string, unknown> {
+async function handleOpenCanvasSurface(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
   const obj = args as Record<string, unknown>;
   if (openSurfaces.size >= MAX_SURFACES) {
     throw new Error("MCP_002: Maximum surfaces reached");
   }
+  // One visual surface for anything you want a human to look at, mark up, or
+  // annotate — a blank sketchpad, or an image (screenshot, chart, page shot)
+  // they draw on. Replaces the old read-only image surface.
+  const imageSrc =
+    obj["imageSrc"] !== undefined && obj["imageSrc"] !== null && obj["imageSrc"] !== ""
+      ? requireImageSrc(obj["imageSrc"])
+      : undefined;
+  const annotations = Array.isArray(obj["annotations"])
+    ? (obj["annotations"] as unknown[]).filter(
+        (a) =>
+          a && typeof a === "object" && typeof (a as Record<string, unknown>)["text"] === "string",
+      )
+    : undefined;
   const id = generateSurfaceId();
   openSurfaces.set(id, {
     surfaceId: id,
     type: "canvas",
-    payload: { prompt: optPrompt(obj["prompt"], true) },
+    payload: {
+      prompt: optPrompt(obj["prompt"], true),
+      ...(imageSrc ? { imageSrc } : {}),
+      ...(annotations && annotations.length ? { annotations } : {}),
+      markedUp: false,
+    },
     createdAt: Date.now(),
     lastActive: Date.now(),
     status: "open",
   });
-  return { surfaceId: id, status: "opened" };
+  // Push now (same reason as openInputSurface): with waitForMarkup the router
+  // would only broadcast after the human finishes, so they'd never see it.
+  notifySurfacePush({
+    surfaceId: id,
+    type: "canvas",
+    payload: openSurfaces.get(id)!.payload,
+    status: "pushed",
+    ...agentTagFor(ctx),
+  });
+  if (obj["waitForMarkup"] !== true) return { surfaceId: id, status: "opened" };
+  const timeoutMs = Math.min(
+    INPUT_WAIT_MAX_MS,
+    Math.max(1_000, typeof obj["timeoutMs"] === "number" ? obj["timeoutMs"] : 300_000),
+  );
+  const waited = await new Promise<Record<string, unknown>>((resolve) => {
+    const timer = setTimeout(() => {
+      inputWaiters.delete(id);
+      resolve({ status: "timeout", markedUp: false });
+    }, timeoutMs) as ReturnType<typeof setTimeout>;
+    timer.unref?.();
+    inputWaiters.set(id, { resolve, timer });
+  });
+  const rec = openSurfaces.get(id);
+  return {
+    surfaceId: id,
+    ...waited,
+    markup: waited.markup ?? rec?.payload?.["markup"] ?? null,
+    note: waited.note ?? rec?.payload?.["markupNote"] ?? null,
+  };
 }
 
-function handleOpenInputSurface(args: unknown): Record<string, unknown> {
+async function handleOpenInputSurface(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
   const obj = args as Record<string, unknown>;
   const question = obj["question"] as string | undefined;
   if (!question || typeof question !== "string" || question.trim().length === 0) {
@@ -411,31 +522,148 @@ function handleOpenInputSurface(args: unknown): Record<string, unknown> {
       kind: (obj["kind"] as string) ?? "text",
       question,
       options: obj["options"] as string[] | undefined,
+      answered: false,
     },
     createdAt: Date.now(),
     lastActive: Date.now(),
     status: "open",
   });
-  return { surfaceId: id, status: "opened" };
+  // Push NOW, before any wait: with waitForAnswer the router's post-handler
+  // broadcast would only fire after the human replies — and the human can't
+  // reply to a panel they never saw. Tagged like the router's push, because
+  // this is the push that reaches the renderer first.
+  notifySurfacePush({
+    surfaceId: id,
+    type: "input",
+    payload: openSurfaces.get(id)!.payload,
+    status: "pushed",
+    ...agentTagFor(ctx),
+  });
+  if (obj["waitForAnswer"] !== true) return { surfaceId: id, status: "opened" };
+  // Block this call until the human answers (or the surface closes / times out)
+  // so a decision the model must NOT guess actually comes from the person.
+  const timeoutMs = Math.min(
+    INPUT_WAIT_MAX_MS,
+    Math.max(1_000, typeof obj["timeoutMs"] === "number" ? obj["timeoutMs"] : 300_000),
+  );
+  const waited = await new Promise<Record<string, unknown>>((resolve) => {
+    const timer = setTimeout(() => {
+      inputWaiters.delete(id);
+      resolve({ status: "timeout", answered: false });
+    }, timeoutMs) as ReturnType<typeof setTimeout>;
+    timer.unref?.();
+    inputWaiters.set(id, { resolve, timer });
+  });
+  const rec = openSurfaces.get(id);
+  return {
+    surfaceId: id,
+    ...waited,
+    answer: waited.answer ?? rec?.payload?.["answer"] ?? null,
+    question,
+    kind: rec?.payload?.["kind"] ?? "text",
+  };
 }
 
-function handleOpenImageSurface(args: unknown): Record<string, unknown> {
-  const obj = args as Record<string, unknown>;
-  const src = requireUrl(obj["src"], "MCP_016");
-  const imgPrompt = optPrompt(obj["prompt"]);
-  if (openSurfaces.size >= MAX_SURFACES) {
-    throw new Error("MCP_002: Maximum surfaces reached");
+/** Agents that need the answer BEFORE continuing (a decision the model must
+ *  not guess: which account, which auth strategy, pay-or-skip) ask for
+ *  waitForAnswer and the tool blocks until the human answers, the surface
+ *  closes, or timeoutMs expires. */
+const INPUT_WAIT_MAX_MS = 10 * 60_000;
+const inputWaiters = new Map<
+  string,
+  { resolve: (v: Record<string, unknown>) => void; timer: ReturnType<typeof setTimeout> }
+>();
+
+function settleInputWait(id: string, value: Record<string, unknown>): void {
+  const w = inputWaiters.get(id);
+  if (!w) return;
+  inputWaiters.delete(id);
+  clearTimeout(w.timer);
+  w.resolve(value);
+}
+
+/** Renderer → main: the human marked up a canvas and hit Send. The flattened
+ *  PNG (background image + their annotations) lands on the surface payload, so
+ *  the agent reads it with readSurface — that is how a review actually closes.
+ *  The PNG itself never passes through the chat: readSurface digests it, and
+ *  what:"markup" returns the pixels only when the agent really needs them. */
+function handleCanvasRespond(msg: Record<string, unknown>): void {
+  const id = typeof msg["surfaceId"] === "string" ? msg["surfaceId"] : "";
+  const rec = id ? openSurfaces.get(id) : undefined;
+  if (!rec || rec.type !== "canvas") {
+    console.warn("[canvas] markup for unknown/closed surface", id || "(missing)");
+    return;
   }
-  const id = generateSurfaceId();
-  openSurfaces.set(id, {
+  const markup = typeof msg["markup"] === "string" ? msg["markup"] : "";
+  if (!markup.startsWith("data:image/")) {
+    console.warn("[canvas] rejected markup payload (not an image data URL)");
+    return;
+  }
+  const note = typeof msg["note"] === "string" ? msg["note"].trim() : "";
+  rec.payload = {
+    ...rec.payload,
+    markedUp: true,
+    markup,
+    markupNote: note || undefined,
+    markupAt: Date.now(),
+    markupBytes: markup.length,
+  };
+  rec.lastActive = Date.now();
+  notifySurfacePush({
     surfaceId: id,
-    type: "image",
-    payload: { src, ...(imgPrompt ? { prompt: imgPrompt } : {}) },
-    createdAt: Date.now(),
-    lastActive: Date.now(),
-    status: "open",
+    type: "canvas",
+    payload: { ...rec.payload, markup: "‹png omitted›" },
+    status: "marked-up",
   });
-  return { surfaceId: id, status: "opened" };
+  notifyUiMessage({
+    level: "success",
+    title: "Markup sent",
+    message: note
+      ? `Annotated canvas — “${note.slice(0, 80)}”`
+      : "Annotated canvas sent to the agent.",
+  });
+  settleInputWait(id, { status: "marked-up", markedUp: true, note: note || null });
+  console.log(`[canvas] markup stored on ${id} (${markup.length} bytes of data URL)`);
+}
+
+/** Renderer → main: the human answered an input surface. */
+function handleInputRespond(msg: Record<string, unknown>): void {
+  const id = typeof msg["surfaceId"] === "string" ? msg["surfaceId"] : "";
+  const rec = id ? openSurfaces.get(id) : undefined;
+  if (!rec || rec.type !== "input") {
+    console.warn("[input] respond for unknown/closed surface", id || "(missing)");
+    return;
+  }
+  const answer =
+    typeof msg["answer"] === "string"
+      ? msg["answer"]
+      : Array.isArray(msg["answer"])
+        ? (msg["answer"] as unknown[]).map(String)
+        : msg["answer"] === undefined
+          ? ""
+          : String(msg["answer"]);
+  rec.payload = {
+    ...rec.payload,
+    answered: true,
+    answer,
+    answeredAt: Date.now(),
+    answeredBy: msg["answeredBy"] === "agent" ? "agent" : "human",
+  };
+  rec.lastActive = Date.now();
+  // Push so every view (incl. the read-only portal) shows the answer.
+  notifySurfacePush({
+    surfaceId: id,
+    type: "input",
+    payload: rec.payload,
+    status: "answered",
+  });
+  notifyUiMessage({
+    level: "success",
+    title: "Answer received",
+    message: `“${String(rec.payload["question"] ?? "").slice(0, 60)}” → ${String(answer).slice(0, 120)}`,
+  });
+  settleInputWait(id, { status: "answered", answered: true, answer });
+  console.log(`[input] answered ${id}: ${String(answer).slice(0, 80)}`);
 }
 
 function handleOpenScreenCapture(args: unknown): Record<string, unknown> {
@@ -528,313 +756,499 @@ export function isMcpSignedIn(): boolean {
 // MCP tools/list manifest (JSON Schema per tool).
 const TOOL_DEFINITIONS = [
   {
-    name: 'openBrowserSurface',
-    description: 'Open an interactive web page in a Human Assist browser surface.',
+    name: "openBrowserSurface",
+    description: "Open an interactive web page in a Human Assist browser surface.",
     inputSchema: {
-      type: 'object',
-      properties: { url: { type: 'string', description: 'Absolute http(s) URL to display' } },
-      required: ['url'],
+      type: "object",
+      properties: { url: { type: "string", description: "Absolute http(s) URL to display" } },
+      required: ["url"],
     },
   },
   {
-    name: 'openCanvasSurface',
-    description: 'Show a generated canvas/visual surface with an optional prompt.',
+    name: "openCanvasSurface",
+    description:
+      'The one visual surface for anything a human should look at, mark up, or annotate: a blank sketchpad (prompt only), or an image they draw on (imageSrc: http(s) URL or data: URI — screenshot, chart, page shot). Pass annotations[] to pre-place numbered callouts, and waitForMarkup:true to BLOCK this call until the human clicks Send — the annotated result is then readable with readSurface(surfaceId) (digest shows markedUp/markupNote/markupAt; what:"markup" returns the PNG data URL). Supersedes the removed image surface.',
     inputSchema: {
-      type: 'object',
-      properties: { prompt: { type: 'string', description: 'Prompt/caption for the canvas' } },
-    },
-  },
-  {
-    name: 'openInputSurface',
-    description: 'Ask the human for input: free text, a choice among options, or a confirm.',
-    inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        question: { type: 'string', description: 'The question to show' },
-        kind: { type: 'string', enum: ['text', 'choices', 'confirm'], description: 'Input mode (default text)' },
-        options: { type: 'array', items: { type: 'string' }, description: 'Choices when kind=choices' },
-      },
-      required: ['question'],
-    },
-  },
-  {
-    name: 'openImageSurface',
-    description: 'Display an image (URL or data URI) for human review.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        src: { type: 'string', description: 'Image URL or data: URI' },
-        prompt: { type: 'string', description: 'Caption/instruction' },
-      },
-      required: ['src'],
-    },
-  },
-  {
-    name: 'openScreenCapture',
-    description: 'Capture the screen (or a region) for human context.',
-    inputSchema: {
-      type: 'object',
-      properties: { mode: { type: 'string', description: 'Capture mode (e.g. full, region)' } },
-    },
-  },
-  {
-    name: 'openCodeDiff',
-    description: 'Present a unified diff (and optional file list) for human approval.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        diff: { type: 'string', description: 'Unified diff text' },
-        files: { type: 'array', items: { type: 'object' }, description: 'Changed file metadata' },
-      },
-    },
-  },
-  {
-    name: 'bindAgentSession',
-    description: 'Bind your coding-agent session id (e.g. pi PI_SESSION_ID or Claude Code session id) to this MCP connection. Call once at session start; subsequent actions are recorded against it and appear as a user session in the Human Assist sidebar.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentSessionId: { type: 'string', description: 'Your coding-session id (PI_SESSION_ID etc)' },
-        client: { type: 'string', description: 'Client name override (pi | claude-code | ...)' },
-        title: { type: 'string', description: 'Optional session title' },
-        project: { type: 'string', description: 'Project this session belongs to — derived from the repo root name. Web-access grants are isolated per project and reviewable in the app.' },
-      },
-      required: ['agentSessionId'],
-    },
-  },
-  {
-    name: 'browserNavigate',
-    description: 'Navigate an embedded Human Assist browser surface to an absolute http(s) URL.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        url: { type: 'string', description: 'Absolute http(s) URL' },
-        surfaceId: { type: 'string', description: 'Surface id (omit if only one browser surface is open)' },
-      },
-      required: ['url'],
-    },
-  },
-  {
-    name: 'browserSnapshot',
-    description: 'Read an embedded browser surface: title, url, visible text, interactive elements, and captchaDetected (true when a CAPTCHA/human check is present — call browserHandoff so the human can solve it).',
-    inputSchema: {
-      type: 'object',
-      properties: { surfaceId: { type: 'string' } },
-    },
-  },
-  {
-    name: 'browserClick',
-    description: 'Click an element in an embedded browser surface by CSS selector or visible text.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        selector: { type: 'string', description: 'CSS selector' },
-        text: { type: 'string', description: 'Visible text of a link/button/label to match' },
-        surfaceId: { type: 'string' },
-      },
-    },
-  },
-  {
-    name: 'browserType',
-    description: 'Type text into an input/textarea/contenteditable in an embedded browser surface (React-friendly native value set + input/change events).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        selector: { type: 'string', description: 'CSS selector of the input' },
-        text: { type: 'string', description: 'Text to enter' },
-        surfaceId: { type: 'string' },
-      },
-      required: ['selector', 'text'],
-    },
-  },
-  {
-    name: 'browserScreenshot',
-    description: 'Capture the embedded browser surface as a PNG data URL.',
-    inputSchema: {
-      type: 'object',
-      properties: { surfaceId: { type: 'string' } },
-    },
-  },
-  {
-    name: 'browserHandoff',
-    description: 'Pause agent control of a browser surface and hand it to the human (CAPTCHAs, logins, 2FA, any human verification). The pane shows the reason and a Done button; automation tools stay blocked on that surface until the human clicks Done.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        reason: { type: 'string', description: 'What the human should do (e.g. "solve the CAPTCHA")' },
-        surfaceId: { type: 'string' },
-      },
-    },
-  },
-  {
-    name: 'browserExecuteActions',
-    description: 'Agency loop: browserListSurfaces (what is open?) → reuse an existing page or openBrowserSurface (new page) → browser_snapshot to READ content → decide click/type/extract from the actual content — never hardcoded search; navigate directly to the site the human names. Execute an ordered SEQUENCE of browser actions on one surface in a single call (plan-then-run web agency). Submit actions[] in order; the model plans the whole task up front. Consent is requested once per domain on the first navigate to it, then the rest of the sequence runs unattended. Stops at the first failed, non-optional step and returns per-step results plus a final snapshot. Prefer this over many single-step browser calls. Per-action fields: navigate{url}; click{selector|target}; type{selector,value}; press{key?,selector?}; extract{extract:{kind:text|html|value|links|attr, selector?, attr?} or selector}; assert{contains, selector?, present?=true|false}; waitFor{selector|target|contains, timeoutMs?}; scroll{selector?}; snapshot{}. Add optional:true to a step so its failure does not abort the sequence.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        surfaceId: { type: 'string', description: 'Target browser surface (open one first with openBrowserSurface). Omit if only one is open.' },
-        actions: {
-          type: 'array',
-          description: 'Ordered steps (1-40). Each: { action, ...fields }.',
-          items: { type: 'object' },
+        prompt: { type: "string", description: "What to draw, or what you want reviewed" },
+        imageSrc: {
+          type: "string",
+          description: "Image to mark up (http(s) URL or data: URI)",
+        },
+        annotations: {
+          type: "array",
+          description: "Pre-placed callouts on the image",
+          items: {
+            type: "object",
+            properties: {
+              text: { type: "string" },
+              x: { type: "number", description: "0..1 relative to image width" },
+              y: { type: "number", description: "0..1 relative to image height" },
+            },
+            required: ["text"],
+          },
+        },
+        waitForMarkup: {
+          type: "boolean",
+          description: "Block until the human clicks Send (or timeoutMs expires)",
+        },
+        timeoutMs: { type: "number", description: "Wait budget when waitForMarkup:true" },
+        surfaceId: {
+          type: "string",
+          description: "Update an existing canvas in place instead of opening a new one",
         },
       },
-      required: ['actions'],
     },
   },
-    {
-      name: 'open3dSurface',
-      description: 'Open an interactive three.js 3D viewer surface (orbit/zoom/pan). Agent describes the scene with primitives: box|sphere|cylinder|torus|plane + position [x,y,z] + size + color #rrggbb. Pass surfaceId to update an existing scene in place. Note: due to a validator quirk, include ALL primitive fields (type, position, size, rotation, color) on every primitive.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          primitives: {
-            type: 'array',
-            description: '1-64 primitives',
-            items: {
-              type: 'object',
-              properties: {
-                type: { type: 'string', enum: ['box', 'sphere', 'cylinder', 'torus', 'plane'] },
-                position: { type: 'array', items: { type: 'number' } },
-                size: { type: 'number' },
-                color: { type: 'string' },
-                rotation: { type: 'array', items: { type: 'number' } },
-              },
-              required: ['type'],
+  {
+    name: "openInputSurface",
+    description:
+      "Ask the human for input: free text, a choice among options, or a confirm. Use this (not a guess) whenever the answer is a human decision — which account/tenant, auth strategy, accept-cookies vs skip, pay-vs-skip a paywall, approve an irreversible action. Pass waitForAnswer:true to BLOCK this call until the human answers, and read the answer straight from the result; otherwise poll readSurface(surfaceId) which digests {answered, answer, answeredAt}.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        question: { type: "string", description: "The question to show" },
+        kind: {
+          type: "string",
+          enum: ["text", "choices", "confirm"],
+          description: "Input mode (default text)",
+        },
+        options: {
+          type: "array",
+          items: { type: "string" },
+          description: "Choices when kind=choices",
+        },
+        waitForAnswer: {
+          type: "boolean",
+          description:
+            "Block until the human answers (or the surface closes / timeoutMs expires), then return {answered, answer}.",
+        },
+        timeoutMs: {
+          type: "number",
+          description:
+            "How long to wait for the answer when waitForAnswer:true (default 300000, max 600000)",
+        },
+      },
+      required: ["question"],
+    },
+  },
+  {
+    name: "openScreenCapture",
+    description: "Capture the screen (or a region) for human context.",
+    inputSchema: {
+      type: "object",
+      properties: { mode: { type: "string", description: "Capture mode (e.g. full, region)" } },
+    },
+  },
+  {
+    name: "openCodeDiff",
+    description: "Present a unified diff (and optional file list) for human approval.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        diff: { type: "string", description: "Unified diff text" },
+        files: { type: "array", items: { type: "object" }, description: "Changed file metadata" },
+      },
+    },
+  },
+  {
+    name: "bindAgentSession",
+    description:
+      "Bind your coding-agent session id (e.g. pi PI_SESSION_ID or Claude Code session id) to this MCP connection. Call once at session start; subsequent actions are recorded against it and appear as a user session in the Human Assist sidebar.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentSessionId: {
+          type: "string",
+          description: "Your coding-session id (PI_SESSION_ID etc)",
+        },
+        client: { type: "string", description: "Client name override (pi | claude-code | ...)" },
+        title: { type: "string", description: "Optional session title" },
+        project: {
+          type: "string",
+          description:
+            "Project this session belongs to — derived from the repo root name. Web-access grants are isolated per project and reviewable in the app.",
+        },
+      },
+      required: ["agentSessionId"],
+    },
+  },
+  {
+    name: "browserNavigate",
+    description: "Navigate an embedded Human Assist browser surface to an absolute http(s) URL.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "Absolute http(s) URL" },
+        surfaceId: {
+          type: "string",
+          description: "Surface id (omit if only one browser surface is open)",
+        },
+      },
+      required: ["url"],
+    },
+  },
+  {
+    name: "browserSnapshot",
+    description:
+      'Read an embedded browser surface: title, url, visible text, interactive elements, captchaDetected, plus "blockers" — classified human-required gates (captcha, botWall, mfa, magicLink, passkey, login, humanVerify, kyc, accountChooser, consent, paywall) each with severity (hard = the human must act; soft = the human must decide), evidence and a ready-to-show prompt. needsHuman=true means hard blockers are present: call browserHandoff (or readSurface for structured data) and wait for the human to click Done instead of retrying clicks.',
+    inputSchema: {
+      type: "object",
+      properties: { surfaceId: { type: "string" } },
+    },
+  },
+  {
+    name: "browserClick",
+    description: "Click an element in an embedded browser surface by CSS selector or visible text.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        selector: { type: "string", description: "CSS selector" },
+        text: { type: "string", description: "Visible text of a link/button/label to match" },
+        surfaceId: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "browserType",
+    description:
+      "Type text into an input/textarea/contenteditable in an embedded browser surface (React-friendly native value set + input/change events).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        selector: { type: "string", description: "CSS selector of the input" },
+        text: { type: "string", description: "Text to enter" },
+        surfaceId: { type: "string" },
+      },
+      required: ["selector", "text"],
+    },
+  },
+  {
+    name: "browserScreenshot",
+    description: "Capture the embedded browser surface as a PNG data URL.",
+    inputSchema: {
+      type: "object",
+      properties: { surfaceId: { type: "string" } },
+    },
+  },
+  {
+    name: "browserHandoff",
+    description:
+      'Pause agent control of a browser surface and hand it to the human (CAPTCHAs, logins, 2FA, any human verification). The pane shows the reason and a Done button; automation tools stay blocked on that surface until the human clicks Done. OMIT reason and it is auto-detected from the page (e.g. "mfa: enter your one-time code"), so the human always knows exactly what is being asked.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        reason: {
+          type: "string",
+          description: 'What the human should do (e.g. "solve the CAPTCHA")',
+        },
+        surfaceId: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "browserExecuteActions",
+    description:
+      "Agency loop: browserListSurfaces (what is open?) → reuse an existing page or openBrowserSurface (new page) → browser_snapshot to READ content → decide click/type/extract from the actual content — never hardcoded search; navigate directly to the site the human names. Execute an ordered SEQUENCE of browser actions on one surface in a single call (plan-then-run web agency). Submit actions[] in order; the model plans the whole task up front. Consent is requested once per domain on the first navigate to it, then the rest of the sequence runs unattended. Stops at the first failed, non-optional step and returns per-step results plus a final snapshot. Prefer this over many single-step browser calls. Per-action fields: navigate{url}; click{selector|target}; type{selector,value}; press{key?,selector?}; extract{extract:{kind:text|html|value|links|attr|table|list|meta|json, selector?, attr?} or selector}; assert{contains, selector?, present?=true|false}; waitFor{selector|target|contains, timeoutMs?}; scroll{selector?}; snapshot{}. Add optional:true to a step so its failure does not abort the sequence. AUTO-HANDOFF: after every step (and at the end) the page is classified; if a HARD human gate appears (CAPTCHA, bot wall, MFA, magic link, passkey, login, identity check) the run stops there, a handoff opens with a human-readable reason, and the result carries needsHuman:true + handoff{reason,blocker} — do not re-run the plan, wait for Done and resume from the failed index (pass autoHandoff:false to opt out).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        surfaceId: {
+          type: "string",
+          description:
+            "Target browser surface (open one first with openBrowserSurface). Omit if only one is open.",
+        },
+        autoHandoff: {
+          type: "boolean",
+          description:
+            "Detect CAPTCHA/MFA/login walls after each step and pause for the human (default true).",
+        },
+        actions: {
+          type: "array",
+          description: "Ordered steps (1-40). Each: { action, ...fields }.",
+          items: { type: "object" },
+        },
+      },
+      required: ["actions"],
+    },
+  },
+  {
+    name: "open3dSurface",
+    description:
+      "Open an interactive three.js 3D viewer surface (orbit/zoom/pan). Agent describes the scene with primitives: box|sphere|cylinder|torus|plane + position [x,y,z] + size + color #rrggbb. Pass surfaceId to update an existing scene in place. Note: due to a validator quirk, include ALL primitive fields (type, position, size, rotation, color) on every primitive.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        primitives: {
+          type: "array",
+          description: "1-64 primitives",
+          items: {
+            type: "object",
+            properties: {
+              type: { type: "string", enum: ["box", "sphere", "cylinder", "torus", "plane"] },
+              position: { type: "array", items: { type: "number" } },
+              size: { type: "number" },
+              color: { type: "string" },
+              rotation: { type: "array", items: { type: "number" } },
+            },
+            required: ["type"],
+          },
+        },
+        background: { type: "string", description: "Scene background #rrggbb" },
+        camera: {
+          type: "object",
+          properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } },
+        },
+        prompt: { type: "string" },
+        surfaceId: {
+          type: "string",
+          description: "Existing 3D surface id to update in place (omit to open a new one)",
+        },
+      },
+      required: ["primitives"],
+    },
+  },
+  {
+    name: "browserListSurfaces",
+    description:
+      "List the pages/surfaces currently open in the desktop app: id, type, URL, and whether a drivable guest (webview) is attached. Call FIRST to decide whether to drive an EXISTING page or open a new one — then browser_snapshot to read the content and decide clicks/inputs. There is no built-in search: navigate directly to the site the human names.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "browserThrottle",
+    description:
+      "Read or change the per-host politeness throttle that paces AGENT browsing (a human driving a pane is never throttled, and read-only tools like snapshot/screenshot don't count). Omit args to read the current policy + per-host token state. Pass policy:{minIntervalMs,burst,maxWaitMs,penaltyMs} to change it live — persisted to ~/Downloads/human-assist-policy/browser-throttle.json so a human can edit it too. Defaults (1.2s between agent page loads per host after a burst of 5) are deliberately invisible to a person and unmistakable to a bot; fast enough that legitimate scraping feels normal, slow enough that a WAF sees a human. A site that blocks/challenges us gets an automatic penaltyMs cooldown; use forgiveHost to drop it early, reset:true for defaults.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        policy: {
+          type: "object",
+          description: "Live policy change",
+          properties: {
+            minIntervalMs: {
+              type: "number",
+              description: "Sustained gap between agent page loads per host (0-60000)",
+            },
+            burst: { type: "number", description: "Actions allowed back-to-back first (1-50)" },
+            maxWaitMs: {
+              type: "number",
+              description: "Longest a tool call sits waiting for a token (0-120000)",
+            },
+            penaltyMs: {
+              type: "number",
+              description: "Cooldown after a site blocks or challenges us (0-900000)",
             },
           },
-          background: { type: 'string', description: 'Scene background #rrggbb' },
-          camera: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } } },
-          prompt: { type: 'string' },
-          surfaceId: { type: 'string', description: 'Existing 3D surface id to update in place (omit to open a new one)' },
         },
-        required: ['primitives'],
+        forgiveHost: {
+          type: "string",
+          description: 'Drop a host\'s cooldown now (e.g. "gaswork.com")',
+        },
+        reset: { type: "boolean", description: "Restore default policy and clear host state" },
       },
     },
-    {
-      name: 'browserListSurfaces',
-      description: 'List the pages/surfaces currently open in the desktop app: id, type, URL, and whether a drivable guest (webview) is attached. Call FIRST to decide whether to drive an EXISTING page or open a new one — then browser_snapshot to read the content and decide clicks/inputs. There is no built-in search: navigate directly to the site the human names.',
-      inputSchema: { type: 'object', properties: {} },
-    },
-    {
-      name: 'saveExportFile',
-      description: 'Write an export file (CSV/JSON/text) from the agent into the desktop app exports directory on disk. Content arrives in append chunks (<=64KB per call); call with mode "start" first, then "append" chunks, then "close". Use for large scraped datasets so they never have to pass through the chat.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          filename: { type: 'string', description: 'File name, e.g. locum-2026-11-03.csv (no path separators)' },
-          content: { type: 'string', description: 'Chunk content (<=64KB)' },
-          mode: { type: 'string', enum: ['start', 'append', 'close'], description: 'start=create/truncate, append=add, close=finalize' },
-        },
-        required: ['filename', 'mode'],
-      },
-    },
-    {
-      name: 'delegateTask',
-      description: 'Hand a HIGH-LEVEL GOAL to the desktop app: the internally configured model plans the task into a browser-action sequence and the app executes it autonomously through the consent-gated browser engine (reusing an open page or opening a new one). Use when the human states an outcome ("search X for me", "find listings on Y"); prefer this over chaining many single-step calls. Returns the plan summary, per-step results, and the final page snapshot.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          goal: { type: 'string', description: 'High-level goal in natural language (<=4000 chars)' },
-          surfaceId: { type: 'string', description: 'Drive an existing attached surface (omit to reuse any open browser page or open a new one)' },
-          baseUrl: { type: 'string', description: 'Override the internal model endpoint base URL (optional)' },
-          modelId: { type: 'string', description: 'Override the internal model id (optional)' },
-        },
-        required: ['goal'],
-      },
-    },
-    {
-      name: 'readGoogleDriveDoc',
-      description: 'Read a Google Drive/Docs page the human has access to (persistent login). If signed out, triggers handoff so the human logs in once.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          url: { type: 'string', description: 'https://drive|docs|sites.google.com/... URL' },
-        },
-        required: ['url'],
-      },
-    },
-    {
-      name: 'scrapeSelective',
-      description: 'Open a page (consent-gated) and extract either a CSS-selector match list or the main text content.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          url: { type: 'string', description: 'Absolute http(s) URL' },
-          selector: { type: 'string', description: 'Optional CSS selector; omit for full body text' },
-        },
-        required: ['url'],
-      },
-    },
-  {
-    name: 'reloadUI',
-    description: 'Reload the Human Assist window (renderer + layout) from the current UI server — no need to close/restart the app after UI changes.',
-    inputSchema: { type: 'object', properties: {} },
   },
   {
-    name: 'restartApp',
-    description: 'Restart the Human Assist desktop app (relaunch + exit). Use when main-process code changed and a full restart is required.',
-    inputSchema: { type: 'object', properties: {} },
-  },
-  {
-    name: 'checkForUpdates',
-    description: 'Trigger the desktop app update check (packaged builds; no-op in dev). Progress reported via toast messages.',
-    inputSchema: { type: 'object', properties: {} },
-  },
-  {
-    name: 'openProcessManager',
-    description: 'Open (or refresh) the Processes dashboard surface: live list of agent-launched background processes with status, output tail, and user kill/restart controls.',
-    inputSchema: { type: 'object', properties: {} },
-  },
-  {
-    name: 'startProcess',
-    description: 'Start a background process (dev server, test runner, watcher) supervised by the desktop app. Appears in the Processes surface; user can stop/restart it.',
+    name: "browserClearSiteData",
+    description:
+      "Clear cookies / localStorage / cache for a site in the browsing partition, then reload the affected pane. Use it when a page shows a block page, a stale login, or 'something went wrong' in Human Assist while the same URL works in Chrome: a WAF decision is usually keyed on a poisoned cookie or a cached challenge for that origin, and clearing it starts you fresh (you may have to log in again — that is the trade). Pass surfaceId (clears whatever that pane shows) or url/host.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        name: { type: 'string', description: 'Human label, e.g. "Dev Server"' },
-        command: { type: 'string', description: 'Shell command (<=512 chars)' },
-        cwd: { type: 'string', description: 'Working directory (defaults to app cwd)' },
+        surfaceId: { type: "string", description: "Pane whose site data should be cleared" },
+        url: { type: "string", description: "Site to clear (alternative to surfaceId)" },
+        host: { type: "string", description: 'Bare hostname, e.g. "gaswork.com"' },
+        what: {
+          type: "array",
+          items: { type: "string", enum: ["cookies", "storage", "cache"] },
+          description: "Defaults to all three",
+        },
       },
-      required: ['name', 'command'],
     },
   },
   {
-    name: 'stopProcess',
-    description: 'Stop a managed background process by id (SIGTERM).',
-    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
-  },
-  {
-    name: 'restartProcess',
-    description: 'Restart a managed background process (kill + start with same command/cwd).',
-    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
-  },
-  {
-    name: 'getProcessLog',
-    description: 'Fetch the recent output tail (last 100 lines) of a managed process.',
-    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
-  },
-  {
-    name: 'showMessage',
-    description: 'Show a transient toast message in the Human Assist desktop app (proof-of-path from pi, notifications, status updates).',
+    name: "readSurface",
+    description:
+      'Retrieve DATA off any open panel — the one read tool for every surface kind. No surfaceId → lists all open surfaces with a digest (then pass surfaceId). For a browser surface it reads LIVE through the attached webview: {extract:{kind:text|html|value|links|attr|table|list|meta|json, selector?, attr?}} plus a page digest and blocker detection — use kind=table for pricing/feature grids, kind=list for result cards (auto-detects the repeating structure when no selector is given), kind=meta for title/OG/canonical/headings/JSON-LD, kind=json for embedded JSON endpoints. For other panels (3d, input, codeDiff, terminal, processes, image, canvas, screenCapture) it returns a digest of the panel\'s state (pass what="payload" for the full stored payload). Returns needsHuman + blockers when the page is gated: stop issuing browser calls and wait for the human to click Done.',
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        message: { type: 'string', description: 'Message text (<=2000 chars)' },
-        level: { type: 'string', enum: ['info', 'success', 'warning', 'error'], description: 'Toast style (default info)' },
-        title: { type: 'string', description: 'Optional title prefix (<=100 chars)' },
+        surfaceId: {
+          type: "string",
+          description: "Target surface (omit to list what is open)",
+        },
+        what: {
+          type: "string",
+          description:
+            'Shortcut for browser extraction kinds (text|links|table|list|meta|json|html|value|attr), or "payload" for the full non-browser panel state',
+        },
+        extract: {
+          type: "object",
+          properties: {
+            kind: {
+              type: "string",
+              description: "text|html|value|links|attr|table|list|meta|json",
+            },
+            selector: { type: "string", description: "CSS scope (optional for list/table)" },
+            attr: { type: "string", description: "Attribute name when kind=attr" },
+          },
+        },
+        selector: { type: "string", description: "CSS scope (alternative to extract.selector)" },
+        limit: {
+          type: "number",
+          description: "Max characters of page text to return (default 2000, cap 20000)",
+        },
       },
-      required: ['message'],
     },
   },
   {
-    name: 'openTerminalOutput',
-    description: 'Stream terminal command output into a surface.',
+    name: "saveExportFile",
+    description:
+      'Write an export file (CSV/JSON/text) from the agent into the desktop app exports directory on disk. Content arrives in append chunks (<=64KB per call); call with mode "start" first, then "append" chunks, then "close". Use for large scraped datasets so they never have to pass through the chat.',
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        command: { type: 'string', description: 'Command that produced the output' },
-        output: { type: 'string', description: 'Terminal output text' },
+        filename: {
+          type: "string",
+          description: "File name, e.g. locum-2026-11-03.csv (no path separators)",
+        },
+        content: { type: "string", description: "Chunk content (<=64KB)" },
+        mode: {
+          type: "string",
+          enum: ["start", "append", "close"],
+          description: "start=create/truncate, append=add, close=finalize",
+        },
+      },
+      required: ["filename", "mode"],
+    },
+  },
+  {
+    name: "delegateTask",
+    description:
+      'Hand a HIGH-LEVEL GOAL to the desktop app: the internally configured model plans the task into a browser-action sequence and the app executes it autonomously through the consent-gated browser engine (reusing an open page or opening a new one). Use when the human states an outcome ("search X for me", "find listings on Y"); prefer this over chaining many single-step calls. Returns the plan summary, per-step results, and the final page snapshot.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        goal: { type: "string", description: "High-level goal in natural language (<=4000 chars)" },
+        surfaceId: {
+          type: "string",
+          description:
+            "Drive an existing attached surface (omit to reuse any open browser page or open a new one)",
+        },
+        baseUrl: {
+          type: "string",
+          description: "Override the internal model endpoint base URL (optional)",
+        },
+        modelId: { type: "string", description: "Override the internal model id (optional)" },
+      },
+      required: ["goal"],
+    },
+  },
+  {
+    name: "readGoogleDriveDoc",
+    description:
+      "Read a Google Drive/Docs page the human has access to (persistent login). If signed out, triggers handoff so the human logs in once.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "https://drive|docs|sites.google.com/... URL" },
+      },
+      required: ["url"],
+    },
+  },
+  {
+    name: "scrapeSelective",
+    description:
+      "Open a page (consent-gated) and extract either a CSS-selector match list or the main text content.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "Absolute http(s) URL" },
+        selector: { type: "string", description: "Optional CSS selector; omit for full body text" },
+      },
+      required: ["url"],
+    },
+  },
+  {
+    name: "reloadUI",
+    description:
+      "Reload the Human Assist window (renderer + layout) from the current UI server — no need to close/restart the app after UI changes.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "restartApp",
+    description:
+      "Restart the Human Assist desktop app (relaunch + exit). Use when main-process code changed and a full restart is required.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "checkForUpdates",
+    description:
+      "Trigger the desktop app update check (packaged builds; no-op in dev). Progress reported via toast messages.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "openProcessManager",
+    description:
+      "Open (or refresh) the Processes dashboard surface: live list of agent-launched background processes with status, output tail, and user kill/restart controls.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "startProcess",
+    description:
+      "Start a background process (dev server, test runner, watcher) supervised by the desktop app. Appears in the Processes surface; user can stop/restart it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: 'Human label, e.g. "Dev Server"' },
+        command: { type: "string", description: "Shell command (<=512 chars)" },
+        cwd: { type: "string", description: "Working directory (defaults to app cwd)" },
+      },
+      required: ["name", "command"],
+    },
+  },
+  {
+    name: "stopProcess",
+    description: "Stop a managed background process by id (SIGTERM).",
+    inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+  },
+  {
+    name: "restartProcess",
+    description: "Restart a managed background process (kill + start with same command/cwd).",
+    inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+  },
+  {
+    name: "getProcessLog",
+    description: "Fetch the recent output tail (last 100 lines) of a managed process.",
+    inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+  },
+  {
+    name: "showMessage",
+    description:
+      "Show a transient toast message in the Human Assist desktop app (proof-of-path from pi, notifications, status updates).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        message: { type: "string", description: "Message text (<=2000 chars)" },
+        level: {
+          type: "string",
+          enum: ["info", "success", "warning", "error"],
+          description: "Toast style (default info)",
+        },
+        title: { type: "string", description: "Optional title prefix (<=100 chars)" },
+      },
+      required: ["message"],
+    },
+  },
+  {
+    name: "openTerminalOutput",
+    description: "Stream terminal command output into a surface.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        command: { type: "string", description: "Command that produced the output" },
+        output: { type: "string", description: "Terminal output text" },
       },
     },
   },
@@ -846,9 +1260,19 @@ const TOOL_DEFINITIONS = [
 // agentProject) MUST be declared in every tool schema, or they are silently
 // dropped and sessions render as the raw clientInfo name + "anonymous".
 const AGENT_IDENTITY_PROPS = {
-  agentClient: { type: 'string', description: 'Injected by the harness: coding-agent client name (e.g. "pi")' },
-  agentSessionId: { type: 'string', description: 'Injected by the harness: coding-agent session id' },
-  agentProject: { type: 'string', description: 'Injected by the harness: repo-root project name — web-access grants are isolated per project' },
+  agentClient: {
+    type: "string",
+    description: 'Injected by the harness: coding-agent client name (e.g. "pi")',
+  },
+  agentSessionId: {
+    type: "string",
+    description: "Injected by the harness: coding-agent session id",
+  },
+  agentProject: {
+    type: "string",
+    description:
+      "Injected by the harness: repo-root project name — web-access grants are isolated per project",
+  },
 };
 for (const tool of TOOL_DEFINITIONS) {
   const schema = tool.inputSchema as { type?: string; properties?: Record<string, unknown> };
@@ -857,14 +1281,10 @@ for (const tool of TOOL_DEFINITIONS) {
 
 const TOOL_HANDLERS: Record<
   string,
-  (
-    args: unknown,
-    ctx?: McpAgentCtx,
-  ) => Record<string, unknown> | Promise<Record<string, unknown>>
+  (args: unknown, ctx?: McpAgentCtx) => Record<string, unknown> | Promise<Record<string, unknown>>
 > = {
   openBrowserSurface: handleOpenBrowserSurface,
   openCanvasSurface: handleOpenCanvasSurface,
-  openImageSurface: handleOpenImageSurface,
   openScreenCapture: handleOpenScreenCapture,
   openCodeDiff: handleOpenCodeDiff,
   openTerminalOutput: handleOpenTerminalOutput,
@@ -873,6 +1293,9 @@ const TOOL_HANDLERS: Record<
   browserNavigate: handleBrowserNavigate,
   open3dSurface: handleOpen3dSurface,
   browserListSurfaces: handleBrowserListSurfaces,
+  browserThrottle: handleBrowserThrottle,
+  browserClearSiteData: handleBrowserClearSiteData,
+  readSurface: handleReadSurface,
   saveExportFile: handleSaveExportFile,
   readGoogleDriveDoc: handleReadGoogleDriveDoc,
   scrapeSelective: handleScrapeSelective,
@@ -895,7 +1318,6 @@ const TOOL_HANDLERS: Record<
 
 // ── MCP Server (HTTP + SSE) ───────────────────────────────────────────────
 
-
 // ── Agent session binding (coding-session linkage for recording) ────────
 
 export interface McpAgentCtx {
@@ -916,16 +1338,33 @@ function handleBindAgentSession(args: unknown, ctx: McpAgentCtx): Record<string,
   if (typeof sid !== "string" || sid.length === 0 || sid.length > 200) {
     throw new Error("MCP_005: agentSessionId must be a non-empty string (<=200 chars)");
   }
-  const client = typeof obj["client"] === "string" ? (obj["client"] as string).slice(0, 60) : undefined;
-  const title = typeof obj["title"] === "string" ? (obj["title"] as string).slice(0, 100) : undefined;
-  const project = typeof obj["project"] === "string" ? (obj["project"] as string).slice(0, 120) : undefined;
+  const client =
+    typeof obj["client"] === "string" ? (obj["client"] as string).slice(0, 60) : undefined;
+  const title =
+    typeof obj["title"] === "string" ? (obj["title"] as string).slice(0, 100) : undefined;
+  const project =
+    typeof obj["project"] === "string" ? (obj["project"] as string).slice(0, 120) : undefined;
   ctx.agentSessionId = sid;
   if (client) ctx.agentClient = client;
   else if (!ctx.agentClient) ctx.agentClient = ctx.clientInfo?.name ?? "agent";
   if (project) ctx.agentProject = project;
-  console.log("[mcp] bound connection " + ctx.connectionId + " -> client=" + (ctx.agentClient ?? "?") + " session=" + sid + (project ? " project=" + project : ""));
+  console.log(
+    "[mcp] bound connection " +
+      ctx.connectionId +
+      " -> client=" +
+      (ctx.agentClient ?? "?") +
+      " session=" +
+      sid +
+      (project ? " project=" + project : ""),
+  );
   broadcastAgentPresence();
-  return { status: "bound", agentSessionId: sid, client: ctx.agentClient ?? null, title: title ?? null, project: ctx.agentProject ?? null };
+  return {
+    status: "bound",
+    agentSessionId: sid,
+    client: ctx.agentClient ?? null,
+    title: title ?? null,
+    project: ctx.agentProject ?? null,
+  };
 }
 
 // ── Shared MCP JSON-RPC dispatch (HTTP POST /mcp + WebSocket transport) ──
@@ -944,7 +1383,9 @@ export async function processMcpMessage(
   const id = p["id"] ?? null;
 
   if (jsonrpc !== "2.0") {
-    return { response: { jsonrpc: "2.0", error: { code: -32600, message: "Invalid request" }, id } };
+    return {
+      response: { jsonrpc: "2.0", error: { code: -32600, message: "Invalid request" }, id },
+    };
   }
 
   if (method === "initialize") {
@@ -1008,20 +1449,34 @@ export async function processMcpMessage(
     return { response: { jsonrpc: "2.0", result: { tools: TOOL_DEFINITIONS }, id } };
   }
 
-  if (method === "resources/list" || method === "resources/templates/list" || method === "prompts/list") {
+  if (
+    method === "resources/list" ||
+    method === "resources/templates/list" ||
+    method === "prompts/list"
+  ) {
     // We advertise only the tools capability — unsupported capabilities
     // must answer -32601 so clients mark them unavailable (not broken).
-    return { response: { jsonrpc: "2.0", error: { code: -32601, message: "Method not found: " + String(method) }, id } };
+    return {
+      response: {
+        jsonrpc: "2.0",
+        error: { code: -32601, message: "Method not found: " + String(method) },
+        id,
+      },
+    };
   }
 
   if (method !== "tools/call" || !params) {
-    return { response: { jsonrpc: "2.0", error: { code: -32600, message: "Invalid request" }, id } };
+    return {
+      response: { jsonrpc: "2.0", error: { code: -32600, message: "Invalid request" }, id },
+    };
   }
 
   if (process.env.HA_DEBUG === "1") {
     console.log(
-      "[debug] ← tools/call name=" + String((params as Record<string, unknown>)["name"]) +
-      " args=" + JSON.stringify((params as Record<string, unknown>)["arguments"] ?? {}).slice(0, 500),
+      "[debug] ← tools/call name=" +
+        String((params as Record<string, unknown>)["name"]) +
+        " args=" +
+        JSON.stringify((params as Record<string, unknown>)["arguments"] ?? {}).slice(0, 500),
     );
   }
 
@@ -1032,58 +1487,85 @@ export async function processMcpMessage(
     const args = (params as Record<string, unknown>)["arguments"];
     if (args && typeof args === "object") {
       const a = args as Record<string, unknown>;
-      if (typeof a["agentSessionId"] === "string" && (a["agentSessionId"] as string).length > 0 && (a["agentSessionId"] as string).length <= 200) {
+      if (
+        typeof a["agentSessionId"] === "string" &&
+        (a["agentSessionId"] as string).length > 0 &&
+        (a["agentSessionId"] as string).length <= 200
+      ) {
         if (ctx.agentSessionId !== a["agentSessionId"]) {
-          console.log("[mcp] auto-bind conn=" + ctx.connectionId + " client=" + (ctx.agentClient ?? "agent") + " harness=" + a["agentSessionId"]);
+          console.log(
+            "[mcp] auto-bind conn=" +
+              ctx.connectionId +
+              " client=" +
+              (ctx.agentClient ?? "agent") +
+              " harness=" +
+              a["agentSessionId"],
+          );
           broadcastAgentPresence();
         }
         ctx.agentSessionId = a["agentSessionId"] as string;
       }
-      if (typeof a["agentClient"] === "string" && (a["agentClient"] as string).length > 0 && (a["agentClient"] as string).length <= 60) {
+      if (
+        typeof a["agentClient"] === "string" &&
+        (a["agentClient"] as string).length > 0 &&
+        (a["agentClient"] as string).length <= 60
+      ) {
         ctx.agentClient = a["agentClient"] as string;
       }
-      if (typeof a["agentProject"] === "string" && (a["agentProject"] as string).length > 0 && (a["agentProject"] as string).length <= 120) {
+      if (
+        typeof a["agentProject"] === "string" &&
+        (a["agentProject"] as string).length > 0 &&
+        (a["agentProject"] as string).length <= 120
+      ) {
         ctx.agentProject = a["agentProject"] as string;
       }
     }
   }
 
-const __toolName = (params as Record<string, unknown>)["name"];
+  const __toolName = (params as Record<string, unknown>)["name"];
   if (__toolName === "bindAgentSession") {
     try {
-      return { response: { jsonrpc: "2.0", result: handleBindAgentSession((params as Record<string, unknown>)["arguments"], ctx), id } };
+      return {
+        response: {
+          jsonrpc: "2.0",
+          result: handleBindAgentSession((params as Record<string, unknown>)["arguments"], ctx),
+          id,
+        },
+      };
     } catch (err) {
-      return { response: { jsonrpc: "2.0", error: { code: -32603, message: (err as Error).message }, id } };
+      return {
+        response: { jsonrpc: "2.0", error: { code: -32603, message: (err as Error).message }, id },
+      };
     }
   }
 
   const toolName = (params as Record<string, unknown>)["name"] as string;
   const handler = TOOL_HANDLERS[toolName];
   if (!handler) {
-    return { response: { jsonrpc: "2.0", error: { code: -32601, message: "Method not found: " + toolName }, id } };
+    return {
+      response: {
+        jsonrpc: "2.0",
+        error: { code: -32601, message: "Method not found: " + toolName },
+        id,
+      },
+    };
   }
 
   try {
-    const result = await handler(
-      (params as Record<string, unknown>)["arguments"],
-      ctx,
-    );
-    const agentTag =
-      ctx.agentSessionId || ctx.agentClient
-        ? { agent: {
-            client: ctx.agentClient ?? "agent",
-            agentSessionId: ctx.agentSessionId ?? null,
-            ...(ctx.agentProject ? { agentProject: ctx.agentProject } : {}),
-          } }
-        : {};
-    const resultSurfaceId = (result as Record<string, unknown>)?.["surfaceId"] as string | undefined;
+    const result = await handler((params as Record<string, unknown>)["arguments"], ctx);
+    const agentTag = agentTagFor(ctx);
+    const resultSurfaceId = (result as Record<string, unknown>)?.["surfaceId"] as
+      string | undefined;
     if (resultSurfaceId && openSurfaces.has(resultSurfaceId)) {
       // Real surface (open* tools): broadcast the push for rendering.
       const entry = openSurfaces.get(resultSurfaceId);
       // Use the STORED record payload (url/searchQuery/... normalized by
       // the tool) — raw arguments lack fields like url for recipes and
       // made BrowserSurface render src="".
-      const argExtras = ((params as Record<string, unknown>)["arguments"] ?? {}) as Record<string, unknown>;
+      const argExtras = ((params as Record<string, unknown>)["arguments"] ?? {}) as Record<
+        string,
+        unknown
+      >;
       notifySurfacePush({
         surfaceId: resultSurfaceId,
         type: entry?.type ?? "unknown",
@@ -1117,12 +1599,24 @@ const __toolName = (params as Record<string, unknown>)["name"];
 }
 
 function logMcpRequest(method: string, id: unknown, ip: string, port: number): void {
-  console.log("[mcp] \u2190 " + method + (id != null ? " (id " + String(id) + ")" : "") + " from " + ip + ":" + port);
+  console.log(
+    "[mcp] \u2190 " +
+      method +
+      (id != null ? " (id " + String(id) + ")" : "") +
+      " from " +
+      ip +
+      ":" +
+      port,
+  );
 }
 
 /** WebSocket MCP server reports live connection count for /status here. */
 let wsPresenceProvider: () => number = () => 0;
-let wsAgentsProvider: () => Array<{ client: string; agentSessionId: string | null; project?: string | null }> = () => [];
+let wsAgentsProvider: () => Array<{
+  client: string;
+  agentSessionId: string | null;
+  project?: string | null;
+}> = () => [];
 
 /** WebSocket MCP layer registers this to feed /status + presence events. */
 export function setWsAgentsProvider(
@@ -1156,7 +1650,9 @@ function createMcpServer(port: number): { server: ReturnType<typeof createServer
 
     if (req.url === "/mcp" && req.method === "POST") {
       let body = "";
-      req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
+      req.on("data", (chunk: Buffer) => {
+        body += chunk.toString();
+      });
       req.on("end", async () => {
         let parsed: unknown;
         try {
@@ -1185,7 +1681,11 @@ function createMcpServer(port: number): { server: ReturnType<typeof createServer
         sendJsonResponse(res, response);
       });
     } else {
-      sendJsonResponse(res, { jsonrpc: "2.0", error: { code: -32000, message: "Not Found" }, id: null });
+      sendJsonResponse(res, {
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Not Found" },
+        id: null,
+      });
     }
   });
 
@@ -1214,7 +1714,15 @@ function startWebSocketServer(port: number): WebSocketServer {
     client.on("error", () => wsClients.delete(client));
     client.on("message", (data) => {
       try {
-        const msg = JSON.parse(data.toString()) as { type?: unknown; surfaceId?: unknown; id?: unknown; action?: unknown; domains?: unknown; grants?: unknown; decision?: unknown };
+        const msg = JSON.parse(data.toString()) as {
+          type?: unknown;
+          surfaceId?: unknown;
+          id?: unknown;
+          action?: unknown;
+          domains?: unknown;
+          grants?: unknown;
+          decision?: unknown;
+        };
         if (msg && msg.type === "process:control" && typeof msg.id === "string") {
           try {
             if (msg.action === "kill") registryStop(msg.id);
@@ -1228,14 +1736,10 @@ function startWebSocketServer(port: number): WebSocketServer {
           // Per-project map { [project]: domains[] } (preferred) or legacy
           // flat domains[] (lands in the unassigned bucket).
           if (msg.grants && typeof msg.grants === "object") {
-            permissionBroker.syncGrants(
-              msg.grants as Record<string, string[]>,
-            );
+            permissionBroker.syncGrants(msg.grants as Record<string, string[]>);
             console.log("[perm] renderer synced per-project grants");
           } else if (Array.isArray(msg.domains)) {
-            const doms = msg.domains.filter(
-              (d: unknown) => typeof d === "string",
-            ) as string[];
+            const doms = msg.domains.filter((d: unknown) => typeof d === "string") as string[];
             permissionBroker.syncGrants(doms);
             console.log("[perm] renderer synced grants:", JSON.stringify(doms));
           }
@@ -1247,13 +1751,24 @@ function startWebSocketServer(port: number): WebSocketServer {
           ["once", "always", "deny"].includes(String(msg.decision))
         ) {
           const ok = permissionBroker.respond(msg.id, msg.decision as PermissionDecision);
-          console.log("[perm] respond", msg.id, msg.decision, ok ? "(applied)" : "(late/orphan — ignored)");
+          console.log(
+            "[perm] respond",
+            msg.id,
+            msg.decision,
+            ok ? "(applied)" : "(late/orphan — ignored)",
+          );
         }
         if (msg && msg.type === "handoff:complete" && typeof msg.surfaceId === "string") {
           if (browserHandoffs.delete(msg.surfaceId)) {
             notifyHandoff(msg.surfaceId, false, "human-completed");
             console.log("[browser] handoff CLOSE on " + msg.surfaceId + " (human done)");
           }
+        }
+        if (msg && msg.type === "input:respond") {
+          handleInputRespond(msg as Record<string, unknown>);
+        }
+        if (msg && msg.type === "canvas:respond") {
+          handleCanvasRespond(msg as Record<string, unknown>);
         }
         // Human-initiated surface creation (tab-bar “+” picker).
         if (msg && msg.type === "surface:create") {
@@ -1271,17 +1786,41 @@ function startWebSocketServer(port: number): WebSocketServer {
 }
 
 /** loadURL with a hard cap: a stalled navigation must not wedge a
- *  sequence forever (observed: 600s tool timeout behind one hang). */
+ *  sequence forever (observed: 600s tool timeout behind one hang).
+ *  Also the single choke point for agent politeness: every agent-driven page
+ *  load passes the per-host throttle here (see browser-throttle.ts). */
 async function loadUrlCapped(handle: GuestHandle, url: string, timeoutMs = 30_000): Promise<void> {
+  await throttleAcquire(url).then((r) => {
+    if (!r.allowed) throw new RateLimitedError(throttleHostOf(url) ?? url, r.reason ?? "paced");
+  });
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, rej) => {
-    timer = setTimeout(() => rej(new Error("BROWSER_009: navigation timed out after " + timeoutMs / 1000 + "s: " + url)), timeoutMs);
+    timer = setTimeout(
+      () =>
+        rej(new Error("BROWSER_009: navigation timed out after " + timeoutMs / 1000 + "s: " + url)),
+      timeoutMs,
+    );
   });
   try {
     await Promise.race([handle.loadURL(url), timeout]);
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+/** Agent identity to stamp on surface pushes / action events for one call, so
+ *  every surface a tool opens is attributable to the coding session that asked
+ *  for it (Human Assist sidebar groups by this). */
+function agentTagFor(ctx?: McpAgentCtx): Record<string, unknown> {
+  return ctx?.agentSessionId || ctx?.agentClient
+    ? {
+        agent: {
+          client: ctx.agentClient ?? "agent",
+          agentSessionId: ctx.agentSessionId ?? null,
+          ...(ctx.agentProject ? { agentProject: ctx.agentProject } : {}),
+        },
+      }
+    : {};
 }
 
 function notifySurfacePush(payload: Record<string, unknown>): void {
@@ -1310,22 +1849,39 @@ export async function __manualSurfaceCreate(
   let result: Record<string, unknown>;
   switch (kind) {
     case "browser":
-      if (!/^https?:\/\//i.test(url)) throw new Error("MCP_002: Manual browser surface requires an http(s) url");
-      result = await handleOpenBrowserSurface({ url, ...(prompt ? { prompt } : {}), __humanInitiated: true });
+      if (!/^https?:\/\//i.test(url))
+        throw new Error("MCP_002: Manual browser surface requires an http(s) url");
+      result = await handleOpenBrowserSurface({
+        url,
+        ...(prompt ? { prompt } : {}),
+        __humanInitiated: true,
+      });
       break;
     case "process":
       result = handleOpenProcessManager();
       break;
     case "canvas":
-      result = handleOpenCanvasSurface({ prompt: prompt ?? "Scratch canvas" });
+      // A url from the “+” picker means “open this image so I can mark it up”.
+      result = await handleOpenCanvasSurface({
+        prompt: prompt ?? (url ? "Review this image" : "Scratch canvas"),
+        ...(url ? { imageSrc: url } : {}),
+      });
       break;
     case "image":
+      // The old read-only image surface is gone: an image to look at is now a
+      // canvas to mark up. Kept as an alias so nothing that asked for “image”
+      // silently stops working.
       if (!url) throw new Error("MCP_002: Manual image surface requires a url");
-      result = handleOpenImageSurface({ src: url, ...(prompt ? { caption: prompt } : {}) });
+      result = await handleOpenCanvasSurface({
+        prompt: prompt ?? "Review this image",
+        imageSrc: url,
+      });
       break;
     case "threed":
       result = await handleOpen3dSurface({
-        primitives: [{ type: "plane", position: [0, 0, 0], size: 10, color: "#1e293b", rotation: [0, 0, 0] }],
+        primitives: [
+          { type: "plane", position: [0, 0, 0], size: 10, color: "#1e293b", rotation: [0, 0, 0] },
+        ],
         ...(prompt ? { prompt } : {}),
       });
       break;
@@ -1342,7 +1898,11 @@ export async function __manualSurfaceCreate(
     notifySurfacePush({
       surfaceId,
       type: rec.type,
-      payload: { ...rec.payload, manual: true, ...(sessionId ? { targetSessionId: sessionId } : {}) },
+      payload: {
+        ...rec.payload,
+        manual: true,
+        ...(sessionId ? { targetSessionId: sessionId } : {}),
+      },
       status: "pushed",
     });
     console.log("[surface] manual create " + kind + " " + surfaceId);
@@ -1351,7 +1911,11 @@ export async function __manualSurfaceCreate(
 }
 
 // ── Domain permission gate (human consent before real-web access) ─────────
-import { PermissionBroker, pendingPermissionIds, type PermissionDecision } from "./permission-broker";
+import {
+  PermissionBroker,
+  pendingPermissionIds,
+  type PermissionDecision,
+} from "./permission-broker";
 
 function sendToWsClients(eventObj: Record<string, unknown>): void {
   const payload = JSON.stringify(eventObj);
@@ -1368,7 +1932,9 @@ function sendToWsClients(eventObj: Record<string, unknown>): void {
       // Lazy require keeps this module importable from non-Electron tests.
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const electron = require("electron") as {
-        BrowserWindow?: { getAllWindows(): Array<{ isMinimized(): boolean; restore(): void; focus(): void }> };
+        BrowserWindow?: {
+          getAllWindows(): Array<{ isMinimized(): boolean; restore(): void; focus(): void }>;
+        };
         app?: { dock?: { bounce?: (kind?: "informational" | "critical") => void } };
       };
       let raised = false;
@@ -1415,7 +1981,6 @@ export function pendingForTest(): string[] {
   return pendingPermissionIds(permissionBroker);
 }
 
-
 // ── Domain recipes (plan: specialized-surfaces.md item 2) ────────────────
 // High-level, consent-gated web workflows the agent invokes in one call.
 
@@ -1429,22 +1994,30 @@ function sleep(ms: number): Promise<void> {
  * or same URL) so repeated requests re-navigate ONE tab instead of
  * spawning twins. */
 function findTaskSurface(url: string, agentArgs: Record<string, unknown>): string | undefined {
-  const query = typeof agentArgs["query"] === "string"
-    ? (agentArgs["query"] as string).trim().toLowerCase()
-    : undefined;
-  const goal = typeof agentArgs["goal"] === "string"
-    ? (agentArgs["goal"] as string).trim().toLowerCase()
-    : undefined;
+  const query =
+    typeof agentArgs["query"] === "string"
+      ? (agentArgs["query"] as string).trim().toLowerCase()
+      : undefined;
+  const goal =
+    typeof agentArgs["goal"] === "string"
+      ? (agentArgs["goal"] as string).trim().toLowerCase()
+      : undefined;
   let fallback: string | undefined;
   for (const [id, rec] of openSurfaces.entries()) {
     if (rec.status !== "open" || rec.type !== "browser") continue;
     const p = (rec.payload ?? {}) as Record<string, unknown>;
-    if (query && typeof p["searchQuery"] === "string" &&
-        (p["searchQuery"] as string).trim().toLowerCase() === query) {
+    if (
+      query &&
+      typeof p["searchQuery"] === "string" &&
+      (p["searchQuery"] as string).trim().toLowerCase() === query
+    ) {
       return id; // exact task match wins outright
     }
-    if (goal && typeof p["goal"] === "string" &&
-        (p["goal"] as string).trim().toLowerCase() === goal) {
+    if (
+      goal &&
+      typeof p["goal"] === "string" &&
+      (p["goal"] as string).trim().toLowerCase() === goal
+    ) {
       return id;
     }
     if (!fallback && typeof p["url"] === "string" && p["url"] === url) fallback = id;
@@ -1470,9 +2043,10 @@ async function agentNavigateAndEval(
 
   // Each task gets its OWN tab — but the SAME task (same searchQuery/
   // goal/URL) re-navigates its existing tab instead of opening a twin.
-  let surfaceId = typeof agentArgs["surfaceId"] === "string"
-    ? agentArgs["surfaceId"]
-    : findTaskSurface(url, agentArgs);
+  let surfaceId =
+    typeof agentArgs["surfaceId"] === "string"
+      ? agentArgs["surfaceId"]
+      : findTaskSurface(url, agentArgs);
   let handle: GuestHandle | undefined;
   if (surfaceId) {
     try {
@@ -1506,7 +2080,9 @@ async function agentNavigateAndEval(
             agent: {
               client: (agentArgs["agentClient"] as string) ?? "agent",
               agentSessionId: (agentArgs["agentSessionId"] as string) ?? null,
-              ...(agentArgs["agentProject"] ? { agentProject: agentArgs["agentProject"] as string } : {}),
+              ...(agentArgs["agentProject"]
+                ? { agentProject: agentArgs["agentProject"] as string }
+                : {}),
             },
           }
         : {};
@@ -1560,16 +2136,30 @@ function validateScenePrimitives(raw: unknown): Array<Record<string, unknown>> {
   return raw.map((item, i) => {
     const p = (item ?? {}) as Record<string, unknown>;
     if (typeof p["type"] !== "string" || !SCENE_KINDS.has(p["type"])) {
-      throw new Error("3D_003: primitive[" + i + "] type must be one of box, sphere, cylinder, torus, plane");
+      throw new Error(
+        "3D_003: primitive[" + i + "] type must be one of box, sphere, cylinder, torus, plane",
+      );
     }
-    if (p["color"] !== undefined && !(typeof p["color"] === "string" && HEX_COLOR.test(p["color"]))) {
+    if (
+      p["color"] !== undefined &&
+      !(typeof p["color"] === "string" && HEX_COLOR.test(p["color"]))
+    ) {
       throw new Error("3D_004: primitive[" + i + "] color must be #rrggbb");
     }
-    if (p["size"] !== undefined && !(typeof p["size"] === "number" && Number.isFinite(p["size"]) && p["size"] > 0)) {
+    if (
+      p["size"] !== undefined &&
+      !(typeof p["size"] === "number" && Number.isFinite(p["size"]) && p["size"] > 0)
+    ) {
       throw new Error("3D_005: primitive[" + i + "] size must be a positive number");
     }
-    if (p["position"] !== undefined &&
-        !(Array.isArray(p["position"]) && p["position"].length === 3 && p["position"].every((n) => typeof n === "number" && Number.isFinite(n)))) {
+    if (
+      p["position"] !== undefined &&
+      !(
+        Array.isArray(p["position"]) &&
+        p["position"].length === 3 &&
+        p["position"].every((n) => typeof n === "number" && Number.isFinite(n))
+      )
+    ) {
       throw new Error("3D_006: primitive[" + i + "] position must be [x,y,z] numbers");
     }
     return p as Record<string, unknown>;
@@ -1587,9 +2177,10 @@ async function handleOpen3dSurface(args: unknown): Promise<Record<string, unknow
   const prompt = optPrompt(o["prompt"]);
   // Passing the previous surfaceId updates that scene in place
   // (renderer upserts the view by id).
-  const reuse = typeof o["surfaceId"] === "string" && openSurfaces.has(o["surfaceId"])
-    ? o["surfaceId"]
-    : undefined;
+  const reuse =
+    typeof o["surfaceId"] === "string" && openSurfaces.has(o["surfaceId"])
+      ? o["surfaceId"]
+      : undefined;
   const id = reuse ?? generateSurfaceId();
   openSurfaces.set(id, {
     surfaceId: id,
@@ -1608,13 +2199,22 @@ async function handleOpen3dSurface(args: unknown): Promise<Record<string, unknow
 }
 
 // ── Export files (large agent datasets land on disk, not in chat) ─────
-const EXPORTS_DIR = require("node:path").join(require("node:os").homedir(), "Downloads", "human-assist-exports");
+const EXPORTS_DIR = require("node:path").join(
+  require("node:os").homedir(),
+  "Downloads",
+  "human-assist-exports",
+);
 const exportStreams = new Map<string, { path: string; bytes: number }>();
 
 function handleSaveExportFile(args: unknown): Record<string, unknown> {
   const o = (args ?? {}) as Record<string, unknown>;
   const filename = typeof o["filename"] === "string" ? o["filename"] : "";
-  const mode = o["mode"] === "append" || o["mode"] === "close" ? o["mode"] : o["mode"] === "start" ? "start" : null;
+  const mode =
+    o["mode"] === "append" || o["mode"] === "close"
+      ? o["mode"]
+      : o["mode"] === "start"
+        ? "start"
+        : null;
   if (!filename || mode === null) throw new Error("EXP_001: filename and mode required");
   if (/[\\/]\.\.?|[\\/]/.test(filename) || !/^[\w.\- ]{1,120}$/.test(filename)) {
     throw new Error("EXP_002: filename must be a plain file name");
@@ -1632,7 +2232,10 @@ function handleSaveExportFile(args: unknown): Record<string, unknown> {
     fs.writeFileSync(path, content, "utf8");
     exportStreams.set(filename, { path, bytes: Buffer.byteLength(content) });
   } else {
-    if (!state) throw new Error("EXP_005: no active export stream for " + filename + " — call mode=start first");
+    if (!state)
+      throw new Error(
+        "EXP_005: no active export stream for " + filename + " — call mode=start first",
+      );
     if (content) fs.appendFileSync(path, content, "utf8");
     state.bytes += Buffer.byteLength(content);
     if (state.bytes > 64 * 1024 * 1024) throw new Error("EXP_006: export exceeds 64MB");
@@ -1646,6 +2249,259 @@ function handleSaveExportFile(args: unknown): Record<string, unknown> {
   return { ok: true, path, bytes: exportStreams.get(filename)?.bytes ?? 0, closed: false };
 }
 
+// ── Panel data retrieval: read ANY open surface, not just the browser ────
+
+/** Compact, transport-safe digest of a panel payload (no 200 KB diffs or
+ *  megabyte data URLs flooding the chat). */
+function summarizePayload(s: SurfaceState): Record<string, unknown> {
+  const p = (s.payload ?? {}) as Record<string, unknown>;
+  const shrink = (v: unknown): unknown =>
+    typeof v === "string" && v.length > 320 ? `${v.slice(0, 320)}…(${v.length} chars)` : v;
+  const pick = (keys: string[]): Record<string, unknown> => {
+    const out: Record<string, unknown> = {};
+    for (const k of keys) if (p[k] !== undefined) out[k] = shrink(p[k]);
+    return out;
+  };
+  switch (s.type) {
+    case "3d": {
+      const pr = Array.isArray(p.primitives) ? (p.primitives as unknown[]) : [];
+      const kinds: Record<string, number> = {};
+      for (const x of pr) {
+        const t = (x as { type?: string })?.type ?? "?";
+        kinds[t] = (kinds[t] ?? 0) + 1;
+      }
+      return {
+        primitives: pr.length,
+        byType: kinds,
+        background: p.background,
+        camera: p.camera,
+        prompt: shrink(p.prompt),
+      };
+    }
+    case "input":
+      return pick(["question", "kind", "options", "answer", "answered", "responded", "prompt"]);
+    case "codeDiff":
+      return {
+        files: p.files,
+        diffChars: typeof p.diff === "string" ? p.diff.length : 0,
+        diffHead: typeof p.diff === "string" ? p.diff.slice(0, 400) : undefined,
+        approved: p.approved,
+      };
+    case "terminal": {
+      const out = typeof p.output === "string" ? p.output : "";
+      const lines = out.split("\n");
+      return {
+        command: p.command,
+        outputLines: lines.length,
+        outputChars: out.length,
+        tail: lines.slice(-30).join("\n"),
+      };
+    }
+    case "processes":
+      return { processes: p.processes };
+    case "canvas": {
+      const out = pick(["prompt", "imageSrc", "markedUp", "markupNote", "markupAt", "markupBytes"]);
+      if (typeof p.markup === "string") {
+        // Never dump a megabyte PNG into the chat — digest it, and hand the
+        // pixels over only via what:"markup".
+        out.hasMarkup = true;
+      }
+      const ann = Array.isArray(p.annotations) ? (p.annotations as unknown[]) : [];
+      if (ann.length) out.annotations = ann.length;
+      return out;
+    }
+    case "screenCapture":
+      return pick(["mode", "src", "prompt"]);
+    case "browser":
+      return pick(["url", "prompt"]);
+    default:
+      return { keys: Object.keys(p), preview: pick(Object.keys(p).slice(0, 12)) };
+  }
+}
+
+/** readSurface — one retrieval tool for every panel kind. Browser surfaces are
+ *  read LIVE (accessibility snapshot + structured extraction); other panels
+ *  return a digest of their stored payload (or the full payload on request). */
+async function handleReadSurface(args: unknown): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const id = typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined;
+  const wantPayload = o["what"] === "payload";
+
+  if (!id) {
+    const list = [...openSurfaces.values()].map((s) => ({
+      surfaceId: s.surfaceId,
+      type: s.type,
+      status: s.status,
+      createdAt: s.createdAt,
+      lastActive: s.lastActive,
+      handoffActive: !!activeHandoff(s.surfaceId),
+      summary: summarizePayload(s),
+    }));
+    return { status: "list", count: list.length, surfaces: list };
+  }
+
+  const rec = openSurfaces.get(id);
+  if (!rec) {
+    throw new Error(
+      `SURFACE_001: unknown surfaceId "${id}" — call readSurface with no surfaceId to list what is open`,
+    );
+  }
+  const base = {
+    surfaceId: id,
+    type: rec.type,
+    status: rec.status,
+    createdAt: rec.createdAt,
+    lastActive: rec.lastActive,
+    handoffActive: !!activeHandoff(id),
+  };
+
+  if (rec.type === "browser") {
+    let handle: GuestHandle;
+    try {
+      handle = resolveGuest(id);
+    } catch (e) {
+      // Detached (renderer closed the tab): still hand back what we know.
+      return { ...base, attached: false, payload: rec.payload, note: (e as Error).message };
+    }
+    const ex =
+      o["extract"] && typeof o["extract"] === "object"
+        ? (o["extract"] as Record<string, unknown>)
+        : null;
+    const kind =
+      (typeof ex?.["kind"] === "string" ? (ex["kind"] as string) : undefined) ??
+      (typeof o["what"] === "string" && SEQ_EXTRACT_KINDS.has(o["what"] as string)
+        ? (o["what"] as string)
+        : "text");
+    if (!SEQ_EXTRACT_KINDS.has(kind)) {
+      throw new Error(
+        `SURFACE_002: extract.kind must be one of ${[...SEQ_EXTRACT_KINDS].join(", ")}`,
+      );
+    }
+    const spec: SeqStep["extract"] = {
+      kind,
+      ...(typeof ex?.["selector"] === "string" ? { selector: ex["selector"] as string } : {}),
+      ...(typeof o["selector"] === "string" && !ex?.["selector"]
+        ? { selector: o["selector"] as string }
+        : {}),
+      ...(typeof ex?.["attr"] === "string" ? { attr: ex["attr"] as string } : {}),
+    };
+    const raw = await handle.executeJavaScript(extractJs(spec));
+    let extracted: unknown;
+    try {
+      extracted = typeof raw === "string" ? JSON.parse(raw) : raw;
+    } catch {
+      extracted = { ok: false, error: "unparseable extraction result" };
+    }
+    const [snap, blockers] = (await Promise.all([
+      handle.executeJavaScript(SNAPSHOT_JS),
+      detectGuestBlockers(handle),
+    ])) as [Record<string, unknown>, Blocker[]];
+    const limit =
+      typeof o["limit"] === "number" ? Math.min(20_000, Math.max(200, o["limit"])) : 2_000;
+    return {
+      ...base,
+      attached: true,
+      url: handle.getURL(),
+      extracted,
+      page: {
+        title: snap?.title,
+        url: snap?.url,
+        text: String(snap?.text ?? "").slice(0, limit),
+      },
+      captchaDetected: captchaLike(blockers) || Boolean(snap?.captchaDetected),
+      blockers,
+      needsHuman: hardBlockers(blockers).length > 0,
+    };
+  }
+
+  return {
+    ...base,
+    summary: summarizePayload(rec),
+    payload: wantPayload ? rec.payload : undefined,
+    // The annotated PNG only leaves here on request: a megabyte of base64 has
+    // no business in a tool result otherwise (the digest already tells the
+    // agent that markup exists and when it arrived).
+    ...(o["what"] === "markup" && typeof rec.payload?.["markup"] === "string"
+      ? { markup: rec.payload["markup"] }
+      : {}),
+  };
+}
+
+/** Clear cookies / storage / cache for a site in the browsing partition.
+ *  When a pane shows a block page but Chrome loads the same URL fine, the
+ *  usual cause is a poisoned cookie or a cached challenge for that origin —
+ *  this is the one-call fix, and the agent is allowed to suggest it. */
+async function handleBrowserClearSiteData(args: unknown): Promise<Record<string, unknown>> {
+  if (!uiControls.clearSiteData) {
+    throw new Error("BROWSER_015: site-data clearing is only available in the desktop app");
+  }
+  const o = (args ?? {}) as Record<string, unknown>;
+  const url = typeof o["url"] === "string" ? o["url"] : undefined;
+  const host = typeof o["host"] === "string" ? o["host"] : undefined;
+  // A surfaceId works instead of a URL: clear whatever that pane is showing.
+  const sid = typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined;
+  const targetUrl = url ?? (sid ? (openSurfaces.get(sid)?.payload?.["url"] as string) : undefined);
+  const what = Array.isArray(o["what"])
+    ? (o["what"] as unknown[])
+        .map(String)
+        .filter((w): w is "cookies" | "storage" | "cache" =>
+          ["cookies", "storage", "cache"].includes(w),
+        )
+    : undefined;
+  const res = await uiControls.clearSiteData({
+    ...(targetUrl ? { url: targetUrl } : {}),
+    ...(host ? { host } : {}),
+    ...(what && what.length ? { what } : {}),
+  });
+  const hostLabel = res.host ?? host ?? targetUrl ?? "(all)";
+  notifyUiMessage({
+    level: "info",
+    title: "Site data cleared",
+    message: `${hostLabel} — ${(res.cleared as string[] | undefined)?.join(", ") ?? "storage"}. Reload the pane (or ask me to navigate again).`,
+  });
+  // Reload the affected pane so the fresh state is immediately visible.
+  if (sid) {
+    try {
+      const handle = resolveGuest(sid);
+      const current = handle.getURL();
+      if (/^https?:\/\//i.test(current)) await loadUrlCapped(handle, current);
+    } catch {
+      /* detached pane — the human can reload it */
+    }
+  }
+  return { status: "cleared", target: hostLabel, ...res };
+}
+
+/** Read / change the agent-browsing politeness throttle. Humans are never
+ *  throttled — this only paces what an agent can do to a host. */
+function handleBrowserThrottle(args: unknown): Record<string, unknown> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  if (o["reset"] === true) {
+    throttleResetPolicy();
+    throttleResetHosts();
+    return { status: "reset", ...throttleSnapshot() };
+  }
+  if (typeof o["forgiveHost"] === "string" && o["forgiveHost"].trim()) {
+    const ok = throttleForgive(o["forgiveHost"].trim());
+    return {
+      status: ok ? "forgiven" : "unknown_host",
+      host: o["forgiveHost"],
+      ...throttleSnapshot(),
+    };
+  }
+  const src = (o["policy"] ?? o) as Record<string, unknown>;
+  const applied: Record<string, number> = {};
+  for (const k of ["minIntervalMs", "burst", "maxWaitMs", "penaltyMs"] as const) {
+    if (typeof src[k] === "number") applied[k] = src[k] as number;
+  }
+  if (Object.keys(applied).length) {
+    const p = throttleSetPolicy(applied);
+    console.log("[throttle] policy updated by agent:", JSON.stringify(p));
+    return { status: "updated", policy: p, note: "persisted to the policy file" };
+  }
+  return { status: "ok", ...throttleSnapshot() };
+}
+
 function handleBrowserListSurfaces(): Record<string, unknown> {
   const attached = new Set(listGuestSurfaceIds());
   const surfaces = [...openSurfaces.values()]
@@ -1654,7 +2510,8 @@ function handleBrowserListSurfaces(): Record<string, unknown> {
       surfaceId: s.surfaceId,
       type: s.type,
       url: typeof s.payload["url"] === "string" ? (s.payload["url"] as string) : null,
-      prompt: typeof s.payload["prompt"] === "string" ? String(s.payload["prompt"]).slice(0, 80) : null,
+      prompt:
+        typeof s.payload["prompt"] === "string" ? String(s.payload["prompt"]).slice(0, 80) : null,
       guestAttached: attached.has(s.surfaceId),
       lastActive: new Date(s.lastActive).toISOString(),
     }));
@@ -1685,7 +2542,9 @@ async function handleReadGoogleDriveDoc(
   let parsed: Record<string, unknown> = {};
   try {
     parsed = typeof r.value === "string" ? JSON.parse(r.value) : {};
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   if (parsed["loginRequired"]) {
     // Hand to the human: log in once, click Done, ask again.
     notifyHandoff(r.surfaceId, true, "Google sign-in required — log in once, then Done");
@@ -1739,14 +2598,20 @@ async function handleScrapeSelective(
   let parsed: Record<string, unknown> = {};
   try {
     parsed = typeof r.value === "string" ? JSON.parse(r.value) : {};
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return { tool: "scrapeSelective", surfaceId: r.surfaceId, url, selector, ...parsed };
 }
 
-
 // ── Browser automation (agent-driven embedded views + human handoff) ─────
 
-interface HandoffState { reason?: string; ts: number }
+interface HandoffState {
+  reason?: string;
+  ts: number;
+  /** What the detector concluded when the handoff opened (drives the pane copy). */
+  blockers?: Blocker[];
+}
 const browserHandoffs = new Map<string, HandoffState>();
 const HANDOFF_TTL_MS = 10 * 60_000;
 
@@ -1764,19 +2629,30 @@ function activeHandoff(surfaceId: string): HandoffState | undefined {
 function assertHumanControlFree(surfaceId?: string): void {
   if (!surfaceId) {
     if (browserHandoffs.size > 0) {
-      throw new Error("BROWSER_005: awaiting human input on " + [...browserHandoffs.keys()].join(", ") + " — resolve handoff first");
+      throw new Error(
+        "BROWSER_005: awaiting human input on " +
+          [...browserHandoffs.keys()].join(", ") +
+          " — resolve handoff first",
+      );
     }
     return;
   }
   if (activeHandoff(surfaceId)) {
-    throw new Error(`BROWSER_005: awaiting human input on "${surfaceId}" — the human must click Done (or call browserHandoff is still open)`);
+    throw new Error(
+      `BROWSER_005: awaiting human input on "${surfaceId}" — the human must click Done (or call browserHandoff is still open)`,
+    );
   }
 }
 
-function notifyHandoff(surfaceId: string, active: boolean, reason?: string): void {
+function notifyHandoff(
+  surfaceId: string,
+  active: boolean,
+  reason?: string,
+  blockers?: Blocker[],
+): void {
   const event = JSON.stringify({
     event: "surface:handoff",
-    data: { surfaceId, active, reason: reason ?? null },
+    data: { surfaceId, active, reason: reason ?? null, blockers: blockers ?? [] },
     timestamp: Date.now(),
   });
   for (const client of wsClients) {
@@ -1800,6 +2676,44 @@ const SNAPSHOT_JS = `(() => {
     interactive: inter,
   };
 })()`;
+
+/** Classify the current page into human-required blockers. Facts are read in
+ *  the guest, rules run in Node (unit-testable without an Electron guest). */
+async function detectGuestBlockers(handle: {
+  executeJavaScript: (js: string) => Promise<unknown>;
+}): Promise<Blocker[]> {
+  try {
+    const raw = await handle.executeJavaScript(BLOCKER_FACTS_JS);
+    const facts = (typeof raw === "string" ? JSON.parse(raw) : raw) as BlockerFacts;
+    return classifyBlockers(facts ?? {});
+  } catch {
+    return []; // guest detached / navigated away — never fail a run for this
+  }
+}
+
+/** Open a handoff from detected blockers (shared by the tool and the
+ *  auto-handoff inside browserExecuteActions). */
+function openHandoff(
+  id: string,
+  reason: string,
+  blockers: Blocker[],
+): { reason: string; blocker: string } {
+  browserHandoffs.set(id, { reason, ts: Date.now(), blockers });
+  notifyHandoff(id, true, reason, blockers);
+  // The pane may be scrolled, minimized or on another session's view — a toast
+  // makes "the agent is waiting on you" impossible to miss.
+  const hard = blockers.filter((b) => b.severity === "hard").map((b) => b.kind);
+  notifyUiMessage({
+    level: "warning",
+    title: "Your turn in the browser",
+    message:
+      reason +
+      (hard.length ? ` (detected: ${hard.join(", ")})` : "") +
+      " — click Done when finished.",
+  });
+  console.log(`[browser] handoff OPEN on ${id}: ${reason}`);
+  return { reason, blocker: blockers[0]?.kind ?? "unknown" };
+}
 
 function clickJs(selector: string | null, text: string | null): string {
   return `(() => {
@@ -1846,9 +2760,27 @@ function typeJs(selector: string, value: string): string {
 // failed, non-optional step and returns per-step results + a final snapshot.
 
 const SEQ_ACTIONS = new Set([
-  "navigate", "click", "type", "extract", "assert", "waitFor", "scroll", "press", "snapshot",
+  "navigate",
+  "click",
+  "type",
+  "extract",
+  "assert",
+  "waitFor",
+  "scroll",
+  "press",
+  "snapshot",
 ]);
-const SEQ_EXTRACT_KINDS = new Set(["text", "html", "value", "links", "attr"]);
+const SEQ_EXTRACT_KINDS = new Set([
+  "text",
+  "html",
+  "value",
+  "links",
+  "attr",
+  "table",
+  "list",
+  "meta",
+  "json",
+]);
 
 type SeqStep = {
   action: string;
@@ -1888,7 +2820,9 @@ function normalizeBrowserActions(raw: unknown): SeqStep[] {
       const ex = a["extract"] as Record<string, unknown>;
       const kind = typeof ex["kind"] === "string" ? ex["kind"] : "text";
       if (!SEQ_EXTRACT_KINDS.has(kind)) {
-        throw new Error(`ACTION_004: actions[${i}].extract.kind must be one of ${[...SEQ_EXTRACT_KINDS].join(", ")}`);
+        throw new Error(
+          `ACTION_004: actions[${i}].extract.kind must be one of ${[...SEQ_EXTRACT_KINDS].join(", ")}`,
+        );
       }
       out.extract = {
         kind,
@@ -1920,6 +2854,75 @@ function extractJs(ex: SeqStep["extract"], fallbackSelector?: string): string {
         .map(e => ({ text: textOf(e).slice(0, 140), href: e.href }))
         .slice(0, 300);
       return JSON.stringify({ ok: true, kind, count: data.length, data });
+    }
+    if (kind === 'table') {
+      const roots = sel ? [...document.querySelectorAll(sel)] : [...document.querySelectorAll('table')];
+      const cells = (tr) => [...tr.querySelectorAll('th,td')].map(textOf);
+      const data = roots.slice(0, 20).map((t) => {
+        const rows = [...t.querySelectorAll('tr')].slice(0, 200);
+        const headRow = rows.find((r) => r.querySelector('th')) || rows[0];
+        // The header row lives in the headers field only - never repeated as data.
+        const body = rows.filter((r) => r !== headRow && !r.closest('thead')).map(cells).filter((r) => r.length);
+        return {
+          caption: textOf(t.querySelector('caption') || { innerText: '' }).slice(0, 120),
+          headers: headRow ? cells(headRow) : [],
+          rows: body.slice(0, 200),
+        };
+      });
+      return JSON.stringify({ ok: true, kind, count: data.length, data });
+    }
+    if (kind === 'list') {
+      // Repeated-sibling structure → items. Explicit selector wins; otherwise
+      // auto-pick the biggest uniform child run (results/cards/table rows).
+      let items = sel ? [...document.querySelectorAll(sel)] : [];
+      let auto = false;
+      if (!items.length) {
+        let best = null;
+        for (const el of [...document.querySelectorAll('ul,ol,dl,main,section,div')].slice(0, 3000)) {
+          const kids = [...el.children];
+          if (kids.length < 3 || kids.length > 400) continue;
+          const tag = kids[0].tagName;
+          if (!kids.every((k) => k.tagName === tag)) continue;
+          if (!best || kids.length > best.n) best = { el, n: kids.length };
+        }
+        if (best) { items = [...best.el.children]; auto = true; }
+      }
+      const data = items.slice(0, 300).map((n) => ({
+        text: textOf(n).slice(0, 600),
+        links: [...n.querySelectorAll('a[href]')].slice(0, 8)
+          .map((a2) => ({ text: textOf(a2).slice(0, 120), href: a2.href })),
+      })).filter((o) => o.text || o.links.length);
+      return JSON.stringify({ ok: true, kind, count: data.length, auto, data });
+    }
+    if (kind === 'meta') {
+      const mq = (s) => document.querySelector(s);
+      const att = (n, a) => (n && n.getAttribute ? n.getAttribute(a) || '' : '');
+      const data = {
+        title: document.title,
+        url: location.href,
+        description: att(mq('meta[name="description"]'), 'content'),
+        canonical: att(mq('link[rel="canonical"]'), 'href'),
+        lang: document.documentElement.lang || '',
+        og: ['og:title', 'og:description', 'og:image', 'og:type', 'og:url']
+          .map((k) => ({ k, v: att(mq('meta[property="' + k + '"]'), 'content') }))
+          .filter((o) => o.v)
+          .reduce((o, x) => { o[x.k] = x.v; return o; }, {}),
+        headings: [...document.querySelectorAll('h1,h2')].slice(0, 25).map((h) => textOf(h).slice(0, 160)),
+        jsonLd: [...document.querySelectorAll('script[type="application/ld+json"]')]
+          .slice(0, 6)
+          .map((s) => { try { return JSON.parse(s.textContent || ''); } catch (e) { return null; } })
+          .filter(Boolean),
+      };
+      return JSON.stringify({ ok: true, kind, count: 1, data });
+    }
+    if (kind === 'json') {
+      const n = sel ? document.querySelector(sel) : null;
+      const src = n ? (n.textContent || '') : (document.body ? document.body.innerText.slice(0, 40000) : '');
+      try {
+        return JSON.stringify({ ok: true, kind, count: 1, data: JSON.parse(src) });
+      } catch (e) {
+        return JSON.stringify({ ok: false, kind, error: 'not valid JSON in ' + (sel || 'body'), sample: String(src).slice(0, 400) });
+      }
     }
     const nodes = sel ? [...document.querySelectorAll(sel)] : (document.body ? [document.body] : []);
     if (kind === 'value') {
@@ -1988,7 +2991,8 @@ function existsJs(a: SeqStep): string {
         .some(e => ((( e.innerText) || '') + ' ' + (e.value || '') + ' ' + (e.getAttribute && e.getAttribute('aria-label') || '')).toLowerCase().includes(t));
     })()`;
   }
-  if (a.contains) return `((document.body && document.body.innerText) || '').toLowerCase().includes(${JSON.stringify(a.contains.toLowerCase())})`;
+  if (a.contains)
+    return `((document.body && document.body.innerText) || '').toLowerCase().includes(${JSON.stringify(a.contains.toLowerCase())})`;
   return "true";
 }
 
@@ -1997,7 +3001,7 @@ async function waitForGuest(handle: GuestHandle, a: SeqStep): Promise<{ ok: bool
   const js = existsJs(a);
   const deadline = Date.now() + timeoutMs;
   // Always give at least one poll even for timeoutMs=0.
-  for (; ;) {
+  for (;;) {
     const hit = (await handle.executeJavaScript(js)) as boolean;
     if (hit) return { ok: true };
     if (Date.now() >= deadline) return { ok: false };
@@ -2033,7 +3037,11 @@ async function handleDelegateTask(
   // anyway; seeding just satisfies the http(s) requirement).
   let surfaceId = typeof o["surfaceId"] === "string" ? (o["surfaceId"] as string) : undefined;
   if (surfaceId) {
-    try { resolveGuest(surfaceId); } catch { surfaceId = undefined; }
+    try {
+      resolveGuest(surfaceId);
+    } catch {
+      surfaceId = undefined;
+    }
   }
   if (!surfaceId) {
     const attached = new Set(listGuestSurfaceIds());
@@ -2072,15 +3080,27 @@ async function handleDelegateTask(
         }
       : undefined;
     for (let waited = 0; waited < 15_000; waited += 250) {
-      try { resolveGuest(surfaceId); break; } catch {
+      try {
+        resolveGuest(surfaceId);
+        break;
+      } catch {
         if (pushed && waited % 2_000 === 0) notifySurfacePush(pushed);
         await new Promise((r) => setTimeout(r, 250));
       }
     }
   }
 
-  const exec = (await handleBrowserExecuteActions({ surfaceId, actions: plan.actions }, ctx)) as Record<string, unknown>;
-  if (dbg) console.log("[debug] delegateTask done: " + String(exec.status) + " steps=" + String((exec.steps as unknown[] | undefined)?.length ?? 0));
+  const exec = (await handleBrowserExecuteActions(
+    { surfaceId, actions: plan.actions },
+    ctx,
+  )) as Record<string, unknown>;
+  if (dbg)
+    console.log(
+      "[debug] delegateTask done: " +
+        String(exec.status) +
+        " steps=" +
+        String((exec.steps as unknown[] | undefined)?.length ?? 0),
+    );
   return {
     ok: exec["ok"] === true,
     tool: "delegateTask",
@@ -2124,16 +3144,30 @@ async function handleBrowserExecuteActions(
         if (surfaceArg) {
           const rec = openSurfaces.get(surfaceArg);
           if (rec && (Date.now() - t0) % 2_000 < 300) {
-            notifySurfacePush({ surfaceId: surfaceArg, type: rec.type, payload: rec.payload, status: "pushed" });
+            notifySurfacePush({
+              surfaceId: surfaceArg,
+              type: rec.type,
+              payload: rec.payload,
+              status: "pushed",
+            });
           }
         }
         await sleep(250);
       }
     }
   }
-  if (!entry) throw lastGuestErr instanceof Error ? lastGuestErr : new Error("BROWSER_002: no attached surface");
+  if (!entry)
+    throw lastGuestErr instanceof Error
+      ? lastGuestErr
+      : new Error("BROWSER_002: no attached surface");
   const { id, handle } = entry;
   assertHumanControlFree(id);
+  // Auto-handoff: a step that lands the page on a CAPTCHA / MFA / sign-in wall
+  // must not burn the rest of the plan (clicking a wall is never a fix, and
+  // the sequence would just fail 8 more times). Detect after every step and
+  // hand the keyboard to the human instead. Opt out with autoHandoff:false.
+  const autoHandoff = o["autoHandoff"] !== false;
+  let handoff: { reason: string; blocker: string; blockers: Blocker[] } | null = null;
 
   const steps: Array<Record<string, unknown>> = [];
   let aborted = false;
@@ -2167,44 +3201,89 @@ async function handleBrowserExecuteActions(
         const res = (await handle.executeJavaScript(
           clickJs(a.selector ?? null, a.target ?? null),
         )) as { ok: boolean; desc?: string };
-        r = res.ok ? { ok: true, element: res.desc ?? null } : { ok: false, error: "element not found" };
+        r = res.ok
+          ? { ok: true, element: res.desc ?? null }
+          : { ok: false, error: "element not found" };
       } else if (a.action === "type") {
         if (!a.selector) throw new Error("ACTION_007: type needs selector");
-        const res = (await handle.executeJavaScript(typeJs(a.selector, a.value ?? ""))) as { ok: boolean };
+        const res = (await handle.executeJavaScript(typeJs(a.selector, a.value ?? ""))) as {
+          ok: boolean;
+        };
         r = res.ok ? { ok: true } : { ok: false, error: "input element not found" };
       } else if (a.action === "extract") {
         const raw = await handle.executeJavaScript(extractJs(a.extract, a.selector));
         r = (typeof raw === "string" ? JSON.parse(raw) : raw) as Record<string, unknown>;
         if (typeof r.ok !== "boolean") r = { ok: true, ...r };
       } else if (a.action === "assert") {
-        if (a.contains === undefined && !a.selector) throw new Error("ACTION_008: assert needs contains and/or selector");
+        if (a.contains === undefined && !a.selector)
+          throw new Error("ACTION_008: assert needs contains and/or selector");
         const res = (await handle.executeJavaScript(
           assertJs(a.contains ?? null, a.selector ?? null, a.present ?? true),
         )) as { ok: boolean; found?: boolean };
-        r = res.ok ? { ok: true, found: res.found } : { ok: false, error: "assertion failed", found: res.found };
+        r = res.ok
+          ? { ok: true, found: res.found }
+          : { ok: false, error: "assertion failed", found: res.found };
       } else if (a.action === "waitFor") {
-        if (!a.selector && !a.target && !a.contains) throw new Error("ACTION_009: waitFor needs selector, target, or contains");
+        if (!a.selector && !a.target && !a.contains)
+          throw new Error("ACTION_009: waitFor needs selector, target, or contains");
         const res = await waitForGuest(handle, a);
         r = res.ok ? { ok: true } : { ok: false, error: "timed out waiting" };
       } else if (a.action === "press") {
-        const res = (await handle.executeJavaScript(pressJs(a.key ?? "Enter", a.selector ?? null))) as { ok: boolean };
-        r = res.ok ? { ok: true, key: a.key ?? "Enter" } : { ok: false, error: "no target to press" };
+        const res = (await handle.executeJavaScript(
+          pressJs(a.key ?? "Enter", a.selector ?? null),
+        )) as { ok: boolean };
+        r = res.ok
+          ? { ok: true, key: a.key ?? "Enter" }
+          : { ok: false, error: "no target to press" };
       } else if (a.action === "scroll") {
         await handle.executeJavaScript(scrollJs(a.selector ?? null));
         r = { ok: true };
       } else if (a.action === "snapshot") {
         const snap = (await handle.executeJavaScript(SNAPSHOT_JS)) as Record<string, unknown>;
-        r = { ok: true, snapshot: { title: snap.title, url: snap.url, captchaDetected: snap.captchaDetected, text: String(snap.text ?? "").slice(0, 4000) } };
+        r = {
+          ok: true,
+          snapshot: {
+            title: snap.title,
+            url: snap.url,
+            captchaDetected: snap.captchaDetected,
+            text: String(snap.text ?? "").slice(0, 4000),
+          },
+        };
       } else {
         r = { ok: false, error: "unknown action" };
       }
       steps.push({ i, action: a.action, ok: r.ok === true, ms: Date.now() - t0, ...r });
+      if (autoHandoff) {
+        const blockers = await detectGuestBlockers(handle);
+        const hard = hardBlockers(blockers);
+        if (hard.length) penalizeForBlockers(handle.getURL(), hard);
+        if (hard.length && !activeHandoff(id)) {
+          const opened = openHandoff(id, handoffPrompt(hard), hard);
+          handoff = { ...opened, blockers: hard };
+          steps.push({
+            i,
+            action: "handoff",
+            ok: true,
+            blocker: opened.blocker,
+            reason: opened.reason,
+            note: "automation paused for the human — the rest of the plan is not executed",
+          });
+          aborted = true;
+          break;
+        }
+      }
       if (r.ok !== true && !a.optional) {
         aborted = true;
         break;
       }
     } catch (e) {
-      steps.push({ i, action: a.action, ok: false, ms: Date.now() - t0, error: (e as Error).message });
+      steps.push({
+        i,
+        action: a.action,
+        ok: false,
+        ms: Date.now() - t0,
+        error: (e as Error).message,
+      });
       if (!a.optional) {
         aborted = true;
         break;
@@ -2213,11 +3292,32 @@ async function handleBrowserExecuteActions(
   }
 
   let final: Record<string, unknown> | undefined;
+  let finalBlockers: Blocker[] = [];
   try {
-    const snap = (await handle.executeJavaScript(SNAPSHOT_JS)) as Record<string, unknown>;
-    final = { title: snap.title, url: snap.url, captchaDetected: snap.captchaDetected, text: String(snap.text ?? "").slice(0, 4000) };
+    const [snap, blockers] = (await Promise.all([
+      handle.executeJavaScript(SNAPSHOT_JS),
+      detectGuestBlockers(handle),
+    ])) as [Record<string, unknown>, Blocker[]];
+    finalBlockers = blockers ?? [];
+    final = {
+      title: snap.title,
+      url: snap.url,
+      captchaDetected: Boolean(snap.captchaDetected) || captchaLike(finalBlockers),
+      text: String(snap.text ?? "").slice(0, 4000),
+      blockers: finalBlockers,
+    };
   } catch {
     /* guest may have navigated away / detached */
+  }
+
+  // A plan can also land on a wall AFTER its last step (a redirect that
+  // finishes during the settle) — same treatment.
+  if (!handoff && autoHandoff) {
+    const hard = hardBlockers(finalBlockers);
+    if (hard.length) penalizeForBlockers(handle?.getURL?.() ?? undefined, hard);
+    if (hard.length && !activeHandoff(id)) {
+      handoff = { ...openHandoff(id, handoffPrompt(hard), hard), blockers: hard };
+    }
   }
 
   return {
@@ -2229,6 +3329,11 @@ async function handleBrowserExecuteActions(
     denied,
     steps,
     final,
+    /** True when the run is blocked on a human (CAPTCHA/MFA/login/…). Stop
+     *  issuing browser calls; poll browserSnapshot until handoffActive is
+     *  false, then resume the plan. */
+    needsHuman: !!handoff || hardBlockers(finalBlockers).length > 0,
+    handoff,
   };
 }
 
@@ -2238,14 +3343,17 @@ async function handleBrowserNavigate(
 ): Promise<Record<string, unknown>> {
   const o = (args ?? {}) as Record<string, unknown>;
   const url = typeof o["url"] === "string" ? o["url"] : "";
-  if (!/^https?:\/\/.+/i.test(url)) throw new Error("BROWSER_006: url must be an absolute http(s) URL");
+  if (!/^https?:\/\/.+/i.test(url))
+    throw new Error("BROWSER_006: url must be an absolute http(s) URL");
   const perm = await permissionBroker.ensure(url, "browserNavigate", {
     agentClient: ctx?.agentClient,
     agentSessionId: ctx?.agentSessionId,
     agentProject: ctx?.agentProject,
   });
   if (!perm.allowed) return { status: "denied", reason: perm.decision, url };
-  const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
+  const { id, handle } = resolveGuestEntry(
+    typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined,
+  );
   assertHumanControlFree(id);
   await loadUrlCapped(handle, url);
   return { status: "navigated", surfaceId: id, url, permission: perm.decision };
@@ -2253,9 +3361,46 @@ async function handleBrowserNavigate(
 
 async function handleBrowserSnapshot(args: unknown): Promise<Record<string, unknown>> {
   const o = (args ?? {}) as Record<string, unknown>;
-  const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
-  const snap = (await handle.executeJavaScript(SNAPSHOT_JS)) as Record<string, unknown>;
-  return { surfaceId: id, handoffActive: !!activeHandoff(id), ...snap };
+  const { id, handle } = resolveGuestEntry(
+    typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined,
+  );
+  const [snap, blockers] = (await Promise.all([
+    handle.executeJavaScript(SNAPSHOT_JS),
+    detectGuestBlockers(handle),
+  ])) as [Record<string, unknown>, Blocker[]];
+  return {
+    surfaceId: id,
+    handoffActive: !!activeHandoff(id),
+    ...snap,
+    // Legacy flag kept, now also true for bot walls / "are you a human".
+    captchaDetected: Boolean(snap.captchaDetected) || captchaLike(blockers),
+    blockers,
+    needsHuman: hardBlockers(blockers).length > 0,
+  };
+}
+
+/** A site pushed back (block page / captcha / bot wall): give the IP a
+ *  cooldown instead of poking it again with the next tool call. */
+function penalizeForBlockers(url: string | undefined, blockers: Blocker[]): void {
+  const wall = blockers.find(
+    (b) => b.severity === "hard" && ["captcha", "botWall", "humanVerify", "mfa"].includes(b.kind),
+  );
+  if (wall) throttlePenalize(url, `${wall.kind}: ${wall.evidence[0] ?? "block page"}`);
+}
+
+/** Soft pacing for actions that can trigger a load (clicking a link,
+ *  submitting a form): returns a rate_limited result instead of throwing, so a
+ *  single impatient click doesn't blow up the whole call. */
+async function paceSoftAction(url: string | undefined): Promise<Record<string, unknown> | null> {
+  const r = await throttleAcquire(url);
+  if (r.allowed) return null;
+  return {
+    status: "rate_limited",
+    url: url ?? null,
+    waitedMs: r.waitedMs,
+    reason: r.reason ?? "paced",
+    hint: "Per-host politeness limit (protects us from WAF bans). Ask again shortly, put more steps in one browserExecuteActions run, or change the policy with browserThrottle.",
+  };
 }
 
 async function handleBrowserClick(args: unknown): Promise<Record<string, unknown>> {
@@ -2263,9 +3408,16 @@ async function handleBrowserClick(args: unknown): Promise<Record<string, unknown
   const selector = typeof o["selector"] === "string" ? o["selector"] : null;
   const text = typeof o["text"] === "string" ? o["text"] : null;
   if (!selector && !text) throw new Error("BROWSER_007: provide selector or text");
-  const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
+  const { id, handle } = resolveGuestEntry(
+    typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined,
+  );
   assertHumanControlFree(id);
-  const res = (await handle.executeJavaScript(clickJs(selector, text))) as { ok: boolean; desc?: string };
+  const limited = await paceSoftAction(handle.getURL());
+  if (limited) return { ...limited, surfaceId: id };
+  const res = (await handle.executeJavaScript(clickJs(selector, text))) as {
+    ok: boolean;
+    desc?: string;
+  };
   if (!res.ok) throw new Error("BROWSER_008: element not found");
   return { status: "clicked", surfaceId: id, element: res.desc ?? null };
 }
@@ -2275,8 +3427,12 @@ async function handleBrowserType(args: unknown): Promise<Record<string, unknown>
   const selector = typeof o["selector"] === "string" ? o["selector"] : "";
   const text = typeof o["text"] === "string" ? o["text"] : "";
   if (!selector) throw new Error("BROWSER_009: selector required");
-  const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
+  const { id, handle } = resolveGuestEntry(
+    typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined,
+  );
   assertHumanControlFree(id);
+  const limited = await paceSoftAction(handle.getURL());
+  if (limited) return { ...limited, surfaceId: id };
   const res = (await handle.executeJavaScript(typeJs(selector, text))) as { ok: boolean };
   if (!res.ok) throw new Error("BROWSER_010: input element not found");
   return { status: "typed", surfaceId: id, selector };
@@ -2284,20 +3440,34 @@ async function handleBrowserType(args: unknown): Promise<Record<string, unknown>
 
 async function handleBrowserScreenshot(args: unknown): Promise<Record<string, unknown>> {
   const o = (args ?? {}) as Record<string, unknown>;
-  const { id, handle } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
+  const { id, handle } = resolveGuestEntry(
+    typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined,
+  );
   const img = await handle.capturePage();
   return { status: "captured", surfaceId: id, url: handle.getURL(), dataUrl: img.toDataURL() };
 }
 
-function handleBrowserHandoff(args: unknown): Record<string, unknown> {
+async function handleBrowserHandoff(args: unknown): Promise<Record<string, unknown>> {
   const o = (args ?? {}) as Record<string, unknown>;
-  const reason = typeof o["reason"] === "string" ? o["reason"].slice(0, 300) : "agent needs a human";
   // Requires a concrete surface (or sole guest).
-  const { id } = resolveGuestEntry(typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined);
-  browserHandoffs.set(id, { reason, ts: Date.now() });
-  notifyHandoff(id, true, reason);
-  console.log(`[browser] handoff OPEN on ${id}: ${reason}`);
-  return { status: "awaiting_human", surfaceId: id, reason, registeredSurfaces: listGuestSurfaceIds() };
+  const { id, handle } = resolveGuestEntry(
+    typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined,
+  );
+  const blockers = await detectGuestBlockers(handle);
+  // An omitted reason is FILLED FROM THE PAGE: the pane then tells the human
+  // exactly what it wants ("mfa: enter your one-time code") instead of a
+  // generic "agent needs a human".
+  const given = typeof o["reason"] === "string" ? o["reason"].trim() : "";
+  const reason = (given || handoffPrompt(blockers, "agent needs a human")).slice(0, 300);
+  const opened = openHandoff(id, reason, blockers);
+  return {
+    status: "awaiting_human",
+    surfaceId: id,
+    reason: opened.reason,
+    blocker: opened.blocker,
+    blockers,
+    registeredSurfaces: listGuestSurfaceIds(),
+  };
 }
 
 // ── UI messages (pi -> renderer toasts) ─────────────────────────────────
@@ -2323,7 +3493,9 @@ function handleShowMessage(args: unknown): Record<string, unknown> {
   }
   const title = typeof obj["title"] === "string" ? obj["title"].slice(0, 100) : undefined;
   notifyUiMessage({ message, level, title });
-  console.log("[mcp] ui message (" + level + ")" + (title ? " [" + title + "]" : "") + ": " + message);
+  console.log(
+    "[mcp] ui message (" + level + ")" + (title ? " [" + title + "]" : "") + ": " + message,
+  );
   return { status: "shown", level, deliveredTo: wsClients.size };
 }
 
@@ -2348,8 +3520,15 @@ export function closeSurface(surfaceId: string): void {
   const surface = openSurfaces.get(surfaceId);
   if (surface) {
     surface.status = "closed";
-    notifySurfacePush({ surfaceId, type: surface.type, payload: surface.payload, status: "closed" });
+    notifySurfacePush({
+      surfaceId,
+      type: surface.type,
+      payload: surface.payload,
+      status: "closed",
+    });
     openSurfaces.delete(surfaceId);
+    // An agent blocked on waitForAnswer must not hang until the timeout.
+    settleInputWait(surfaceId, { status: "closed", answered: false });
     unregisterGuest(surfaceId);
   }
 }
@@ -2372,10 +3551,7 @@ export function getServerState(): {
 
 // ── Start ─────────────────────────────────────────────────────────────────
 
-export function startMcpServer(
-  initialPort: number = 3615,
-  wsPort: number = 3614,
-): void {
+export function startMcpServer(initialPort: number = 3615, wsPort: number = 3614): void {
   const portRange = Array.from({ length: 10 }, (_, i) => initialPort + i);
 
   for (const port of portRange) {
@@ -2395,21 +3571,25 @@ export function startMcpServer(
         });
 
         // Clean up timed-out surfaces every 5 minutes
-        setInterval(() => {
-          const now = Date.now();
-          for (const [id, surface] of openSurfaces.entries()) {
-            if (now - surface.lastActive > SURFACE_TIMEOUT_MS) {
-              surface.status = "timeout";
-              notifySurfacePush({
-                surfaceId: id,
-                type: surface.type,
-                payload: surface.payload,
-                status: "timeout",
-              });
-              openSurfaces.delete(id);
+        setInterval(
+          () => {
+            const now = Date.now();
+            for (const [id, surface] of openSurfaces.entries()) {
+              if (now - surface.lastActive > SURFACE_TIMEOUT_MS) {
+                surface.status = "timeout";
+                notifySurfacePush({
+                  surfaceId: id,
+                  type: surface.type,
+                  payload: surface.payload,
+                  status: "timeout",
+                });
+                openSurfaces.delete(id);
+                settleInputWait(id, { status: "timeout", answered: false });
+              }
             }
-          }
-        }, 5 * 60 * 1000);
+          },
+          5 * 60 * 1000,
+        );
       });
       return;
     } catch {

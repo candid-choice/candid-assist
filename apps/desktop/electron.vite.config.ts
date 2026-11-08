@@ -9,21 +9,21 @@
   output (Phase P6).
 */
 
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
+import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     build: {
-      outDir: 'out/main',
-      lib: { entry: 'electron/main/index.ts', formats: ['cjs'] },
+      outDir: "out/main",
+      lib: { entry: "electron/main/index.ts", formats: ["cjs"] },
     },
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
     build: {
-      outDir: 'out/preload',
-      lib: { entry: 'electron/preload/index.ts', formats: ['cjs'] },
+      outDir: "out/preload",
+      lib: { entry: "electron/preload/index.ts", formats: ["cjs"] },
     },
   },
 });

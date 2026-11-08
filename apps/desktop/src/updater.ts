@@ -9,14 +9,7 @@
 import { app } from "electron";
 
 export interface UpdaterState {
-  phase:
-    | "unavailable"
-    | "idle"
-    | "checking"
-    | "available"
-    | "downloading"
-    | "ready"
-    | "error";
+  phase: "unavailable" | "idle" | "checking" | "available" | "downloading" | "ready" | "error";
   version?: string;
   error?: string;
 }
@@ -74,9 +67,7 @@ export async function checkForUpdates(): Promise<UpdaterState> {
       autoUpdater.on("update-downloaded", (info) => {
         setState({ phase: "ready", version: (info as { version?: string }).version });
       });
-      autoUpdater.on("error", (err) =>
-        setState({ phase: "error", error: (err as Error).message }),
-      );
+      autoUpdater.on("error", (err) => setState({ phase: "error", error: (err as Error).message }));
     }
     setState({ phase: "checking" });
     await autoUpdater.checkForUpdates();
@@ -90,7 +81,11 @@ export async function checkForUpdates(): Promise<UpdaterState> {
 export function installUpdateNow(): void {
   if (state.phase !== "ready") return;
   void import("electron-updater")
-    .then((m) => (m as unknown as { autoUpdater: { quitAndInstall: () => void } }).autoUpdater.quitAndInstall())
+    .then((m) =>
+      (
+        m as unknown as { autoUpdater: { quitAndInstall: () => void } }
+      ).autoUpdater.quitAndInstall(),
+    )
     .catch(() => {
       /* packaged-only */
     });

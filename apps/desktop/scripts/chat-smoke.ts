@@ -1,15 +1,33 @@
-import { createPiChatRuntime } from '../electron/main/chat-runtime';
+import { createPiChatRuntime } from "../electron/main/chat-runtime";
 (async () => {
-  const pi = await import('@earendil-works/pi-coding-agent');
-  const { session } = await pi.createAgentSession({ sessionManager: pi.SessionManager.inMemory(), cwd: process.cwd() });
+  const pi = await import("@earendil-works/pi-coding-agent");
+  const { session } = await pi.createAgentSession({
+    sessionManager: pi.SessionManager.inMemory(),
+    cwd: process.cwd(),
+  });
   const seen = new Set<string>();
   session.subscribe((ev: any) => {
-    const key = ev?.type + (ev?.assistantMessageEvent?.type ? '/' + ev.assistantMessageEvent.type : '');
-    if (!seen.has(key)) { seen.add(key); console.log('[evt]', key, JSON.stringify(ev).slice(0, 220)); }
+    const key =
+      ev?.type + (ev?.assistantMessageEvent?.type ? "/" + ev.assistantMessageEvent.type : "");
+    if (!seen.has(key)) {
+      seen.add(key);
+      console.log("[evt]", key, JSON.stringify(ev).slice(0, 220));
+    }
   });
-  const t2 = setTimeout(() => { console.log('TIMEOUT', [...seen]); session.dispose(); process.exit(1); }, 90000);
-  try { await session.prompt('Reply with exactly: CHAT-PIPELINE-OK'); } catch (e) { console.log('PROMPT ERR', (e as Error).message.slice(0, 200)); }
-  console.log('LAST TEXT:', JSON.stringify(String(session.getLastAssistantText?.() ?? '').slice(0, 120)));
+  const t2 = setTimeout(() => {
+    console.log("TIMEOUT", [...seen]);
+    session.dispose();
+    process.exit(1);
+  }, 90000);
+  try {
+    await session.prompt("Reply with exactly: CHAT-PIPELINE-OK");
+  } catch (e) {
+    console.log("PROMPT ERR", (e as Error).message.slice(0, 200));
+  }
+  console.log(
+    "LAST TEXT:",
+    JSON.stringify(String(session.getLastAssistantText?.() ?? "").slice(0, 120)),
+  );
   clearTimeout(t2);
   session.dispose();
   process.exit(0);
