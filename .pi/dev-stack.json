@@ -4,6 +4,8 @@
   "command": "pnpm run dev",
   "_ports_comment": "ALL of these must answer for the stack to count as up. 43179 is the desktop app's MCP WebSocket (ws://127.0.0.1:43179/mcp) that the human-assist pi extension dials — keeping it here means a green footer genuinely implies the socket HA needs is listening.",
   "ports": [3600, 3601, 3602, 3604, 3613, 3614, 3615, 3616, 43179],
+  "_gracePorts_comment": "3614/3615/43179 are bound by the desktop app itself, which restarts on its own (restart_app, single-instance contention). Down for less than the keeper's 20s grace means yellow/partial, not a crash — without this an app bounce spent launch budget and read as a stack crash.",
+  "gracePorts": [3614, 3615, 43179],
   "taskName": "candid-assist dev",
   "openUrls": [
     "http://localhost:3600/",
