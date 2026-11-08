@@ -13,9 +13,7 @@ export function SessionHarnessBadge() {
   const activeSessionId = useStore((s) => s.activeSessionId);
   const sessions = useStore((s) => s.sessions);
 
-  const session = activeSessionId
-    ? sessions.find((s) => s.id === activeSessionId)
-    : undefined;
+  const session = activeSessionId ? sessions.find((s) => s.id === activeSessionId) : undefined;
 
   if (!session?.agentSessionId) return null;
 

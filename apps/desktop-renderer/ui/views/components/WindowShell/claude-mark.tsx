@@ -11,14 +11,7 @@ export function ClaudeMark({ size = 14 }: { size?: number }) {
     >
       <g stroke="#d97757" strokeWidth={6} strokeLinecap="round">
         {spokes.map((deg) => (
-          <line
-            key={deg}
-            x1={32}
-            y1={10}
-            x2={32}
-            y2={54}
-            transform={`rotate(${deg} 32 32)`}
-          />
+          <line key={deg} x1={32} y1={10} x2={32} y2={54} transform={`rotate(${deg} 32 32)`} />
         ))}
       </g>
     </svg>

@@ -24,3 +24,6 @@ extensions-debug.log
 tmp/
 .ha-shots/
 .playwright-mcp/
+
+# TS incremental build info
+*.tsbuildinfo

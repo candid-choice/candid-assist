@@ -72,8 +72,11 @@ function App() {
         ctx.fillRect(0, 0, 1, 1);
         const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
         const hex = "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
-        (window as unknown as { desktop?: { window?: { setBackgroundColor?: (c: string) => void } } })
-          .desktop?.window?.setBackgroundColor?.(hex);
+        (
+          window as unknown as {
+            desktop?: { window?: { setBackgroundColor?: (c: string) => void } };
+          }
+        ).desktop?.window?.setBackgroundColor?.(hex);
       }
     } catch {
       /* background sync is cosmetic only */
@@ -87,9 +90,7 @@ function App() {
 
   // ── Render ────────────────────────────────────────────────────────────
   const activeSession = useStoreSelector((s) =>
-    s.activeSessionId
-      ? (s.sessions.find((x) => x.id === s.activeSessionId) ?? null)
-      : null,
+    s.activeSessionId ? (s.sessions.find((x) => x.id === s.activeSessionId) ?? null) : null,
   );
 
   // Chat for user-added sessions is PINNED: the dock renders whenever a
@@ -107,11 +108,13 @@ function App() {
   // Strict session scoping: never show a surface from another session,
   // and none at all when no session is selected.
   const sessionOpenViews = (views as never[]).filter((v) =>
-    activeSession
-      ? (v as { sessionId?: string }).sessionId === activeSession.id
-      : false,
+    activeSession ? (v as { sessionId?: string }).sessionId === activeSession.id : false,
   ) as typeof views;
-  const visibleSurface = pickVisibleSurface(activeSession, activeSurface, sessionOpenViews as never[]) as typeof activeSurface;
+  const visibleSurface = pickVisibleSurface(
+    activeSession,
+    activeSurface,
+    sessionOpenViews as never[],
+  ) as typeof activeSurface;
 
   // Self-heal a dangling activeSessionId (persisted across restarts but
   // no longer present in the synced sessions list): a ghost id hides the
@@ -130,9 +133,7 @@ function App() {
     (id: string) => {
       if (id.startsWith("saved:")) {
         const surfaceId = id.slice("saved:".length);
-        const rec = activeSession?.surfaces?.find(
-          (r) => r.surfaceId === surfaceId,
-        );
+        const rec = activeSession?.surfaces?.find((r) => r.surfaceId === surfaceId);
         if (rec && activeSession) {
           useStore.getState().openSurface(reopenRecordedSurface(rec, activeSession.id) as never);
         }
@@ -143,10 +144,7 @@ function App() {
     [activeSession],
   );
 
-  const handleHelpAction = useCallback(
-    () => closeHelpPalette(),
-    [closeHelpPalette],
-  );
+  const handleHelpAction = useCallback(() => closeHelpPalette(), [closeHelpPalette]);
 
   // ── Auth gate ──────────────────────────────────────────────────────────
   // Nothing in the workspace (sessions, surfaces, chat, MCP tools) exists
@@ -159,9 +157,7 @@ function App() {
     <div className="human-assist-app h-full w-full">
       <WindowShell
         title="Human Assist"
-        userStatus={
-          <UserMenu onOpenSettings={() => setSettingsOpen(true)} />
-        }
+        userStatus={<UserMenu onOpenSettings={() => setSettingsOpen(true)} />}
         footer={
           <span className="ha-footer-status">
             <ConnectionIndicator />
@@ -231,9 +227,7 @@ function App() {
           </div>
 
           {/* ── Direct chat (Electron only, togglable from the titlebar) ── */}
-          {getDesktopBridge()?.chat &&
-            activeSession &&
-            isChatCapableSession(activeSession) && (
+          {getDesktopBridge()?.chat && activeSession && isChatCapableSession(activeSession) && (
             <ChatDock sessionId={activeSession.id} />
           )}
         </div>
@@ -241,11 +235,7 @@ function App() {
 
       <ToastContainer toasts={uiMessages} onDismiss={dismissUiMessage} />
 
-      <HelpPalette
-        open={helpPaletteOpen}
-        onClose={closeHelpPalette}
-        onAction={handleHelpAction}
-      />
+      <HelpPalette open={helpPaletteOpen} onClose={closeHelpPalette} onAction={handleHelpAction} />
 
       {composerOpen && (
         <TaskComposer

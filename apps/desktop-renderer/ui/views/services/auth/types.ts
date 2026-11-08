@@ -6,7 +6,7 @@ export interface AuthError {
   retryable?: boolean;
 }
 
-export type AuthStatus = 'checking' | 'unauthorized' | 'authorized';
+export type AuthStatus = "checking" | "unauthorized" | "authorized";
 
 /** Authenticated user profile (persisted for offline-first session restore). */
 export interface AuthUser {

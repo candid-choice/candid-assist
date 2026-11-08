@@ -88,20 +88,28 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
       // pi (or any MCP client) -> showMessage tool -> toast proof-of-path
       const d = event.data as { message?: string; level?: string; title?: string };
       if (d?.message) {
-        const level = d.level === "success" || d.level === "warning" || d.level === "error" ? d.level : "info";
+        const level =
+          d.level === "success" || d.level === "warning" || d.level === "error" ? d.level : "info";
         useStore.getState().pushUiMessage({ message: d.message, type: level, title: d.title });
       }
       return;
     }
     if (event.event === "agent:presence") {
       // Live WS MCP agent set changed (connected / bound / disconnected).
-      const d = event.data as { agents?: Array<{ client: string; agentSessionId: string | null; project?: string | null }> };
+      const d = event.data as {
+        agents?: Array<{ client: string; agentSessionId: string | null; project?: string | null }>;
+      };
       const agents = d?.agents ?? [];
       useStore.getState().setMcpAgents(agents);
       // A bound agent means "a new session connected": materialize its
       // sidebar row immediately instead of waiting for a surface push.
       for (const a of agents) {
-        if (a.agentSessionId) ensureAgentSessionFor({ client: a.client, agentSessionId: a.agentSessionId, agentProject: a.project });
+        if (a.agentSessionId)
+          ensureAgentSessionFor({
+            client: a.client,
+            agentSessionId: a.agentSessionId,
+            agentProject: a.project,
+          });
       }
       return;
     }
@@ -141,11 +149,35 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
     }
     if (event.event === "surface:handoff") {
       // Agent handed the browser pane to the human (or got it back).
-      const d = event.data as { surfaceId?: string; active?: boolean; reason?: string | null };
+      const d = event.data as {
+        surfaceId?: string;
+        active?: boolean;
+        reason?: string | null;
+        blockers?: { kind: string; severity: "hard" | "soft" }[];
+      };
       if (d?.surfaceId) {
         useStore
           .getState()
-          .setBrowserHandoff(d.surfaceId, d.active ? (d.reason ?? "agent needs a human") : null);
+          .setBrowserHandoff(
+            d.surfaceId,
+            d.active ? (d.reason ?? "agent needs a human") : null,
+            d.blockers,
+          );
+        if (d.active) {
+          // Same "make it noticeable" treatment as a web-access consent prompt:
+          // the agent is BLOCKED until Done is clicked, so say so loudly, and
+          // name what the detector saw (captcha / mfa / login / …).
+          const hard = (d.blockers ?? [])
+            .filter((b) => b.severity === "hard")
+            .map((b) => b.kind)
+            .join(", ");
+          useStore.getState().pushUiMessage({
+            message: `${d.reason ?? "The agent needs you"}${hard ? ` (detected: ${hard})` : ""} — click Done to hand control back.`,
+            type: "warning",
+            title: "Your turn in the browser",
+            ttlMs: 30_000,
+          });
+        }
       }
       return;
     }
@@ -231,7 +263,6 @@ if (typeof window !== "undefined" && shouldStartLiveServices()) {
   // Dev/debug hook (browser mode): inspect the store from the console.
   (window as unknown as { __haStore: unknown }).__haStore = useStore;
 }
-
 
 export default function RootUI() {
   return (

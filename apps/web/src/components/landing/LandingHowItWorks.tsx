@@ -24,7 +24,10 @@ export default function LandingHowItWorks() {
     <section className="py-20" id="how-it-works">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mb-14 text-center">
-          <p className="mb-2 text-sm font-medium" style={{ color: "#7c6fa8", letterSpacing: "0.5px" }}>
+          <p
+            className="mb-2 text-sm font-medium"
+            style={{ color: "#7c6fa8", letterSpacing: "0.5px" }}
+          >
             HOW IT WORKS
           </p>
           <h2 className="text-3xl font-bold" style={{ color: "#3d3d3d" }}>

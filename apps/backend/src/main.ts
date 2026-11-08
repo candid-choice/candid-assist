@@ -1,9 +1,9 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import { NestFactory } from "@nestjs/core";
+import { AppModule } from "./app.module";
 
 // Load environment: backend-local .env first (wins), then repo-root .env.
 // (Node >= 20.12 built-in; missing files are ignored.)
-for (const file of ['.env', '../../.env']) {
+for (const file of [".env", "../../.env"]) {
   try {
     process.loadEnvFile(file);
   } catch {

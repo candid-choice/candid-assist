@@ -1,7 +1,5 @@
 // ── Core components ──────────────────────────────────────────────
-export {
-  WindowShell
-} from "./WindowShell";
+export { WindowShell } from "./WindowShell";
 export { IdleState } from "./IdleState";
 export { ConnectionIndicator } from "./ConnectionIndicator";
 export { AppSidebar } from "./AppSidebar";
@@ -27,13 +25,16 @@ export { UserStatus } from "./shared/UserStatus";
 
 // ── Surface implementations ─────────────────────────────────────
 export { BrowserSurface } from "./surfaces/BrowserSurface";
-export { ImageSurface } from "./surfaces/ImageSurface";
 export { CanvasSurface } from "./surfaces/CanvasSurface";
 export { ScreenSurface } from "./surfaces/ScreenSurface";
 export { InputSurface } from "./surfaces/InputSurface";
 
 // ── Hooks ────────────────────────────────────────────────────────
-export { useKeyboardShortcuts, DEFAULT_SHORTCUTS, isMacPlatform } from "../hooks/use-keyboard-shortcuts";
+export {
+  useKeyboardShortcuts,
+  DEFAULT_SHORTCUTS,
+  isMacPlatform,
+} from "../hooks/use-keyboard-shortcuts";
 export { useDropZone, DropZoneOverlay, ComposerDropTarget } from "../hooks/use-drop-zone";
 export { useIndexedDBPersist } from "../hooks/use-indexeddb-persist";
 export { useNotifications } from "../hooks/use-notifications";

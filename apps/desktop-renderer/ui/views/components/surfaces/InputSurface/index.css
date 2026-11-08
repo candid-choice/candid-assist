@@ -43,7 +43,9 @@
   color: var(--ha-text);
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
   text-align: left;
 }
 
@@ -136,4 +138,44 @@
 
 .ha-input-voice-btn:hover {
   background: var(--ha-primary-light);
+}
+
+/* ── Answered state ─────────────────────────────────────────────────────
+   The answer was mirrored back from the desktop main process, which is also
+   what the agent reads (openInputSurface waitForAnswer / readSurface). Render
+   the record and drop the controls so a second click can't change what the
+   agent is acting on; the read-only portal shows the same thing. */
+.ha-input-surface--answered {
+  border-color: var(--ha-primary-light);
+}
+
+.ha-input-answer {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--ha-border);
+  border-radius: var(--ha-radius-md);
+  background: var(--ha-surface);
+}
+
+.ha-input-answer-mark {
+  color: var(--ha-primary);
+  font-weight: 700;
+}
+
+.ha-input-answer-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ha-text);
+  word-break: break-word;
+}
+
+.ha-input-answer-meta {
+  font-size: 11px;
+  opacity: 0.65;
+  color: var(--ha-text);
+  margin-left: auto;
 }

@@ -25,8 +25,8 @@ IndexedDB details:
     createJSONStorage).
 */
 
-const DB_NAME = 'human-assist-store';
-const STORE_NAME = 'state';
+const DB_NAME = "human-assist-store";
+const STORE_NAME = "state";
 const DB_VERSION = 1;
 const SOFT_QUOTA_BYTES = 5 * 1024 * 1024; // ~5MB
 
@@ -37,7 +37,7 @@ function openDatabase(): Promise<IDBDatabase | null> {
   if (dbPromise) return dbPromise;
 
   dbPromise = new Promise((resolve) => {
-    if (typeof indexedDB === 'undefined') {
+    if (typeof indexedDB === "undefined") {
       resolve(null);
       return;
     }
@@ -56,7 +56,7 @@ function openDatabase(): Promise<IDBDatabase | null> {
     request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        db.createObjectStore(STORE_NAME, { keyPath: "id" });
       }
     };
   });
@@ -69,7 +69,7 @@ async function readValue(id: string): Promise<string | null> {
   if (!db) return null;
 
   return new Promise((resolve) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
+    const tx = db.transaction(STORE_NAME, "readonly");
     const store = tx.objectStore(STORE_NAME);
     const request = store.get(id);
 
@@ -94,7 +94,7 @@ async function writeValue(id: string, value: string): Promise<void> {
   }
 
   return new Promise((resolve) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const tx = db.transaction(STORE_NAME, "readwrite");
     const store = tx.objectStore(STORE_NAME);
     store.put({ id, value });
 
@@ -108,7 +108,7 @@ async function deleteValue(id: string): Promise<void> {
   if (!db) return;
 
   return new Promise((resolve) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const tx = db.transaction(STORE_NAME, "readwrite");
     const store = tx.objectStore(STORE_NAME);
     store.delete(id);
 
@@ -139,4 +139,4 @@ export function createIndexedDBStorage() {
  * Keys that should be persisted (data only — functions are dropped by
  * partialize, but this documents intent and is easy to reuse).
  */
-export const PERSIST_KEY = 'human-assist-store';
+export const PERSIST_KEY = "human-assist-store";

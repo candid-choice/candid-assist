@@ -1,0 +1,30 @@
+# Build output / generated
+**/node_modules/
+**/.next/
+**/out/
+**/dist/
+**/build/
+**/coverage/
+**/.turbo/
+**/.vercel/
+tmp/
+.playwright-mcp/
+.playwright-mcp/**
+.pi/npm/
+*.log
+
+# Lockfiles (machine-written)
+package-lock.json
+pnpm-lock.yaml
+
+# Vendored / minified assets
+**/*.min.js
+**/*.min.css
+
+# Markdown is hand-authored (docs, plans, skills) — line breaks and list
+# markers are intentional, so prettier leaves it exactly as written.
+*.md
+**/*.md
+
+# Files whose literal bytes matter
+**/fixtures/**

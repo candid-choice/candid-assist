@@ -69,14 +69,14 @@ function OnboardingWizard({ onStepComplete, onComplete }: OnboardingWizardProps)
       <div className="ha-onboarding-steps">
         {steps.map((s, i) => (
           <div key={s.key} className="ha-onboarding-step">
-            <div className={`ha-onboarding-step-dot ${i <= currentIndex ? "active" : ""} ${i < currentIndex ? "complete" : ""}`}>
-              {i < currentIndex ? (
-                <IconCheck size={14} />
-              ) : (
-                <span>{i + 1}</span>
-              )}
+            <div
+              className={`ha-onboarding-step-dot ${i <= currentIndex ? "active" : ""} ${i < currentIndex ? "complete" : ""}`}
+            >
+              {i < currentIndex ? <IconCheck size={14} /> : <span>{i + 1}</span>}
             </div>
-            {i < steps.length - 1 && <div className={`ha-onboarding-step-line ${i < currentIndex ? "active" : ""}`} />}
+            {i < steps.length - 1 && (
+              <div className={`ha-onboarding-step-line ${i < currentIndex ? "active" : ""}`} />
+            )}
           </div>
         ))}
       </div>
@@ -89,9 +89,7 @@ function OnboardingWizard({ onStepComplete, onComplete }: OnboardingWizardProps)
         {step === "configure" && (
           <OnboardingConfigure onStepComplete={() => onStepComplete("configure")} />
         )}
-        {step === "verify" && (
-          <OnboardingVerify onComplete={onComplete} />
-        )}
+        {step === "verify" && <OnboardingVerify onComplete={onComplete} />}
       </div>
 
       {/* ── Navigation ─────────────────────────────────────────────── */}
@@ -104,7 +102,11 @@ function OnboardingWizard({ onStepComplete, onComplete }: OnboardingWizardProps)
         )}
         <div className="ha-onboarding-btn-spacer" />
         {step !== "verify" ? (
-          <button className="ha-onboarding-btn ha-onboarding-btn--primary" onClick={handleNext} disabled={loading}>
+          <button
+            className="ha-onboarding-btn ha-onboarding-btn--primary"
+            onClick={handleNext}
+            disabled={loading}
+          >
             {loading ? <IconLoader className="ha-spinner" size={16} /> : "Next"}
           </button>
         ) : (
@@ -139,7 +141,8 @@ function OnboardingConnect({ onStepComplete }: OnboardingConnectProps) {
     <div className="ha-onboarding-step-content">
       <h3 className="ha-onboarding-title">Step 1: MCP Server Running</h3>
       <p className="ha-onboarding-desc">
-        The MCP server is starting on port 3615. Claude Code will connect to this server to push surfaces.
+        The MCP server is starting on port 3615. Claude Code will connect to this server to push
+        surfaces.
       </p>
       <div className={`ha-onboarding-status ${status === "ready" ? "ready" : ""}`}>
         {status === "ready" ? (
@@ -175,7 +178,7 @@ function OnboardingConfigure({ onStepComplete }: OnboardingConfigureProps) {
         Add the following to your Claude Code configuration to enable Human Assist:
       </p>
       <div className="ha-onboarding-code">
-        <code>echo 'export HUMAN_ASSIST_URL=http://localhost:3615' {'>>'} ~/.bashrc</code>
+        <code>echo 'export HUMAN_ASSIST_URL=http://localhost:3615' {">>"} ~/.bashrc</code>
       </div>
       <p className="ha-onboarding-desc-small">
         Run this in your terminal. Then restart Claude Code.

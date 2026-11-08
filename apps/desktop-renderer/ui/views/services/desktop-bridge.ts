@@ -42,7 +42,7 @@ export interface DesktopAPI {
         cwd?: string;
         baseUrl?: string;
         modelId?: string;
-        api?: 'auto' | 'openai-completions' | 'anthropic-messages';
+        api?: "auto" | "openai-completions" | "anthropic-messages";
       },
     ) => Promise<{ ok: boolean; error?: string }>;
     abort: (sessionId: string) => Promise<{ ok: boolean }>;
@@ -50,7 +50,9 @@ export interface DesktopAPI {
     listModels?: (
       baseUrl?: string,
     ) => Promise<{ ok: boolean; baseUrl: string; models: string[]; error?: string }>;
-    onEvent: (callback: (e: { sessionId: string; kind: string; text: string }) => void) => () => void;
+    onEvent: (
+      callback: (e: { sessionId: string; kind: string; text: string }) => void,
+    ) => () => void;
   };
   mcp?: {
     getStatus: () => Promise<McpStatusPayload>;
@@ -64,8 +66,13 @@ export interface DesktopAPI {
     pickFolder: () => Promise<string | null>;
     checkForUpdates: () => Promise<{ phase: string; version?: string; error?: string }>;
     clearWebProfile: () => Promise<{ status: string }>;
+    clearSiteData: (opts: {
+      url?: string;
+      host?: string;
+      what?: ("cookies" | "storage" | "cache")[];
+    }) => Promise<{ status: string; host?: string; cleared?: string[] }>;
   };
-  readonly runtime: 'electron';
+  readonly runtime: "electron";
 }
 
 /** Plain structured-clone mirror of main's McpStatus. */
@@ -83,13 +90,13 @@ export interface McpStatusPayload {
 
 /** Returns the Electron bridge when running under Electron, else undefined. */
 export function getDesktopBridge(): DesktopAPI | undefined {
-  if (typeof window === 'undefined') return undefined;
+  if (typeof window === "undefined") return undefined;
   const api = (window as unknown as { desktop?: DesktopAPI }).desktop;
   // STRICT: only the real Electron preload (window.desktop with
   // runtime 'electron') counts. No dev stubs, no HTTP fallbacks —
   // a plain browser must never be able to observe MCP presence or
   // live surfaces. The desktop app is the only runtime that does.
-  return api?.runtime === 'electron' ? api : undefined;
+  return api?.runtime === "electron" ? api : undefined;
 }
 
 /** Tell the Electron main process whether a user is signed in, so the MCP

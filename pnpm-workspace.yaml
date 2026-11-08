@@ -1,9 +1,9 @@
 packages:
-  - 'apps/*'
-  - 'packages/*'
+  - "apps/*"
+  - "packages/*"
 allowBuilds:
-  '@firebase/util': true
-  '@google/genai': set this to true or false
+  "@firebase/util": true
+  "@google/genai": set this to true or false
   electron: true
   electron-winstaller: true
   esbuild: true

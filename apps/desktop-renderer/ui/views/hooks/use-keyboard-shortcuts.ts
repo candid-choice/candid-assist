@@ -13,20 +13,20 @@ Usage:
   })
 */
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from "react";
 
 // ── Platform Detection ──────────────────────────────────────────────────────
 
 const isMac = (() => {
-  if (typeof navigator === 'undefined') return false;
-  return navigator.platform.includes('Mac');
+  if (typeof navigator === "undefined") return false;
+  return navigator.platform.includes("Mac");
 })();
 
 export function isMacPlatform(): boolean {
   return isMac;
 }
 
-export const ModifierKey = isMac ? 'metaKey' : 'ctrlKey';
+export const ModifierKey = isMac ? "metaKey" : "ctrlKey";
 
 // ── Shortcut Parser ────────────────────────────────────────────────────────
 
@@ -44,39 +44,40 @@ export function parseShortcut(description: string): ShortcutKey {
     .split(/\+/)
     .map((p) => p.trim());
 
-  const key = parts.filter(
-    (p) =>
-      p !== '⌘' &&
-      p !== 'cmd' &&
-      p !== 'ctrl' &&
-      p !== 'control' &&
-      p !== 'shift' &&
-      p !== 'alt' &&
-      p !== 'option' &&
-      p !== 'meta',
-  )[0] ?? '';
+  const key =
+    parts.filter(
+      (p) =>
+        p !== "⌘" &&
+        p !== "cmd" &&
+        p !== "ctrl" &&
+        p !== "control" &&
+        p !== "shift" &&
+        p !== "alt" &&
+        p !== "option" &&
+        p !== "meta",
+    )[0] ?? "";
 
-  const shift = parts.includes('shift');
-  const alt = parts.includes('alt') || parts.includes('option');
+  const shift = parts.includes("shift");
+  const alt = parts.includes("alt") || parts.includes("option");
   const ctrl =
-    parts.includes('ctrl') ||
-    parts.includes('control') ||
-    (isMac && parts.some((p) => p === 'ctrl' || p === 'control'));
-  const meta = parts.includes('⌘') || parts.includes('cmd') || parts.includes('meta');
+    parts.includes("ctrl") ||
+    parts.includes("control") ||
+    (isMac && parts.some((p) => p === "ctrl" || p === "control"));
+  const meta = parts.includes("⌘") || parts.includes("cmd") || parts.includes("meta");
 
   return { key, shift, alt, ctrl, meta };
 }
 
 export function eventMatchesKey(e: KeyboardEvent, key: ShortcutKey): boolean {
   return (
-    e.key.toLowerCase() === key.key ||
-    e.code.toLowerCase() === `key${key.key.toUpperCase()}` ||
-    e.code.toLowerCase() === `digit${key.key.toUpperCase()}`
-  ) &&
+    (e.key.toLowerCase() === key.key ||
+      e.code.toLowerCase() === `key${key.key.toUpperCase()}` ||
+      e.code.toLowerCase() === `digit${key.key.toUpperCase()}`) &&
     e.shiftKey === key.shift &&
     e.altKey === key.alt &&
     (isMac ? e.metaKey : e.ctrlKey) === key.meta &&
-    (isMac ? e.ctrlKey : e.metaKey) === key.ctrl;
+    (isMac ? e.ctrlKey : e.metaKey) === key.ctrl
+  );
 }
 
 // ── Shortcut Handler ────────────────────────────────────────────────────────
@@ -99,11 +100,7 @@ export function useKeyboardShortcuts(initialHandlers: ShortcutRegistry = {}) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if typing in input/textarea
-      if (
-        ['INPUT', 'TEXTAREA', 'SELECT'].includes(
-          (e.target as HTMLElement).tagName,
-        )
-      ) {
+      if (["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement).tagName)) {
         return;
       }
 
@@ -129,8 +126,8 @@ export function useKeyboardShortcuts(initialHandlers: ShortcutRegistry = {}) {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, []);
 
   return {
@@ -151,48 +148,30 @@ export function useKeyboardShortcuts(initialHandlers: ShortcutRegistry = {}) {
  */
 export const DEFAULT_SHORTCUTS: ShortcutRegistry = {
   [`⌘+N`]: (_e: KeyboardEvent) => {
-    window.dispatchEvent(
-      new CustomEvent('ha-shortcut-new-task'),
-    );
+    window.dispatchEvent(new CustomEvent("ha-shortcut-new-task"));
   },
   [`⌘+W`]: (_e: KeyboardEvent) => {
-    window.dispatchEvent(
-      new CustomEvent('ha-shortcut-close-surface'),
-    );
+    window.dispatchEvent(new CustomEvent("ha-shortcut-close-surface"));
   },
   [`⌘+1`]: (_e: KeyboardEvent) => {
-    window.dispatchEvent(
-      new CustomEvent('ha-shortcut-surface-tab', { detail: { index: 0 } }),
-    );
+    window.dispatchEvent(new CustomEvent("ha-shortcut-surface-tab", { detail: { index: 0 } }));
   },
   [`⌘+2`]: (_e: KeyboardEvent) => {
-    window.dispatchEvent(
-      new CustomEvent('ha-shortcut-surface-tab', { detail: { index: 1 } }),
-    );
+    window.dispatchEvent(new CustomEvent("ha-shortcut-surface-tab", { detail: { index: 1 } }));
   },
   [`⌘+3`]: (_e: KeyboardEvent) => {
-    window.dispatchEvent(
-      new CustomEvent('ha-shortcut-surface-tab', { detail: { index: 2 } }),
-    );
+    window.dispatchEvent(new CustomEvent("ha-shortcut-surface-tab", { detail: { index: 2 } }));
   },
   [`⌘+K`]: (_e: KeyboardEvent) => {
-    window.dispatchEvent(
-      new CustomEvent('ha-shortcut-toggle-palette'),
-    );
+    window.dispatchEvent(new CustomEvent("ha-shortcut-toggle-palette"));
   },
   [`⌘+Shift+R`]: (_e: KeyboardEvent) => {
-    window.dispatchEvent(
-      new CustomEvent('ha-shortcut-retry'),
-    );
+    window.dispatchEvent(new CustomEvent("ha-shortcut-retry"));
   },
   [`⌘+D`]: (_e: KeyboardEvent) => {
-    window.dispatchEvent(
-      new CustomEvent('ha-shortcut-new-surface'),
-    );
+    window.dispatchEvent(new CustomEvent("ha-shortcut-new-surface"));
   },
   [`Esc`]: (_e: KeyboardEvent) => {
-    window.dispatchEvent(
-      new CustomEvent('ha-shortcut-dismiss'),
-    );
+    window.dispatchEvent(new CustomEvent("ha-shortcut-dismiss"));
   },
 };

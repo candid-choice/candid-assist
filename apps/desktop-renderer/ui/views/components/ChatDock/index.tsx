@@ -31,15 +31,13 @@ export function ChatDock({ sessionId }: ChatDockProps) {
   const chat = bridge?.chat;
   // Chat owns its conversation id (independent of the harness session id)
   // plus the endpoint/model it talks to.
-  const chatId = useStore((s) => (sessionId ? s.chatIds[sessionId] ?? null : null));
+  const chatId = useStore((s) => (sessionId ? (s.chatIds[sessionId] ?? null) : null));
   const chatModel = useStore((s) => s.chatModel);
   const setChatModel = useStore((s) => s.setChatModel);
   const chatModels = useStore((s) => s.chatModels);
   const setChatModels = useStore((s) => s.setChatModels);
   const chatBaseUrl = useStore((s) => s.chatBaseUrl);
-  const messages = useStore((s) =>
-    (chatId ? s.chatBySession[chatId] : undefined) ?? NO_MESSAGES
-  );
+  const messages = useStore((s) => (chatId ? s.chatBySession[chatId] : undefined) ?? NO_MESSAGES);
   const busy = useStore((s) => (chatId ? s.chatBusy[chatId] === true : false));
   const appendChatMessage = useStore((s) => s.appendChatMessage);
   const setChatBusy = useStore((s) => s.setChatBusy);
@@ -214,7 +212,9 @@ export function ChatDock({ sessionId }: ChatDockProps) {
         )}
         {messages.map((m) =>
           m.role === "tool" ? (
-            <div key={m.id} className="ha-chat-tool">⚙ {m.text}</div>
+            <div key={m.id} className="ha-chat-tool">
+              ⚙ {m.text}
+            </div>
           ) : (
             <div key={m.id} className={`ha-chat-bubble ha-chat-bubble--${m.role}`}>
               {m.text}
@@ -257,7 +257,10 @@ export function ChatDock({ sessionId }: ChatDockProps) {
 
       {/* What's actually answering: pi agent core → model @ endpoint */}
       <div className="ha-chat-footer" role="note">
-        <span className="ha-chat-footer-core" title="Agentic backend: in-process pi agent core (createAgentSession)">
+        <span
+          className="ha-chat-footer-core"
+          title="Agentic backend: in-process pi agent core (createAgentSession)"
+        >
           pi agent core
         </span>
         <span className="ha-chat-footer-sep">·</span>

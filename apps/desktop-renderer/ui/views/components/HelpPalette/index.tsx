@@ -71,11 +71,7 @@ export function HelpPalette({ open, onClose, onAction }: HelpPaletteProps) {
 
   return (
     <div className="ha-help-palette__overlay" onClick={onClose}>
-      <div
-        className="ha-help-palette"
-        role="menu"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="ha-help-palette" role="menu" onClick={(e) => e.stopPropagation()}>
         {/* Title bar */}
         <div className="ha-help-palette-header">
           <span className="ha-help-palette-title">Help Claude</span>
@@ -98,9 +94,7 @@ export function HelpPalette({ open, onClose, onAction }: HelpPaletteProps) {
               <span className="ha-help-palette-item-icon">{item.icon}</span>
               <span className="ha-help-palette-item-label">{item.label}</span>
               {item.shortcut && (
-                <span className="ha-help-palette-item-shortcut">
-                  {item.shortcut}
-                </span>
+                <span className="ha-help-palette-item-shortcut">{item.shortcut}</span>
               )}
             </button>
           ))}

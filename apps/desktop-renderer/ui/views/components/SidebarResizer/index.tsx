@@ -18,15 +18,12 @@ export function SidebarResizer() {
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
-  const onMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      dragRef.current = { startX: e.clientX, startWidth: useStore.getState().sidebarWidth };
-      setDragging(true);
-    },
-    [],
-  );
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startWidth: useStore.getState().sidebarWidth };
+    setDragging(true);
+  }, []);
 
   // While the overlay is up, it receives all mouse events; keep
   // window-level listeners as a belt-and-braces for releases outside.

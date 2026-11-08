@@ -1,13 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import * as admin from 'firebase-admin';
-import { FirebaseService } from '../firebase/firebase.service';
+import { Injectable, UnauthorizedException } from "@nestjs/common";
+import * as admin from "firebase-admin";
+import { FirebaseService } from "../firebase/firebase.service";
 import {
   UserProfile,
   Nullable,
   UserWorkspace,
   UserMcpConfig,
   UserPreferences,
-} from '../types/firestore';
+} from "../types/firestore";
 
 @Injectable()
 export class AuthService {
@@ -24,38 +24,37 @@ export class AuthService {
       return `http://${emulatorHost}/identitytoolkit.googleapis.com/v1`;
     }
     if (process.env.FIREBASE_WEB_API_KEY) {
-      return 'https://identitytoolkit.googleapis.com/v1';
+      return "https://identitytoolkit.googleapis.com/v1";
     }
     throw new UnauthorizedException(
-      'Email auth is unavailable: start the Firebase emulator or set FIREBASE_WEB_API_KEY',
+      "Email auth is unavailable: start the Firebase emulator or set FIREBASE_WEB_API_KEY",
     );
   }
 
   async emailAuth(
-    mode: 'register' | 'login',
+    mode: "register" | "login",
     email: string,
     password: string,
     displayName?: string,
   ): Promise<{ token: string; refreshToken?: string; user: UserProfile }> {
-    const endpoint =
-      mode === 'register' ? 'accounts:signUp' : 'accounts:signInWithPassword';
-    const key = process.env.FIREBASE_WEB_API_KEY || 'local';
+    const endpoint = mode === "register" ? "accounts:signUp" : "accounts:signInWithPassword";
+    const key = process.env.FIREBASE_WEB_API_KEY || "local";
     const body: Record<string, unknown> = { email, password, returnSecureToken: true };
-    if (mode === 'register' && displayName) body.displayName = displayName;
+    if (mode === "register" && displayName) body.displayName = displayName;
 
     const res = await fetch(`${this.identityToolkitBase()}/${endpoint}?key=${key}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
     const data: any = await res.json().catch(() => ({}));
     if (!res.ok || !data?.idToken) {
       const msg =
-        data?.error?.message === 'EMAIL_EXISTS'
-          ? 'An account with this email already exists'
-          : data?.error?.message === 'INVALID_PASSWORD' || data?.error?.message === 'USER_NOT_FOUND'
-            ? 'Invalid email or password'
-            : data?.error?.message || 'Authentication failed';
+        data?.error?.message === "EMAIL_EXISTS"
+          ? "An account with this email already exists"
+          : data?.error?.message === "INVALID_PASSWORD" || data?.error?.message === "USER_NOT_FOUND"
+            ? "Invalid email or password"
+            : data?.error?.message || "Authentication failed";
       throw new UnauthorizedException(msg);
     }
 
@@ -73,19 +72,19 @@ export class AuthService {
   async refreshIdToken(
     refreshToken: string,
   ): Promise<{ token: string; refreshToken?: string; user: UserProfile }> {
-    if (!refreshToken || typeof refreshToken !== 'string') {
-      throw new UnauthorizedException('Missing refresh token');
+    if (!refreshToken || typeof refreshToken !== "string") {
+      throw new UnauthorizedException("Missing refresh token");
     }
-    const key = process.env.FIREBASE_WEB_API_KEY || 'local';
+    const key = process.env.FIREBASE_WEB_API_KEY || "local";
     const res = await fetch(`${this.identityToolkitBase()}/token?key=${key}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ grantType: 'refresh_token', refreshToken }),
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ grantType: "refresh_token", refreshToken }),
     });
     const data: any = await res.json().catch(() => ({}));
     const idToken = data?.id_token ?? data?.idToken;
     if (!res.ok || !idToken) {
-      throw new UnauthorizedException('Session expired — sign in again');
+      throw new UnauthorizedException("Session expired — sign in again");
     }
     const decoded = await this.verifyIdToken(idToken);
     const user = await this.getOrCreateUser(decoded);
@@ -106,10 +105,7 @@ export class AuthService {
   // email sign-ins.
 
   private googleRedirectUri(): string {
-    return (
-      process.env.GOOGLE_REDIRECT_URI ||
-      'http://localhost:3601/auth/google/callback'
-    );
+    return process.env.GOOGLE_REDIRECT_URI || "http://localhost:3601/auth/google/callback";
   }
 
   googleAuthConfigured(): boolean {
@@ -118,13 +114,13 @@ export class AuthService {
 
   googleAuthorizeUrl(state: string): string {
     const params = new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID || '',
+      client_id: process.env.GOOGLE_CLIENT_ID || "",
       redirect_uri: this.googleRedirectUri(),
-      response_type: 'code',
-      scope: 'openid email profile',
+      response_type: "code",
+      scope: "openid email profile",
       state,
-      access_type: 'online',
-      prompt: 'select_account',
+      access_type: "online",
+      prompt: "select_account",
     });
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }
@@ -133,50 +129,47 @@ export class AuthService {
    * Complete the OAuth flow: exchange the code for Google tokens, federate
    * the ID token into Firebase Auth, and return the app session shape.
    */
-  async googleAuth(code: string): Promise<{ token: string; refreshToken?: string; user: UserProfile }> {
+  async googleAuth(
+    code: string,
+  ): Promise<{ token: string; refreshToken?: string; user: UserProfile }> {
     if (!this.googleAuthConfigured()) {
       throw new UnauthorizedException(
-        'Google sign-in is not configured (set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)',
+        "Google sign-in is not configured (set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)",
       );
     }
 
     // 1. Code → tokens
-    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         code,
-        client_id: process.env.GOOGLE_CLIENT_ID || '',
-        client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+        client_id: process.env.GOOGLE_CLIENT_ID || "",
+        client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
         redirect_uri: this.googleRedirectUri(),
-        grant_type: 'authorization_code',
+        grant_type: "authorization_code",
       }).toString(),
     });
     const tokens: any = await tokenRes.json().catch(() => ({}));
     if (!tokenRes.ok || !tokens?.id_token) {
-      throw new UnauthorizedException(
-        tokens?.error_description || 'Google token exchange failed',
-      );
+      throw new UnauthorizedException(tokens?.error_description || "Google token exchange failed");
     }
 
     // 2. Google ID token → Firebase Auth user (signInWithIdp)
-    const key = process.env.FIREBASE_WEB_API_KEY || 'local';
-    const idpRes = await fetch(
-      `${this.identityToolkitBase()}/accounts:signInWithIdp?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          requestUri: tokens.id_token,
-          returnIdpCredential: true,
-          oauthIdpClientId: process.env.GOOGLE_CLIENT_ID,
-        }),
-      },
-    );
+    const key = process.env.FIREBASE_WEB_API_KEY || "local";
+    const idpRes = await fetch(`${this.identityToolkitBase()}/accounts:signInWithIdp?key=${key}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        requestUri: tokens.id_token,
+        returnIdpCredential: true,
+        oauthIdpClientId: process.env.GOOGLE_CLIENT_ID,
+      }),
+    });
     const idpData: any = await idpRes.json().catch(() => ({}));
     if (!idpRes.ok || !idpData?.idToken) {
       throw new UnauthorizedException(
-        idpData?.error?.message || 'Google account could not be linked to Firebase',
+        idpData?.error?.message || "Google account could not be linked to Firebase",
       );
     }
 
@@ -207,7 +200,11 @@ export class AuthService {
     if (webKey) {
       const res = await fetch(
         `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${webKey}`,
-        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idToken }) },
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ idToken }),
+        },
       );
       const data: any = await res.json().catch(() => ({}));
       const u = res.ok && Array.isArray(data?.users) ? data.users[0] : null;
@@ -221,7 +218,7 @@ export class AuthService {
       }
     }
 
-    throw new UnauthorizedException('Invalid or expired Firebase ID token');
+    throw new UnauthorizedException("Invalid or expired Firebase ID token");
   }
 
   /**
@@ -242,20 +239,20 @@ export class AuthService {
     const now = new Date().toISOString();
     const newUser: UserProfile = {
       id: uid,
-      email: email || '',
+      email: email || "",
       name: name || null,
       photoURL: picture || null,
       workspace: {
-        path: '',
+        path: "",
         gitUrl: null,
         createdAt: now,
       },
       mcp: {
-        endpoint: 'http://localhost:3615/mcp',
+        endpoint: "http://localhost:3615/mcp",
         active: false,
       },
       preferences: {
-        theme: 'dark',
+        theme: "dark",
         surfaces: {
           autoMinimize: true,
           showNotifications: true,
@@ -279,7 +276,7 @@ export class AuthService {
     if (!db) {
       return null;
     }
-    const userDoc = await db.collection('users').doc(userId).get();
+    const userDoc = await db.collection("users").doc(userId).get();
 
     if (!userDoc.exists) {
       return null;
@@ -297,7 +294,7 @@ export class AuthService {
   async createUser(user: UserProfile): Promise<void> {
     const db = this.firebaseService.getFirestore();
     if (!db) return;
-    await db.collection('users').doc(user.id).set(user);
+    await db.collection("users").doc(user.id).set(user);
   }
 
   /**
@@ -306,7 +303,7 @@ export class AuthService {
   async updateUserWorkspace(userId: string, workspace: UserWorkspace): Promise<void> {
     const db = this.firebaseService.getFirestore();
     if (!db) return;
-    await db.collection('users').doc(userId).update({
+    await db.collection("users").doc(userId).update({
       workspace,
       updatedAt: new Date().toISOString(),
     });
@@ -318,7 +315,7 @@ export class AuthService {
   async updateUserMcp(userId: string, mcp: UserMcpConfig): Promise<void> {
     const db = this.firebaseService.getFirestore();
     if (!db) return;
-    await db.collection('users').doc(userId).update({
+    await db.collection("users").doc(userId).update({
       mcp,
       updatedAt: new Date().toISOString(),
     });
@@ -330,7 +327,7 @@ export class AuthService {
   async updateUserPreferences(userId: string, preferences: UserPreferences): Promise<void> {
     const db = this.firebaseService.getFirestore();
     if (!db) return;
-    await db.collection('users').doc(userId).update({
+    await db.collection("users").doc(userId).update({
       preferences,
       updatedAt: new Date().toISOString(),
     });
@@ -342,7 +339,7 @@ export class AuthService {
   async deleteUser(userId: string): Promise<void> {
     const db = this.firebaseService.getFirestore();
     if (!db) return;
-    await db.collection('users').doc(userId).update({
+    await db.collection("users").doc(userId).update({
       deletedAt: new Date().toISOString(),
     });
   }
@@ -350,11 +347,7 @@ export class AuthService {
   /**
    * Create a new session for a user
    */
-  async createSession(
-    userId: string,
-    title: string,
-    surfaces: any[] = [],
-  ) {
+  async createSession(userId: string, title: string, surfaces: any[] = []) {
     const db = this.firebaseService.getFirestore();
     if (!db) return null;
     const now = new Date().toISOString();
@@ -363,14 +356,22 @@ export class AuthService {
     const sessionDoc = await db.collection(`users/${userId}/sessions`).add({
       userId,
       title,
-      status: 'active',
+      status: "active",
       surfaces,
       createdAt: now,
       updatedAt: now,
       archivedAt: null,
     });
 
-    return { id: sessionDoc.id, title, status: 'active', surfaces, createdAt: now, updatedAt: now, archivedAt: null };
+    return {
+      id: sessionDoc.id,
+      title,
+      status: "active",
+      surfaces,
+      createdAt: now,
+      updatedAt: now,
+      archivedAt: null,
+    };
   }
 
   /**
@@ -381,12 +382,12 @@ export class AuthService {
     if (!db) return [];
     const snapshot = await db
       .collection(`users/${userId}/sessions`)
-      .where('status', '==', 'active')
-      .orderBy('updatedAt', 'desc')
+      .where("status", "==", "active")
+      .orderBy("updatedAt", "desc")
       .limit(20)
       .get();
 
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   }
 
   /**
@@ -407,7 +408,11 @@ export class AuthService {
   /**
    * Update session status
    */
-  async updateSessionStatus(userId: string, sessionId: string, status: 'active' | 'waiting' | 'done' | 'error'): Promise<void> {
+  async updateSessionStatus(
+    userId: string,
+    sessionId: string,
+    status: "active" | "waiting" | "done" | "error",
+  ): Promise<void> {
     const db = this.firebaseService.getFirestore();
     if (!db) return;
     await db.collection(`users/${userId}/sessions`).doc(sessionId).update({
@@ -423,7 +428,7 @@ export class AuthService {
     const db = this.firebaseService.getFirestore();
     if (!db) return;
     await db.collection(`users/${userId}/sessions`).doc(sessionId).update({
-      status: 'done',
+      status: "done",
       archivedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });

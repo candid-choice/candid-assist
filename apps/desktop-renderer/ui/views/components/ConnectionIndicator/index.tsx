@@ -21,10 +21,7 @@ interface IndicatorMeta {
   dotClass: string;
 }
 
-function resolve(
-  connectionState: ConnectionState,
-  agentCount: number,
-): IndicatorMeta {
+function resolve(connectionState: ConnectionState, agentCount: number): IndicatorMeta {
   if (connectionState === "disconnected") {
     return { label: "MCP offline", dotClass: "ha-connection-dot--disconnected" };
   }
@@ -72,10 +69,7 @@ export function ConnectionIndicator() {
       role="status"
       aria-live="polite"
     >
-      <span
-        className={`ha-connection-dot ${meta.dotClass}`}
-        aria-hidden="true"
-      />
+      <span className={`ha-connection-dot ${meta.dotClass}`} aria-hidden="true" />
       <span className="ha-connection-label">{meta.label}</span>
     </span>
   );

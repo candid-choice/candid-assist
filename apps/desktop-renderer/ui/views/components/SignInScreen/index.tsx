@@ -105,8 +105,8 @@ export function SignInScreen(_props: { onDismiss?: () => void }) {
           <span className="ha-signin-logo">✦</span>
           <h1 className="ha-signin-title">Human Assist</h1>
           <p className="ha-signin-subtitle">
-            Your human-in-the-loop workspace — sessions, curated web, and agent
-            surfaces, tied to your account.
+            Your human-in-the-loop workspace — sessions, curated web, and agent surfaces, tied to
+            your account.
           </p>
         </div>
 

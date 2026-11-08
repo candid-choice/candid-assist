@@ -1,11 +1,6 @@
-import {
-  Injectable,
-  CanActivate,
-  ExecutionContext,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { UserRequest } from './interfaces';
+import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from "@nestjs/common";
+import { AuthService } from "./auth.service";
+import { UserRequest } from "./interfaces";
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -16,14 +11,14 @@ export class AuthGuard implements CanActivate {
     const token = request.headers.authorization;
 
     if (!token) {
-      throw new UnauthorizedException('No authorization token provided');
+      throw new UnauthorizedException("No authorization token provided");
     }
 
     // Extract token (expecting "Bearer <token>")
-    const [type, idToken] = token.split(' ');
+    const [type, idToken] = token.split(" ");
 
-    if (type !== 'Bearer' || !idToken) {
-      throw new UnauthorizedException('Invalid token format');
+    if (type !== "Bearer" || !idToken) {
+      throw new UnauthorizedException("Invalid token format");
     }
 
     // Attach raw token for the service layer
@@ -35,7 +30,7 @@ export class AuthGuard implements CanActivate {
     request.user = decoded;
 
     if (!request.user?.uid) {
-      throw new UnauthorizedException('Token missing uid');
+      throw new UnauthorizedException("Token missing uid");
     }
 
     return true;

@@ -14,8 +14,7 @@
   -webkit-app-region: drag;
   background:
     radial-gradient(1200px 600px at 20% -10%, rgba(99, 102, 248, 0.18), transparent 60%),
-    radial-gradient(900px 500px at 90% 110%, rgba(99, 102, 248, 0.12), transparent 60%),
-    #12141a;
+    radial-gradient(900px 500px at 90% 110%, rgba(99, 102, 248, 0.12), transparent 60%), #12141a;
 }
 
 .ha-signin-card {
@@ -152,7 +151,9 @@
   border: 1px solid #2c313d;
   border-radius: 8px;
   font-size: 14px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .ha-signin-input:focus {
@@ -181,7 +182,9 @@
   border: 1px solid #2c313d;
   background: #232735;
   color: #dbe0e8;
-  transition: background 0.12s, border-color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
 }
 
 .ha-signin-actions .ha-btn:hover:not(:disabled) {
@@ -248,7 +251,9 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
 }
 
 .ha-signin-tab:hover {

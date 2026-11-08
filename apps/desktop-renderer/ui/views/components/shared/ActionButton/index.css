@@ -11,7 +11,9 @@
   background: transparent;
   color: var(--ha-text-secondary);
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
   font-size: 14px;
   flex-shrink: 0;
 }

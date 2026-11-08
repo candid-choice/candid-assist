@@ -4,22 +4,13 @@ Exported as a single import:
   import { useErrors, ErrorProvider, useNetworkStatus } from '../errors';
 */
 
-export {
-  ErrorProvider,
-  useErrors,
-} from './error-context';
+export { ErrorProvider, useErrors } from "./error-context";
 
-export {
-  useNetworkStatus,
-} from './use-network-status';
+export { useNetworkStatus } from "./use-network-status";
 
-export {
-  NetworkBanner,
-} from './network-banner';
+export { NetworkBanner } from "./network-banner";
 
-export {
-  ErrorBoundary,
-} from './error-boundary';
+export { ErrorBoundary } from "./error-boundary";
 
 export {
   Errors,
@@ -29,7 +20,7 @@ export {
   shouldToast,
   isBlocking,
   defaultSeverity,
-} from './error-hierarchy';
+} from "./error-hierarchy";
 
 export {
   queueAction,
@@ -41,4 +32,4 @@ export {
   getPendingActions,
   isIndexedDBAvailable,
   type QueuedAction,
-} from './offline-queue';
+} from "./offline-queue";

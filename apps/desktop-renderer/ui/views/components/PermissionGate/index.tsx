@@ -26,17 +26,11 @@ export function PermissionGate() {
         // Record under the requesting project so one project's "always
         // allow" never authorizes another; falls back to unassigned when
         // the agent declared no project.
-        useStore
-          .getState()
-          .grantForProject(
-            pending.agentProject || "(unassigned)",
-            pending.host,
-            {
-              tool: pending.tool,
-              agentClient: pending.agentClient,
-              agentSessionId: pending.agentSessionId,
-            },
-          );
+        useStore.getState().grantForProject(pending.agentProject || "(unassigned)", pending.host, {
+          tool: pending.tool,
+          agentClient: pending.agentClient,
+          agentSessionId: pending.agentSessionId,
+        });
       }
       // Approving means "go ahead AND watch": jump to the requesting
       // agent's session so the surface it opens is visible immediately.
@@ -76,8 +70,7 @@ export function PermissionGate() {
           </span>
           <div>
             <div className="ha-permission-title">
-              Agent wants to visit{" "}
-              <strong className="ha-permission-host">{pending.host}</strong>
+              Agent wants to visit <strong className="ha-permission-host">{pending.host}</strong>
             </div>
             <div className="ha-permission-sub">
               via <code>{pending.tool}</code> · {pending.url}
@@ -85,8 +78,8 @@ export function PermissionGate() {
           </div>
         </div>
         <p className="ha-permission-note">
-          Logins you make here are saved for future agent sessions. Granting
-          “Always” remembers this domain.
+          Logins you make here are saved for future agent sessions. Granting “Always” remembers this
+          domain.
         </p>
         {portal && (
           <p className="ha-permission-note" style={{ fontStyle: "italic" }}>

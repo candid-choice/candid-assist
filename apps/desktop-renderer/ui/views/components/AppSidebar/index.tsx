@@ -45,9 +45,7 @@ export function toSidebarSession(
   // Sessions owned by an agent WebSocket: gray out when that agent is
   // no longer connected (liveAgentIds known and the id is absent).
   const connected =
-    liveAgentIds && doc.agentSessionId
-      ? liveAgentIds.has(doc.agentSessionId)
-      : undefined;
+    liveAgentIds && doc.agentSessionId ? liveAgentIds.has(doc.agentSessionId) : undefined;
 
   return {
     id: doc.id,
@@ -68,11 +66,7 @@ export interface AppSidebarProps {
   onToggle?: () => void;
 }
 
-export function AppSidebar({
-  open = true,
-  width = 240,
-  onToggle,
-}: AppSidebarProps) {
+export function AppSidebar({ open = true, width = 240, onToggle }: AppSidebarProps) {
   const sessions = useStore((s) => s.sessions);
   const activeSessionId = useStore((s) => s.activeSessionId);
   const mcpAgents = useStore((s) => s.mcpAgents);
@@ -108,9 +102,7 @@ export function AppSidebar({
     st.setActiveSession(id);
     // Main content follows the session: show its most recent open
     // surface, or none (which reveals the guide/dashboard).
-    const owned = st.views.filter(
-      (v) => (v as unknown as { sessionId?: string }).sessionId === id,
-    );
+    const owned = st.views.filter((v) => (v as unknown as { sessionId?: string }).sessionId === id);
     const last = owned[owned.length - 1];
     if (last) st.selectView(last.id);
     else st.cancelSurface();
@@ -198,13 +190,7 @@ export function AppSidebar({
 // human granted to THIS project (never another) with the audit trail of
 // which agent/tool asked, and lets them revoke — per domain or all at once.
 
-function ProjectAccessPanel({
-  project,
-  onClose,
-}: {
-  project: string;
-  onClose: () => void;
-}) {
+function ProjectAccessPanel({ project, onClose }: { project: string; onClose: () => void }) {
   const domains = useStore((s) => s.grantsByProject[project]) ?? [];
   const consentLog = useStore((s) => s.consentLog);
   const revokeProjectGrant = useStore((s) => s.revokeProjectGrant);
@@ -233,22 +219,29 @@ function ProjectAccessPanel({
         <div className="ha-project-panel-head">
           <div>
             <div className="ha-project-panel-kicker">Project web access</div>
-            <h2 className="ha-project-panel-title" title={project}>{label}</h2>
+            <h2 className="ha-project-panel-title" title={project}>
+              {label}
+            </h2>
           </div>
-          <button type="button" className="ha-project-panel-close" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="ha-project-panel-close"
+            onClick={onClose}
+            aria-label="Close"
+          >
             ✕
           </button>
         </div>
 
         <p className="ha-project-panel-help">
-          Domains this project was allowed to visit. Grants are isolated per
-          project — allowing a domain here does not authorize any other project.
+          Domains this project was allowed to visit. Grants are isolated per project — allowing a
+          domain here does not authorize any other project.
         </p>
 
         {domains.length === 0 ? (
           <div className="ha-project-panel-empty">
-            No domains granted to “{label}” yet. It will ask the first time it
-            wants to visit a site.
+            No domains granted to “{label}” yet. It will ask the first time it wants to visit a
+            site.
           </div>
         ) : (
           <ul className="ha-project-panel-list">
@@ -260,9 +253,7 @@ function ProjectAccessPanel({
                   <span className="ha-project-panel-meta">
                     {a?.agentClient ? `via ${a.agentClient}` : "manual"}
                     {a?.tool ? ` · ${a.tool}` : ""}
-                    {a?.grantedAt
-                      ? ` · ${new Date(a.grantedAt).toLocaleDateString()}`
-                      : ""}
+                    {a?.grantedAt ? ` · ${new Date(a.grantedAt).toLocaleDateString()}` : ""}
                   </span>
                   <button
                     type="button"

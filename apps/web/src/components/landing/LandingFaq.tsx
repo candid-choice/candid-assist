@@ -38,7 +38,10 @@ export default function LandingFaq() {
     <section className="py-20" id="faq">
       <div className="mx-auto max-w-2xl px-6">
         <div className="mb-14 text-center">
-          <p className="mb-2 text-sm font-medium" style={{ color: "#7c6fa8", letterSpacing: "0.5px" }}>
+          <p
+            className="mb-2 text-sm font-medium"
+            style={{ color: "#7c6fa8", letterSpacing: "0.5px" }}
+          >
             FAQ
           </p>
           <h2 className="text-3xl font-bold" style={{ color: "#3d3d3d" }}>
@@ -48,7 +51,11 @@ export default function LandingFaq() {
 
         <div className="w-full">
           {faqs.map((faq, i) => (
-            <div key={i} className="border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
+            <div
+              key={i}
+              className="border-b last:border-b-0"
+              style={{ borderColor: "var(--border)" }}
+            >
               <button
                 className="flex w-full items-center justify-between py-4 text-left text-base font-semibold"
                 style={{ color: "#3d3d3d" }}

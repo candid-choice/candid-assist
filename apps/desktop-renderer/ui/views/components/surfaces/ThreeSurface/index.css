@@ -1,12 +1,40 @@
-.ha-3d-surface { position: relative; width: 100%; height: 100%; min-height: 320px; background: #161a21; }
-.ha-3d-canvas { width: 100%; height: 100%; }
-.ha-3d-canvas canvas { display: block; }
-.ha-3d-fallback {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  padding: 24px; text-align: center; font-size: 13px; color: #9aa3b2;
+.ha-3d-surface {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  background: #161a21;
 }
-.ha-3d-error { padding: 16px; font-size: 12px; color: #f87171; }
+.ha-3d-canvas {
+  width: 100%;
+  height: 100%;
+}
+.ha-3d-canvas canvas {
+  display: block;
+}
+.ha-3d-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: #9aa3b2;
+}
+.ha-3d-error {
+  padding: 16px;
+  font-size: 12px;
+  color: #f87171;
+}
 .ha-3d-hint {
-  position: absolute; left: 10px; bottom: 8px; font-size: 10px; color: #6b7482;
-  background: rgba(22,26,33,.7); padding: 2px 8px; border-radius: 999px;
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  font-size: 10px;
+  color: #6b7482;
+  background: rgba(22, 26, 33, 0.7);
+  padding: 2px 8px;
+  border-radius: 999px;
 }

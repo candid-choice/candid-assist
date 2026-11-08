@@ -2,11 +2,7 @@ const linkStyle = { color: "#8a8178" } as const;
 
 function FooterLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <a
-      href={href}
-      className="transition hover:text-ha-text hover:opacity-80"
-      style={linkStyle}
-    >
+    <a href={href} className="transition hover:text-ha-text hover:opacity-80" style={linkStyle}>
       {children}
     </a>
   );
@@ -15,10 +11,7 @@ function FooterLink({ href, children }: { href: string; children: React.ReactNod
 function Column({ title, links }: { title: string; links: { label: string; href: string }[] }) {
   return (
     <div className="flex flex-col gap-3">
-      <h3
-        className="text-xs font-semibold uppercase tracking-wider"
-        style={{ color: "#3d3d3d" }}
-      >
+      <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#3d3d3d" }}>
         {title}
       </h3>
       <nav className="flex flex-col gap-2.5 text-sm">
@@ -94,8 +87,7 @@ export default function LandingFooter() {
               </span>
             </div>
             <p className="text-xs leading-relaxed" style={{ color: "#8a8178" }}>
-              A human-in-the-loop workspace where agents work and you stay in
-              control.
+              A human-in-the-loop workspace where agents work and you stay in control.
             </p>
             {/* Social */}
             <div className="mt-1 flex items-center gap-4">

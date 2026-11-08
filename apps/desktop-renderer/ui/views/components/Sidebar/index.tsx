@@ -81,9 +81,7 @@ function Sidebar({
 }: SidebarProps) {
   const [search, setSearch] = useState("");
 
-  const filtered = sessions.filter((s) =>
-    s.title.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filtered = sessions.filter((s) => s.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div
@@ -94,31 +92,30 @@ function Sidebar({
       }}
     >
       {/* ── Header ─────────────────────────────────────────────── */}
-      <div className="ha-sidebar-header">
-      </div>
+      <div className="ha-sidebar-header"></div>
 
       {/* ── Search ─────────────────────────────────────────────── */}
       <div className="ha-sidebar-search-row">
-      <div className="ha-sidebar-search">
-        <IconSearch size={14} className="ha-sidebar-search-icon" />
-        <input
-          type="text"
-          placeholder="Search sessions…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-      {onAddSession && (
-        <button
-          type="button"
-          className="ha-sidebar-search-add"
-          onClick={onAddSession}
-          title="Add a session you own (with direct chat)"
-          aria-label="Add session"
-        >
-          ＋
-        </button>
-      )}
+        <div className="ha-sidebar-search">
+          <IconSearch size={14} className="ha-sidebar-search-icon" />
+          <input
+            type="text"
+            placeholder="Search sessions…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {onAddSession && (
+          <button
+            type="button"
+            className="ha-sidebar-search-add"
+            onClick={onAddSession}
+            title="Add a session you own (with direct chat)"
+            aria-label="Add session"
+          >
+            ＋
+          </button>
+        )}
       </div>
 
       {/* ── Session List ───────────────────────────────────────── */}
@@ -145,11 +142,15 @@ function Sidebar({
               onItemContextMenu?.(session, e.clientX, e.clientY);
             }}
           >
-            <span className="ha-sidebar-dot" style={{ backgroundColor: statusColor(session.status) }} />
+            <span
+              className="ha-sidebar-dot"
+              style={{ backgroundColor: statusColor(session.status) }}
+            />
             <div className="ha-sidebar-item-content">
               <div className="ha-sidebar-item-title">{session.title}</div>
               <div className="ha-sidebar-item-meta">
-                {formatTimeAgo(session.updatedAt)} · {session.surfaceCount} surface{session.surfaceCount !== 1 ? "s" : ""}
+                {formatTimeAgo(session.updatedAt)} · {session.surfaceCount} surface
+                {session.surfaceCount !== 1 ? "s" : ""}
                 {session.project && onProjectClick ? (
                   <button
                     type="button"
@@ -185,7 +186,6 @@ function Sidebar({
           </div>
         ))}
       </div>
-
     </div>
   );
 }

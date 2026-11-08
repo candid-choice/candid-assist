@@ -18,7 +18,7 @@ export interface ChatRuntime {
   dispose(): void;
 }
 
-export type ChatApiMode = 'auto' | 'openai-completions' | 'anthropic-messages';
+export type ChatApiMode = "auto" | "openai-completions" | "anthropic-messages";
 
 export interface ChatRunOptions {
   cwd?: string;
@@ -103,7 +103,7 @@ export async function sendChat(
   active.set(chatSessionId, run);
   try {
     const opts: ChatRunOptions =
-      typeof optsOrCwd === 'string' ? { cwd: optsOrCwd } : (optsOrCwd ?? {});
+      typeof optsOrCwd === "string" ? { cwd: optsOrCwd } : (optsOrCwd ?? {});
     let runtime = runtimes.get(chatSessionId);
     if (!runtime) {
       runtime = await factory({

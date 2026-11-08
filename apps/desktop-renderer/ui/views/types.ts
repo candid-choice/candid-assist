@@ -4,18 +4,17 @@
 // and a type-specific payload.
 
 export type SurfaceType =
-  | 'processManager'
-  | 'browser'
-  | '3d'
-  | 'image'
-  | 'canvas'
-  | 'screen'
-  | 'input'
-  | 'file'
-  | 'voice'
-  | 'prompt'
-  | 'code-diff'
-  | 'terminal';
+  | "processManager"
+  | "browser"
+  | "3d"
+  | "canvas"
+  | "screen"
+  | "input"
+  | "file"
+  | "voice"
+  | "prompt"
+  | "code-diff"
+  | "terminal";
 
 export interface SurfaceConfig<T = unknown> {
   /** Unique identifier for this surface/view. */
@@ -31,7 +30,7 @@ export interface SurfaceConfig<T = unknown> {
   /** Type-specific payload data */
   payload: T;
   /** Origin of this surface */
-  source: 'mcp' | 'proactive';
+  source: "mcp" | "proactive";
   /** Creation timestamp (ms) */
   createdAt: number;
   /** Session this surface was pushed into (if any) — enables response round-trip */
@@ -48,7 +47,7 @@ export interface ProcessManagerPayload {
     cwd: string;
     startedAt: number;
     stoppedAt?: number;
-    status: 'running' | 'stopped' | 'crashed' | 'exited';
+    status: "running" | "stopped" | "crashed" | "exited";
     exitCode: number | null;
     output: string[];
   }>;
@@ -64,31 +63,37 @@ export interface BrowserPayload {
   warning?: string;
 }
 
-export interface ImagePayload {
-  /** Data URL or blob URL of the image to display */
-  src: string;
-  /** Title for this annotation request */
-  title?: string;
-}
-
 export interface CanvasPayload {
-  /** Optional initial content (data URL) */
-  initialContent?: string;
-  /** Canvas dimensions (0 = auto-fit) */
+  /** What to draw, or what the human is being asked to review */
+  prompt?: string;
+  /** Image to mark up (http(s) URL or data: URI). The canvas surface absorbed
+   *  the old read-only image surface: looking at a picture and annotating it
+   *  are the same activity. */
+  imageSrc?: string;
+  /** Agent-placed numbered callouts, x/y relative to the image (0..1) */
+  annotations?: { text: string; x?: number; y?: number }[];
+  /** Requested drawing aspect ratio (0 = fill the pane) */
   width?: number;
   height?: number;
+  /** Legacy: initial content (data URL) */
+  initialContent?: string;
+  /** Mirrored from the desktop main process once the human clicks Send */
+  markedUp?: boolean;
+  markup?: string;
+  markupNote?: string;
+  markupAt?: number;
 }
 
 export interface ScreenPayload {
   /** Capture mode */
-  mode?: 'region' | 'window' | 'screen';
+  mode?: "region" | "window" | "screen";
   /** Optional initial capture data */
   captureData?: string;
 }
 
 export interface InputPayload {
   /** Input format */
-  kind: 'choices' | 'text' | 'confirm' | 'file' | 'voice' | 'prompt';
+  kind: "choices" | "text" | "confirm" | "file" | "voice" | "prompt";
   /** Display text for the input */
   question?: string;
   /** Multiple choice options */
@@ -99,6 +104,12 @@ export interface InputPayload {
   placeholder?: string;
   /** Pre-filled value */
   value?: string;
+  /** Answer the human already gave (mirrored from the desktop main process so
+   *  every view — including the read-only portal — shows the collected answer) */
+  answered?: boolean;
+  answer?: string | string[];
+  answeredAt?: number;
+  answeredBy?: "human" | "agent";
 }
 
 export interface CodeDiffPayload {
@@ -107,7 +118,7 @@ export interface CodeDiffPayload {
   /** Array of file diffs */
   files: Array<{
     path: string;
-    status: 'modified' | 'added' | 'deleted';
+    status: "modified" | "added" | "deleted";
     hunks: Array<{
       start: number;
       lines: string[];
@@ -127,13 +138,7 @@ export interface TerminalPayload {
 }
 
 export type SurfacePayload =
-  | BrowserPayload
-  | ImagePayload
-  | CanvasPayload
-  | ScreenPayload
-  | InputPayload
-  | CodeDiffPayload
-  | TerminalPayload;
+  BrowserPayload | CanvasPayload | ScreenPayload | InputPayload | CodeDiffPayload | TerminalPayload;
 
 // ── Result Shapes ─────────────────────────────────────────────────────────
 
@@ -161,7 +166,7 @@ export interface ImageResult {
 }
 
 export interface Annotation {
-  type: 'draw' | 'circle' | 'arrow' | 'text';
+  type: "draw" | "circle" | "arrow" | "text";
   position: { x: number; y: number };
   content?: string;
 }

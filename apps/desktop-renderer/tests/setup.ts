@@ -1,4 +1,4 @@
-import { afterEach } from 'vitest';
+import { afterEach } from "vitest";
 
 // Auto cleanup after each test case
 afterEach(() => {
@@ -7,12 +7,12 @@ afterEach(() => {
 
 // Mock DOM environment for tests
 const mockNavigator = {
-  platform: 'MacIntel',
+  platform: "MacIntel",
   userAgent:
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 };
 
-Object.defineProperty(window, 'navigator', {
+Object.defineProperty(window, "navigator", {
   value: mockNavigator,
   writable: true,
 });
@@ -20,7 +20,7 @@ Object.defineProperty(window, 'navigator', {
 // ── In-memory localStorage ─────────────────────────────────────────────────
 const memoryStorage = new Map<string, string>();
 
-Object.defineProperty(window, 'localStorage', {
+Object.defineProperty(window, "localStorage", {
   value: {
     getItem: (key: string) => memoryStorage.get(key) ?? null,
     setItem: (key: string, value: string) => {
@@ -107,7 +107,7 @@ function createFakeIndexedDB() {
               const addReq = {} as FakeRequest;
               queueMicrotask(() => {
                 if (storeData.has(value.id)) {
-                  addReq.error = new Error('ConstraintError: key already exists');
+                  addReq.error = new Error("ConstraintError: key already exists");
                   addReq.onerror?.();
                   return;
                 }
@@ -173,13 +173,13 @@ function createFakeIndexedDB() {
   };
 }
 
-Object.defineProperty(window, 'indexedDB', {
+Object.defineProperty(window, "indexedDB", {
   value: createFakeIndexedDB(),
   writable: true,
 });
 
 // Mock IntersectionObserver
-Object.defineProperty(window, 'IntersectionObserver', {
+Object.defineProperty(window, "IntersectionObserver", {
   value: class MockIntersectionObserver {
     constructor(callback) {
       this.callback = callback;

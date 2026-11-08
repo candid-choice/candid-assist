@@ -46,9 +46,7 @@ function TaskComposer({ open, onClose, onSubmit }: TaskComposerProps) {
       <div className="ha-composer" onClick={(e) => e.stopPropagation()}>
         {/* ── Header ─────────────────────────────────────────────── */}
         <div className="ha-composer-header">
-          <div className="ha-composer-title">
-            ✎ Compose a Task for Claude Code
-          </div>
+          <div className="ha-composer-title">✎ Compose a Task for Claude Code</div>
           <button className="ha-composer-close" onClick={onClose} title="Close (Esc)">
             <IconX size={16} />
           </button>
@@ -86,7 +84,7 @@ function TaskComposer({ open, onClose, onSubmit }: TaskComposerProps) {
               >
                 {suggestion}
               </button>
-            )
+            ),
           )}
         </div>
       </div>

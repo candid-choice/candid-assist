@@ -8,14 +8,14 @@
  * the emulator directly). Attaches the default role as custom claims
  * so the very first ID token already carries it.
  */
-import { beforeUserCreated } from 'firebase-functions/v2/identity';
-import { provisionUserDocument, resolveUserRole } from '../lib/provision';
+import { beforeUserCreated } from "firebase-functions/v2/identity";
+import { provisionUserDocument, resolveUserRole } from "../lib/provision";
 
 export const beforeUserCreate = beforeUserCreated(async (event) => {
   const uid = event.data?.uid;
 
   if (!uid) {
-    console.warn('[beforeCreate] Missing uid in beforeUserCreated event');
+    console.warn("[beforeCreate] Missing uid in beforeUserCreated event");
     return { allow: true };
   }
 
@@ -24,11 +24,11 @@ export const beforeUserCreate = beforeUserCreated(async (event) => {
     const role = await resolveUserRole(uid);
     return { allow: true, customClaims: { role } };
   } catch (err) {
-    console.error('[beforeCreate] Provisioning failed, rejecting signup:', err);
+    console.error("[beforeCreate] Provisioning failed, rejecting signup:", err);
     return {
       allow: false,
-      code: 'ERR_INTERNAL',
-      message: 'User provisioning failed — please try again.',
+      code: "ERR_INTERNAL",
+      message: "User provisioning failed — please try again.",
     };
   }
 });

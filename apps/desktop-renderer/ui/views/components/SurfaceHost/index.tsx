@@ -5,7 +5,6 @@ import { useCallback } from "react";
 import type {
   SurfaceConfig,
   BrowserPayload,
-  ImagePayload,
   CanvasPayload,
   ScreenPayload,
   InputPayload,
@@ -15,6 +14,7 @@ import type {
 
 import { useStoreSelector, useStore } from "../../store";
 import { addSurfaceToSession } from "../../services/sync/sync-service";
+import { wsService } from "../../services/ws-service";
 import { queueAction } from "../../errors/offline-queue";
 import type { EmbeddedSurface, SurfaceUserResponse } from "../../services/sync/types";
 
@@ -22,7 +22,6 @@ import { BrowserSurface } from "../surfaces/BrowserSurface";
 import { ThreeSurface } from "../surfaces/ThreeSurface";
 import { ProcessSurface } from "../surfaces/ProcessSurface";
 import { CanvasSurface } from "../surfaces/CanvasSurface";
-import { ImageSurface } from "../surfaces/ImageSurface";
 import { InputSurface } from "../surfaces/InputSurface";
 import { ScreenSurface } from "../surfaces/ScreenSurface";
 import { CodeDiffSurface } from "../surfaces/CodeDiffSurface";
@@ -32,15 +31,17 @@ import "./index.css";
 
 export interface SurfaceHostProps {
   config: SurfaceConfig<
-    BrowserPayload | ImagePayload | CanvasPayload | ScreenPayload | InputPayload | CodeDiffPayload | TerminalPayload
+    | BrowserPayload
+    | CanvasPayload
+    | ScreenPayload
+    | InputPayload
+    | CodeDiffPayload
+    | TerminalPayload
   >;
   isViewActive: boolean;
 }
 
-export function SurfaceHost({
-  config,
-  isViewActive,
-}: SurfaceHostProps) {
+export function SurfaceHost({ config, isViewActive }: SurfaceHostProps) {
   const isProactive = config.source === "proactive";
 
   // Select from Zustand store — components only re-render when their selected slice changes.
@@ -49,6 +50,17 @@ export function SurfaceHost({
 
   const handleDone = () => {};
   const handleCancel = () => {};
+
+  // ── Canvas markup → desktop main, so the AGENT can read what you drew ──
+  const handleCanvasSend = useCallback(
+    (markup: string, note: string) => {
+      wsService.send({ type: "canvas:respond", surfaceId: config.id, markup, note });
+      useStore
+        .getState()
+        .pushUiMessage({ message: "Markup sent to the agent.", type: "success", title: "Canvas" });
+    },
+    [config.id],
+  );
 
   // ── Input surface completion: store + backend round-trip ─────────────
   const handleInputComplete = useCallback(
@@ -62,6 +74,16 @@ export function SurfaceHost({
       };
 
       useStore.getState().completeSurface({ completed: true, data: response });
+
+      // Tell the desktop main process too, so the AGENT can read the answer:
+      // openInputSurface(waitForAnswer) resolves immediately and
+      // readSurface(surfaceId) digests {answered, answer, answeredAt}.
+      wsService.send({
+        type: "input:respond",
+        surfaceId: config.id,
+        answer: response.text,
+        responseType,
+      });
 
       const state = useStore.getState();
       const sessionId = config.sessionId ?? state.activeSessionId ?? undefined;
@@ -83,15 +105,11 @@ export function SurfaceHost({
       addSurfaceToSession(sessionId, embedded)
         .then(() => {
           // Optimistically mirror the embed into the local session doc
-          const sess = useStore
-            .getState()
-            .sessions.find((s) => s.id === sessionId);
+          const sess = useStore.getState().sessions.find((s) => s.id === sessionId);
           if (!sess) return;
           const exists = sess.surfaces.some((x) => x.surfaceId === config.id);
           const surfaces = exists
-            ? sess.surfaces.map((x) =>
-                x.surfaceId === config.id ? embedded : x,
-              )
+            ? sess.surfaces.map((x) => (x.surfaceId === config.id ? embedded : x))
             : [...sess.surfaces, embedded];
           useStore.getState().updateSession(sessionId, { surfaces });
         })
@@ -114,10 +132,7 @@ export function SurfaceHost({
       case "processManager":
         return (
           <ProcessSurface
-            processes={
-              (config as SurfaceConfig<{ processes?: never }>).payload
-                ?.processes ?? []
-            }
+            processes={(config as SurfaceConfig<{ processes?: never }>).payload?.processes ?? []}
           />
         );
       case "browser":
@@ -131,18 +146,11 @@ export function SurfaceHost({
         );
       case "3d":
         return <ThreeSurface config={config} />;
-      case "image":
-        return (
-          <ImageSurface
-            config={config as SurfaceConfig<ImagePayload>}
-            onComplete={() => {}}
-          />
-        );
       case "canvas":
         return (
           <CanvasSurface
             config={config as SurfaceConfig<CanvasPayload>}
-            onDone={handleDone}
+            onSend={handleCanvasSend}
             onCancel={handleCancel}
           />
         );
@@ -184,9 +192,7 @@ export function SurfaceHost({
             {config.instruction && <p>{config.instruction}</p>}
             <div>
               <button onClick={handleCancel}>Cancel</button>
-              <button onClick={handleDone}>
-                {isProactive ? "Send" : "Done"}
-              </button>
+              <button onClick={handleDone}>{isProactive ? "Send" : "Done"}</button>
             </div>
           </div>
         );
@@ -196,10 +202,7 @@ export function SurfaceHost({
   };
 
   return (
-    <div
-      className="ha-surface-shell absolute w-full"
-      style={{ top: isViewActive ? "0" : "100vh" }}
-    >
+    <div className="ha-surface-shell absolute w-full" style={{ top: isViewActive ? "0" : "100vh" }}>
       {renderSurface()}
     </div>
   );

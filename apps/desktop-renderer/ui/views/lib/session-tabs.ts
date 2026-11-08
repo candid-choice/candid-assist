@@ -19,16 +19,24 @@ export interface ChromeTab {
  * theme-safe, and consistent with the rest of the chrome). */
 export function surfaceIcon(type: string): string {
   switch (type) {
-    case "browser": return "🌐";
-    case "3d": return "🧊";
-    case "input": return "❓";
-    case "code-diff": return "🔀";
-    case "canvas": return "🎨";
-    case "image": return "🖼️";
-    case "screen": return "📸";
-    case "terminal": return "🖥️";
-    case "processManager": return "⚙️";
-    default: return "▫️";
+    case "browser":
+      return "🌐";
+    case "3d":
+      return "🧊";
+    case "input":
+      return "❓";
+    case "code-diff":
+      return "🔀";
+    case "canvas":
+      return "🎨";
+    case "screen":
+      return "📸";
+    case "terminal":
+      return "🖥️";
+    case "processManager":
+      return "⚙️";
+    default:
+      return "▫️";
   }
 }
 
@@ -46,9 +54,7 @@ export function deriveSessionTabs(
   // tabs — never leak other sessions' views into the chrome bar.
   const sessionScopedViews = activeSession
     ? views.filter(
-        (v) =>
-          (v as unknown as { sessionId?: string | null }).sessionId ===
-          activeSession.id,
+        (v) => (v as unknown as { sessionId?: string | null }).sessionId === activeSession.id,
       )
     : [];
 
@@ -75,12 +81,8 @@ export function deriveSessionTabs(
 }
 
 /** Re-open a session-recorded surface as a live view config. */
-export function reopenRecordedSurface(
-  rec: EmbeddedSurface,
-  sessionId: string,
-): SurfaceConfig {
-  const label =
-    rec.type.charAt(0).toUpperCase() + rec.type.slice(1).replace(/-/g, " ");
+export function reopenRecordedSurface(rec: EmbeddedSurface, sessionId: string): SurfaceConfig {
+  const label = rec.type.charAt(0).toUpperCase() + rec.type.slice(1).replace(/-/g, " ");
   const payload: Record<string, unknown> = { prompt: rec.prompt };
   if (rec.url) payload.url = rec.url;
   return {
@@ -131,20 +133,26 @@ export function surfaceLabel(type: string, payload: unknown): string {
     let host = "Drive";
     try {
       host = `Drive · ${new URL(String(p.url ?? "")).hostname.replace(/^www\./, "")}`;
-    } catch { /* keep 'Drive' */ }
+    } catch {
+      /* keep 'Drive' */
+    }
     return host;
   }
 
   let hint = "";
   if (typeof p.url === "string" && p.url) {
-    try { hint = new URL(p.url).hostname.replace(/^www\./, ""); } catch { hint = p.url.slice(0, 22); }
+    try {
+      hint = new URL(p.url).hostname.replace(/^www\./, "");
+    } catch {
+      hint = p.url.slice(0, 22);
+    }
   } else if (typeof p.question === "string") hint = p.question;
   else if (typeof p.name === "string") hint = p.name;
   else if (typeof p.command === "string") hint = p.command;
   else if (typeof p.prompt === "string") hint = p.prompt;
   else if (typeof p.diff === "string") {
     const file = /^diff --git a\/([^ ]+)/m.exec(p.diff)?.[1];
-    hint = file ? file.split("/").pop() ?? "" : "diff";
+    hint = file ? (file.split("/").pop() ?? "") : "diff";
   }
   hint = hint.trim().replace(/\s+/g, " ");
   if (!hint) return base;

@@ -3,7 +3,16 @@ import { Card, CardContent } from "@/components/ui/card";
 const features = [
   {
     icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="white"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <path d="M12 5v14" />
         <path d="M5 12h14" />
       </svg>
@@ -14,7 +23,16 @@ const features = [
   },
   {
     icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="white"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <circle cx="12" cy="12" r="10" />
         <polyline points="12 6 12 12 16 14" />
       </svg>
@@ -25,7 +43,16 @@ const features = [
   },
   {
     icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="white"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <rect x="3" y="3" width="18" height="18" rx="2" />
         <path d="M3 9h18" />
         <path d="M9 21V9" />
@@ -39,10 +66,17 @@ const features = [
 
 export default function LandingFeatures() {
   return (
-    <section className="border-t bg-ha-surface py-20" id="features" style={{ borderColor: "#e8e4de" }}>
+    <section
+      className="border-t bg-ha-surface py-20"
+      id="features"
+      style={{ borderColor: "#e8e4de" }}
+    >
       <div className="mx-auto max-w-6xl px-6">
         <div className="mb-14 text-center">
-          <p className="mb-2 text-sm font-medium" style={{ color: "#7c6fa8", letterSpacing: "0.5px" }}>
+          <p
+            className="mb-2 text-sm font-medium"
+            style={{ color: "#7c6fa8", letterSpacing: "0.5px" }}
+          >
             FEATURES
           </p>
           <h2 className="text-3xl font-bold" style={{ color: "#3d3d3d" }}>
@@ -57,7 +91,10 @@ export default function LandingFeatures() {
               className="hover-lift"
               style={{ backgroundColor: "#faf7f2", borderColor: "#e8e4de", borderWidth: 1 }}
             >
-              <CardContent className="flex flex-col gap-3 px-6 pt-6" style={{ paddingBottom: "24px" }}>
+              <CardContent
+                className="flex flex-col gap-3 px-6 pt-6"
+                style={{ paddingBottom: "24px" }}
+              >
                 <div
                   className="flex h-10 w-10 items-center justify-center rounded-md"
                   style={{ backgroundColor: "#7c6fa8" }}

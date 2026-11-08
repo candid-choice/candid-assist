@@ -46,9 +46,9 @@ const ITEMS: SurfaceItem[] = [
     urlPlaceholder: "https://…",
   },
   {
-    type: "image",
-    label: "Image",
-    hint: "View an image side-by-side",
+    type: "canvas",
+    label: "Mark up an image",
+    hint: "Open an image and annotate it for the agent",
     icon: <IconPhoto size={15} stroke={1.75} />,
     needsUrl: true,
     urlPlaceholder: "https://…/image.png",
@@ -207,11 +207,7 @@ export function AddSurfaceMenu() {
                 >
                   Back
                 </button>
-                <button
-                  type="submit"
-                  className="ha-add-surface-go"
-                  disabled={!url.trim()}
-                >
+                <button type="submit" className="ha-add-surface-go" disabled={!url.trim()}>
                   Add
                 </button>
               </div>

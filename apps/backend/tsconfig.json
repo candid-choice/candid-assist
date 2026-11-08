@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-    "moduleResolution": "node",
     "esModuleInterop": true,
     "declaration": true,
     "strict": true,
@@ -13,7 +12,7 @@
     "incremental": true,
     "skipLibCheck": true,
     "outDir": "./dist",
-    "baseUrl": "./",
+    "rootDir": "./src",
     "paths": {
       "@/*": ["./src/*"]
     }

@@ -9,13 +9,7 @@ so it never spills off-screen near the sidebar edges.
 */
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import {
-  IconArchive,
-  IconCopy,
-  IconRestore,
-  IconSkull,
-  IconTrash,
-} from "@tabler/icons-react";
+import { IconArchive, IconCopy, IconRestore, IconSkull, IconTrash } from "@tabler/icons-react";
 import "./index.css";
 
 interface SidebarSession {

@@ -82,7 +82,9 @@
   border: 1px solid #2c313d;
   background: #232735;
   color: #dbe0e8;
-  transition: background 0.12s, border-color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
 }
 
 .ha-splash-actions .ha-btn:hover:not(:disabled) {

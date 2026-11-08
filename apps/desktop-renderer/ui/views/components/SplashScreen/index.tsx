@@ -19,8 +19,8 @@ export function SplashScreen() {
         </span>
         <h1 className="ha-splash-title">Human Assist</h1>
         <p className="ha-splash-tagline">
-          Your human-in-the-loop workspace — sessions, curated web, and
-          agent surfaces, tied to your account.
+          Your human-in-the-loop workspace — sessions, curated web, and agent surfaces, tied to your
+          account.
         </p>
         <div className="ha-splash-actions">
           <button
@@ -29,16 +29,12 @@ export function SplashScreen() {
           >
             Sign in
           </button>
-          <button
-            className="ha-btn ha-splash-btn"
-            onClick={() => openSignIn("register")}
-          >
+          <button className="ha-btn ha-splash-btn" onClick={() => openSignIn("register")}>
             Create account
           </button>
         </div>
         <p className="ha-splash-foot">
-        Create an account to get started — it takes a moment, and your
-        workspace comes with you.
+          Create an account to get started — it takes a moment, and your workspace comes with you.
         </p>
       </div>
     </div>

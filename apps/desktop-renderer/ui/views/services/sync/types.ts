@@ -5,15 +5,15 @@ Client-side mirrors of the backend Firestore documents
 desktop renderer cannot import backend workspace code.
 */
 
-export type SessionStatus = 'active' | 'waiting' | 'done' | 'error' | 'dead';
+export type SessionStatus = "active" | "waiting" | "done" | "error" | "dead";
 
 export interface SurfaceUserResponse {
-  type: 'feedback' | 'approval' | 'dismiss';
+  type: "feedback" | "approval" | "dismiss";
   text: string;
 }
 
 export interface SurfaceClaudeResponse {
-  type: 'action' | 'summary' | 'error';
+  type: "action" | "summary" | "error";
   text: string;
 }
 

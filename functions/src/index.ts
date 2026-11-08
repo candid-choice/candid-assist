@@ -18,7 +18,7 @@
  * /auth/register — backend-only provisioning left those users without
  * a profile document. Blocking triggers cover every creation path.
  */
-import './admin-init';
+import "./admin-init";
 
-export { beforeUserCreate } from './blocking/before-create';
-export { beforeSignIn } from './blocking/before-sign-in';
+export { beforeUserCreate } from "./blocking/before-create";
+export { beforeSignIn } from "./blocking/before-sign-in";

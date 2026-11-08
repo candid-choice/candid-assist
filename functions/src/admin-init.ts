@@ -7,12 +7,10 @@
  * locally (against the emulators via FIRESTORE_EMULATOR_HOST /
  * FIREBASE_AUTH_EMULATOR_HOST) and in Cloud (ADC picked up automatically).
  */
-import { getApps, initializeApp } from 'firebase-admin/app';
+import { getApps, initializeApp } from "firebase-admin/app";
 
 if (!getApps().length) {
   const projectId =
-    process.env.GOOGLE_CLOUD_PROJECT ??
-    process.env.GCLOUD_PROJECT ??
-    'candid-assist';
+    process.env.GOOGLE_CLOUD_PROJECT ?? process.env.GCLOUD_PROJECT ?? "candid-assist";
   initializeApp({ projectId });
 }
