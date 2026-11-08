@@ -174,9 +174,22 @@ export class RateLimitedError extends Error {
 }
 
 /** Wait for permission to load a page from `host`. Never throws. */
+/** Loopback and `.local` are our own dev stack, our test servers and the
+ *  desktop app's MCP port — there is no WAF at the other end. Treating them
+ *  like a hostile site made unrelated tests fail (one 404 probe penalized
+ *  127.0.0.1 and every later call in the process sat out the cooldown), and
+ *  it can never protect anything: nobody rate-limits their own laptop. */
+export function isLocalHost(host: string): boolean {
+  const h = host
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
+  return h === "localhost" || h === "::1" || h.startsWith("127.") || h.endsWith(".local");
+}
+
 export async function acquire(urlOrHost: string | undefined): Promise<AcquireResult> {
   const host = urlOrHost && urlOrHost.includes("/") ? hostOf(urlOrHost) : (urlOrHost ?? null);
-  if (!host) return { allowed: true, waitedMs: 0 };
+  if (!host || isLocalHost(host)) return { allowed: true, waitedMs: 0 };
   if (policy.minIntervalMs <= 0 && policy.burst >= 50) return { allowed: true, waitedMs: 0 };
 
   const s = stateFor(host);
@@ -237,7 +250,7 @@ export async function acquire(urlOrHost: string | undefined): Promise<AcquireRes
 /** A site blocked/challenged us (or answered 429/403): back off from it. */
 export function penalize(urlOrHost: string | undefined, reason: string): void {
   const host = urlOrHost && urlOrHost.includes("/") ? hostOf(urlOrHost) : (urlOrHost ?? null);
-  if (!host || policy.penaltyMs <= 0) return;
+  if (!host || isLocalHost(host) || policy.penaltyMs <= 0) return;
   const s = stateFor(host);
   s.penaltyUntil = Math.max(s.penaltyUntil, Date.now() + policy.penaltyMs);
   s.penaltyReason = reason.slice(0, 120);

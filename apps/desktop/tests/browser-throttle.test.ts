@@ -13,6 +13,7 @@ import {
   DEFAULT_POLICY,
   forgive,
   hostOf,
+  isLocalHost,
   penalize,
   resetHosts,
   resetPolicy,
@@ -119,5 +120,41 @@ describe("policy", () => {
     const s = snapshot();
     expect(s.policy).toBeDefined();
     expect(s.hosts.find((h) => h.host === "counted.test")?.hits).toBe(1);
+  });
+});
+
+describe("loopback is never paced or penalized", () => {
+  it("recognises our own addresses", () => {
+    expect(isLocalHost("localhost")).toBe(true);
+    expect(isLocalHost("LOCALHOST")).toBe(true);
+    expect(isLocalHost("127.0.0.1")).toBe(true);
+    expect(isLocalHost("::1")).toBe(true);
+    expect(isLocalHost("[::1]")).toBe(true);
+    expect(isLocalHost("dev.local")).toBe(true);
+    expect(isLocalHost("gaswork.com")).toBe(false);
+    expect(isLocalHost("notlocalhost.com")).toBe(false);
+  });
+
+  it("hands a loopback token instantly and records no penalty", async () => {
+    setPolicy({ penaltyMs: 30_000 });
+    penalize("http://127.0.0.1:3615/mcp", "404 from a tools/list probe");
+    const t0 = Date.now();
+    const res = await acquire("http://127.0.0.1:3615/mcp");
+    expect(res.allowed).toBe(true);
+    expect(res.waitedMs).toBe(0);
+    expect(Date.now() - t0).toBeLessThan(250);
+    // Nothing was recorded for that host, so later calls are not stuck either.
+    expect(snapshot().hosts.some((h) => h.host === "127.0.0.1")).toBe(false);
+    resetPolicy();
+  });
+
+  it("still penalizes a real host that pushed back", () => {
+    setPolicy({ penaltyMs: 30_000 });
+    penalize("https://gaswork.com/robots.txt", "challenge page");
+    const row = snapshot().hosts.find((h) => h.host === "gaswork.com");
+    expect(row).toBeDefined();
+    expect(row!.penaltyRemainingMs).toBeGreaterThan(0);
+    expect(row!.penaltyReason).toContain("challenge page");
+    resetPolicy();
   });
 });
