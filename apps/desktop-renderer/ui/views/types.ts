@@ -84,11 +84,44 @@ export interface CanvasPayload {
   markupAt?: number;
 }
 
+/** One row of the capture picker. Displays and individual windows come from
+ *  Electron's desktopCapturer (with its own thumbnails — humans choose
+ *  visually, they cannot tell "Screen 1" from "Window: Screen 1"); `pane` is a
+ *  Human Assist browser page, captured by webContentsId, which is pixel-sharp
+ *  instead of cropping the display it happens to sit on. */
+export interface CaptureSourceOption {
+  id: string;
+  name: string;
+  kind: "screen" | "window" | "pane";
+  thumbnail?: string;
+  width?: number;
+  height?: number;
+}
+
 export interface ScreenPayload {
-  /** Capture mode */
-  mode?: "region" | "window" | "screen";
+  /** Panel mood: a still, or a clip (live/recording/played back) */
+  mode?: "region" | "window" | "screen" | "screenshot" | "video" | "recording";
+  /** What the agent asked for (fullscreen / region / window / video …) */
+  requestedMode?: string;
+  /** Instruction shown to the human */
+  prompt?: string;
   /** Optional initial capture data */
   captureData?: string;
+  /** Capturable sources for the picker */
+  sources?: CaptureSourceOption[];
+  /** Currently selected source id */
+  selectedSourceId?: string;
+  /** Set while a recording is running (stop button + elapsed timer) */
+  recordingId?: string;
+  /** Last result, served from the app's /captures route on the MCP port */
+  file?: string;
+  url?: string;
+  bytes?: number;
+  width?: number;
+  height?: number;
+  seconds?: number;
+  fps?: number;
+  note?: string;
 }
 
 export interface InputPayload {
