@@ -5,6 +5,11 @@ WebSocket surface:push broadcast type mapping (renderer routing
 depends on the correct type).
 */
 
+import * as fs from "node:fs";
+import { request as httpRequest } from "node:http";
+import * as os from "node:os";
+import * as path from "node:path";
+
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { startMcpServer, permissionBroker, closeSurface } from "@/mcp-server";
 import { setGuestResolver, registerGuest } from "@/guest-registry";
@@ -129,7 +134,7 @@ describe("MCP tools/call router", () => {
       method: "POST",
       body: JSON.stringify({ jsonrpc: "2.0", method: "tools/list", id: 1 }),
     }).then((r) => r.json());
-    expect(res.result.tools).toHaveLength(32); // +readSurface, browserThrottle, browserClearSiteData, -openImageSurface
+    expect(res.result.tools).toHaveLength(36); // +listCaptureSources, captureScreenshot, screenRecording, analyzeCapture
     expect(res.result.tools.map((t: { name: string }) => t.name)).toContain("readSurface");
     const names = res.result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain("openBrowserSurface");
@@ -839,5 +844,66 @@ describe("delegateTask (internal-model planner → sequence engine)", () => {
   it("delegateTask requires a goal", async () => {
     const res = await callDT({}, 1051);
     expect(res.error!.message).toMatch(/MCP_021/);
+  });
+});
+describe("/captures route (pixels over HTTP, never through a tool result)", () => {
+  const dir = path.join(os.homedir(), "Downloads", "human-assist-captures");
+
+  it("serves a capture with the right type and no-store", async () => {
+    fs.mkdirSync(dir, { recursive: true });
+    // 1x1 PNG written straight into the captures folder.
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    const name = "route-test.png";
+    fs.writeFileSync(path.join(dir, name), png);
+    try {
+      const res = await fetch(`http://localhost:${HTTP_PORT}/captures/${name}`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toBe("image/png");
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect((await res.arrayBuffer()).byteLength).toBe(png.length);
+    } finally {
+      fs.rmSync(path.join(dir, name), { force: true });
+    }
+  });
+
+  it("refuses to leave the captures folder", async () => {
+    // Percent-encoded traversal is the form that actually reaches the handler —
+    // fetch/curl normalise literal "../" away before it ever leaves the client.
+    const raw = (p: string) =>
+      new Promise<number>((resolve, reject) => {
+        // node:http lets us send the request line untouched (fetch re-encodes
+        // and normalises it, which hides exactly the case we care about).
+        const req = httpRequest(
+          { host: "127.0.0.1", port: HTTP_PORT, path: p, method: "GET" },
+          (res) => {
+            res.resume();
+            resolve(res.statusCode ?? 0);
+          },
+        );
+        req.on("error", reject);
+        req.end();
+      });
+    for (const bad of [
+      "/captures/%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+      "/captures/..%2f..%2f..%2fetc%2fpasswd",
+      "/captures/a%2fb.png",
+      "/captures/%2e%2e%2f.env",
+    ]) {
+      expect(await raw(bad), bad).toBe(400);
+    }
+    // Anything not in the folder is never handed out as an image, whatever the
+    // router's status code says.
+    const res = await fetch(`http://localhost:${HTTP_PORT}/captures/passwd`, {
+      headers: { accept: "*/*" },
+    });
+    expect(res.headers.get("content-type") ?? "").not.toMatch(/^image\//);
+  });
+
+  it("404s a capture that is not there (instead of inventing one)", async () => {
+    const res = await fetch(`http://localhost:${HTTP_PORT}/captures/nope-${Date.now()}.png`);
+    expect(res.status).toBe(404);
   });
 });
