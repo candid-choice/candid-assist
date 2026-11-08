@@ -5,5 +5,10 @@
   "packages": ["npm:pi-playwright", "npm:@sentiolabs/pi-frontend-design"],
   "permissions": {
     "deny": ["WebSearch"]
+  },
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 32768,
+    "keepRecentTokens": 20000
   }
 }
