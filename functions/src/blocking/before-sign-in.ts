@@ -6,14 +6,14 @@
  * workspace always has a profile to read, and refreshes the role claim
  * on every token.
  */
-import { beforeUserSignedIn } from 'firebase-functions/v2/identity';
-import { provisionUserDocument, resolveUserRole } from '../lib/provision';
+import { beforeUserSignedIn } from "firebase-functions/v2/identity";
+import { provisionUserDocument, resolveUserRole } from "../lib/provision";
 
 export const beforeSignIn = beforeUserSignedIn(async (event) => {
   const uid = event.data?.uid;
 
   if (!uid) {
-    console.warn('[beforeSignIn] Missing uid in beforeUserSignedIn event');
+    console.warn("[beforeSignIn] Missing uid in beforeUserSignedIn event");
     return { allow: true };
   }
 
@@ -24,7 +24,7 @@ export const beforeSignIn = beforeUserSignedIn(async (event) => {
     return { allow: true, customClaims: { role } };
   } catch (err) {
     // Do not lock users out over a profile repair failure.
-    console.error('[beforeSignIn] Error during beforeSignIn:', err);
-    return { allow: true, customClaims: { role: 'user' } };
+    console.error("[beforeSignIn] Error during beforeSignIn:", err);
+    return { allow: true, customClaims: { role: "user" } };
   }
 });
