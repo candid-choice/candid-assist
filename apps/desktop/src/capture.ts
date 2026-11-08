@@ -147,6 +147,10 @@ function safeName(raw: unknown, fallback: string, ext: string): string {
   let base = typeof raw === "string" ? raw.trim() : "";
   base = base
     .replace(/[^\w.\-]+/g, "-")
+    // Collapse separator runs: "../.." is contained by basename() anyway, but
+    // it should not come out of here looking like a path-traversal scar in the
+    // human's captures folder.
+    .replace(/[.\-]{2,}/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 64);
   if (!base) base = fallback;

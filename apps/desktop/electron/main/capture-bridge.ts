@@ -17,6 +17,7 @@
 
 import { app, BrowserWindow, desktopCapturer, session, webContents } from "electron";
 import * as fs from "node:fs";
+import * as path from "node:path";
 import type {
   CaptureBridge,
   CaptureSource,
@@ -26,10 +27,23 @@ import type {
   StillRequest,
 } from "../../src/capture";
 
-const RECORDER_PAGE = `data:text/html,${encodeURIComponent(
-  `<!doctype html><html><head><meta charset="utf-8"><title>Human Assist recorder</title></head>
-<body></body></html>`,
-)}`;
+const RECORDER_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Human Assist recorder</title></head>
+<body></body></html>`;
+
+let recorderPagePath: string | null = null;
+
+/** The recorder page MUST load from a secure context. A `data:` URL is not one
+ *  — Chromium hands such a page no `navigator.mediaDevices` at all, which is
+ *  exactly the "no mediaDevices in recorder context" failure this used to die
+ *  on. `file://` is potentially trustworthy, so a private 0600 file in the
+ *  app's own userData is enough: nothing is served and nothing is world-writable. */
+function recorderPage(): string {
+  if (recorderPagePath && fs.existsSync(recorderPagePath)) return recorderPagePath;
+  const file = path.join(app.getPath("userData"), "ha-recorder.html");
+  fs.writeFileSync(file, RECORDER_HTML, { mode: 0o600 });
+  recorderPagePath = file;
+  return file;
+}
 
 interface RecSession {
   win: BrowserWindow;
@@ -83,12 +97,23 @@ async function ensureRecorder(): Promise<BrowserWindow> {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
-      // getUserMedia needs a secure context; a data: URL is treated as one by
-      // Chromium's media pipeline in Electron with these constraints.
     },
   });
   trustedRecorderIds.add(win.webContents.id);
-  await win.loadURL(RECORDER_PAGE);
+  await win.loadFile(recorderPage());
+  // Fail here, with the origin named, rather than three layers down in a
+  // getUserMedia TypeError.
+  const hasMedia = (await win.webContents
+    .executeJavaScript(`!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)`, true)
+    .catch(() => false)) as boolean;
+  if (!hasMedia) {
+    win.destroy();
+    trustedRecorderIds.delete(win.webContents.id);
+    recorderWindow.win = null;
+    throw new Error(
+      `CAP_004: recorder context has no mediaDevices (origin ${win.webContents.getURL()}) — screen capture needs a secure context and the screen-recording permission`,
+    );
+  }
   recorderWindow.win = win;
   return win;
 }

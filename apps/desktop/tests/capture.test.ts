@@ -226,3 +226,16 @@ describe("recordings", () => {
     expect(estimateRecordingBytes(30, 1200)).toBe(Math.round((30 * 1200 * 1000) / 8));
   });
 });
+
+describe("capture file naming", () => {
+  it("does not smuggle path dots into the file name", async () => {
+    const res = await captureStill({
+      sourceId: "screen:0:0",
+      out: "../../../etc/evil.png",
+      force: true,
+    });
+    expect(path.dirname(res.file)).toBe(CAPTURES_DIR);
+    expect(path.basename(res.file)).not.toMatch(/\.\./);
+    expect(path.basename(res.file)).toBe("etc-evil.png");
+  });
+});
