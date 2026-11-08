@@ -141,3 +141,60 @@ export async function planGoal(goal: string, opts: PlanOptions = {}): Promise<Pl
     clearTimeout(timer);
   }
 }
+
+/** Vision hop for capture analysis: send an image (data URL) + a question to
+ *  the internal model and get prose back. This is what lets "take a
+ *  screenshot then do something with it" stay inside the app — the bytes go to
+ *  OUR model, not through the coding agent's chat. */
+export async function describeImage(
+  imageDataUrl: string,
+  question: string,
+  opts: PlanOptions = {},
+): Promise<{ answer: string; model: string }> {
+  if (!/^data:image\/(png|jpeg|webp);base64,/.test(imageDataUrl)) {
+    throw new Error("IMG_001: imageDataUrl must be a png/jpeg/webp data URL");
+  }
+  const base = (opts.baseUrl || process.env.HA_AGENT_BASE_URL || PLAN_DEFAULT_BASE_URL).replace(
+    /\/+$/,
+    "",
+  );
+  const doFetch = opts.fetchImpl ?? fetch;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 60_000);
+  try {
+    const modelId =
+      opts.modelId ||
+      process.env.HA_AGENT_MODEL ||
+      (await discoverModel(base, doFetch, controller.signal));
+    const res = await doFetch(`${base}/chat/completions`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: modelId,
+        temperature: 0,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: (question || "Describe what is on screen.").slice(0, 4000) },
+              { type: "image_url", image_url: { url: imageDataUrl } },
+            ],
+          },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(
+        `IMG_002: vision endpoint ${res.status} ${(await res.text().catch(() => "")).slice(0, 200)}`,
+      );
+    }
+    const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const raw = json?.choices?.[0]?.message?.content;
+    const answer = typeof raw === "string" ? raw.trim() : "";
+    if (!answer) throw new Error("IMG_003: vision endpoint returned no content");
+    return { answer, model: modelId };
+  } finally {
+    clearTimeout(timer);
+  }
+}
