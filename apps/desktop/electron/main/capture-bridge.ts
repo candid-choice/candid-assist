@@ -15,7 +15,7 @@
  a single executeJavaScript return that size is asking for trouble.
 */
 
-import { app, BrowserWindow, desktopCapturer, session, webContents } from "electron";
+import { app, BrowserWindow, desktopCapturer, screen, session, webContents } from "electron";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type {
@@ -143,20 +143,40 @@ export async function listSourcesBridge(opts: {
     thumbnailSize: opts.thumbnailSize ?? { width: 220, height: 130 },
     fetchWindowIcons: false,
   });
+  // Real display resolution comes from Electron's screen module: the source
+  // itself only knows about its (optional, scaled) thumbnail, and we usually
+  // ask for no thumbnail at all — an agent listing sources must not pay for
+  // JPEGs it will not look at. Physical pixels (bounds × devicePixelRatio),
+  // because that is the size the captured PNG actually has: a Retina panel
+  // whose logical bounds read 2056×1329 hands back a 4112×2658 shot, and a
+  // picker that promised the smaller number would look wrong against the file.
+  const displays = new Map<string, { width: number; height: number }>();
+  for (const d of screen.getAllDisplays()) {
+    const sf = d.scaleFactor || 1;
+    displays.set(String(d.id), {
+      width: Math.round(d.bounds.width * sf),
+      height: Math.round(d.bounds.height * sf),
+    });
+  }
   return sources
     .filter((s) => s.id && s.id !== "screen:0") // the placeholder "screen:0" is unusable
     .map((s) => {
       const kind: CaptureSource["kind"] = s.id.startsWith("screen:") ? "screen" : "window";
       const thumb = s.thumbnail;
       const size = thumb.getSize();
+      const disp = kind === "screen" ? displays.get(String(s.display_id ?? "")) : undefined;
       return {
         id: s.id,
-        name: s.name || (kind === "screen" ? `Display ${s.display_id ?? "?"}` : "Window"),
+        name:
+          s.name ||
+          (kind === "screen"
+            ? `Display ${s.display_id ?? "?"}`
+            : `Window ${s.id.split(":")[1] ?? ""}`.trim()),
         kind,
         displayId: s.display_id ? String(s.display_id) : undefined,
         thumbnail: size.width ? thumb.toDataURL() : undefined,
-        width: size.width || undefined,
-        height: size.height || undefined,
+        width: (disp?.width ?? size.width) || undefined,
+        height: (disp?.height ?? size.height) || undefined,
       };
     });
 }
