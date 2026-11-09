@@ -6,6 +6,8 @@
   "ports": [3600, 3601, 3602, 3604, 3613, 3614, 3615, 3616, 43179],
   "_gracePorts_comment": "3614/3615/43179 are bound by the desktop app itself, which restarts on its own (restart_app, single-instance contention). Down for less than the keeper's 20s grace means yellow/partial, not a crash — without this an app bounce spent launch budget and read as a stack crash.",
   "gracePorts": [3614, 3615, 43179],
+  "_graceMs_comment": "An Electron bounce costs whatever its bundler needs to rebuild and respawn — measured at ~35s here — so the keeper's 20s default would still spend launch budget on a restart we caused ourselves.",
+  "graceMs": 60000,
   "taskName": "candid-assist dev",
   "openUrls": [
     "http://localhost:3600/",
