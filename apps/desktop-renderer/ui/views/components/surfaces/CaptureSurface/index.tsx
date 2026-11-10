@@ -19,6 +19,7 @@ import {
   IconWindow,
   IconBrowser,
   IconLoader,
+  IconRefresh,
 } from "@tabler/icons-react";
 
 import type { SurfaceConfig, ScreenPayload, CaptureSourceOption } from "../../../types";
@@ -46,14 +47,45 @@ const KIND_ICON = {
 } as const;
 const KIND_LABEL = { screen: "Full screen", window: "Window", pane: "Browser pane" } as const;
 
+/** "2026-11-10T01:02:03.000Z" → "01:02" (local). The question a stale picker
+ *  raises is *how* stale, and an ISO timestamp does not answer it. */
+function hhmm(iso?: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 export function CaptureSurface({ config }: CaptureSurfaceProps) {
   const payload = config.payload ?? {};
   const options = payload.sources ?? [];
   const selected = payload.selectedSourceId ?? options[0]?.id;
   const recordingId = payload.recordingId;
   const [busy, setBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // The window list is a snapshot: desktopCapturer enumerates on-screen windows
+  // when it is called and macOS gives no event when one opens, minimises or
+  // moves to another Space. So the panel re-asks — on focus, and on demand.
+  const refresh = useCallback(() => {
+    setSyncing(true);
+    wsService.send({ type: "capture:refresh", surfaceId: config.id });
+  }, [config.id]);
+
+  useEffect(() => {
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!syncing) return;
+    const t = setTimeout(() => setSyncing(false), 4_000); // main re-pushes on arrival
+    return () => clearTimeout(t);
+  }, [syncing]);
 
   useEffect(() => {
     if (!recordingId) {
@@ -72,6 +104,11 @@ export function CaptureSurface({ config }: CaptureSurfaceProps) {
   useEffect(() => {
     setBusy(false);
   }, [payload.url, payload.recordingId, payload.note]);
+
+  useEffect(() => {
+    // Sources arrived (or the list came back empty) — stop showing a spinner.
+    setSyncing(false);
+  }, [payload.sources]);
 
   const send = useCallback(
     (action: "still" | "start" | "stop") => {
@@ -111,6 +148,19 @@ export function CaptureSurface({ config }: CaptureSurfaceProps) {
           )}
         </span>
         <span className="ha-capture-meta">{meta || payload.note || "Electron capture"}</span>
+        <button
+          type="button"
+          className="ha-capture-refresh"
+          onClick={refresh}
+          disabled={!!recordingId}
+          title="Re-list displays and windows (macOS only reports on-screen windows on the current Space)"
+        >
+          {syncing ? (
+            <IconLoader size={14} className="ha-capture-spin" />
+          ) : (
+            <IconRefresh size={14} />
+          )}
+        </button>
       </div>
 
       {payload.prompt ? <div className="ha-capture-prompt">{payload.prompt}</div> : null}
@@ -151,6 +201,14 @@ export function CaptureSurface({ config }: CaptureSurfaceProps) {
             );
           })
         )}
+      </div>
+
+      <div className="ha-capture-count">
+        {options.length} {options.length === 1 ? "source" : "sources"}
+        {syncing ? " · re-listing…" : ""}
+        {payload.sourcesAt ? ` · re-listed ${hhmm(payload.sourcesAt)}` : ""} · macOS offers only
+        on-screen windows on the current Space — minimised windows and windows on another Space
+        cannot appear here
       </div>
 
       <div className="ha-capture-actions">

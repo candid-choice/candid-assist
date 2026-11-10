@@ -109,6 +109,9 @@ export interface ScreenPayload {
   captureData?: string;
   /** Capturable sources for the picker */
   sources?: CaptureSourceOption[];
+  /** When `sources` was last (re)listed — the human needs to know how stale
+   *  the list is, since macOS only reports the current Space. */
+  sourcesAt?: string;
   /** Currently selected source id */
   selectedSourceId?: string;
   /** Set while a recording is running (stop button + elapsed timer) */

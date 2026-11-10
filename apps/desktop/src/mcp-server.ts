@@ -763,8 +763,11 @@ async function fillCaptureSources(surfaceId: string): Promise<void> {
     cur.payload = {
       ...cur.payload,
       sources,
+      sourcesAt: new Date().toISOString(),
       selectedSourceId: cur.payload?.selectedSourceId ?? sources[0]?.id,
-      note: sources.length ? undefined : "No capturable sources — is screen recording allowed?",
+      note: sources.length
+        ? undefined
+        : "No capturable sources. Either macOS Screen Recording permission for Electron is off (System Settings → Privacy & Security → Screen Recording) or every window is minimised / on another Space. Then hit ↻.",
     };
     notifySurfacePush({
       surfaceId,
@@ -2114,6 +2117,14 @@ function startWebSocketServer(port: number): WebSocketServer {
               status: "updated",
             });
           }
+        }
+        if (msg && msg.type === "capture:refresh" && typeof msg.surfaceId === "string") {
+          // Window lists go stale the moment the human opens something, and
+          // macOS gives no event when that happens — so the panel asks.
+          void fillCaptureSources(msg.surfaceId).catch((err: unknown) => {
+            console.error("[capture] re-list failed:", String(err));
+          });
+          return;
         }
         if (msg && msg.type === "capture:request") {
           void handleCaptureRequest(msg as Record<string, unknown>).catch((err: unknown) => {
@@ -3891,7 +3902,15 @@ async function handleCaptureScreenshot(
         agentProject: ctx?.agentProject,
       },
     );
-    if (!perm.allowed) return { status: "denied", reason: perm.decision, target: target.kindLabel };
+    if (!perm.allowed) {
+      const g = consentGuidance(perm.decision, target.kindLabel);
+      return {
+        status: "denied",
+        reason: perm.decision,
+        target: target.kindLabel,
+        ...g,
+      };
+    }
   }
   const res = await captureStill({
     ...(target.webContentsId !== undefined ? { webContentsId: target.webContentsId } : {}),
@@ -3976,7 +3995,15 @@ async function handleScreenRecording(
         agentProject: ctx?.agentProject,
       },
     );
-    if (!perm.allowed) return { status: "denied", reason: perm.decision, target: target.kindLabel };
+    if (!perm.allowed) {
+      const g = consentGuidance(perm.decision, target.kindLabel);
+      return {
+        status: "denied",
+        reason: perm.decision,
+        target: target.kindLabel,
+        ...g,
+      };
+    }
   }
   const handle = await startRecording({
     ...(target.webContentsId !== undefined ? { webContentsId: target.webContentsId } : {}),
@@ -4141,6 +4168,34 @@ let mcpHttpPort = 3615;
 
 /** Public URL for a file in the captures folder (what the UI and the
  *  markup canvas use — pixels over HTTP, never through a tool result). */
+/** A consent prompt nobody saw is not the same failure as a human saying no.
+ *  Both used to come back as a bare `{ status: "denied" }`, so the agent
+ *  retried a prompt that was waiting on someone's screen, or pushed on a
+ *  target the human had actually refused. Name the failure and the one action
+ *  that unblocks it. Exported so the wording is pinned by tests. */
+export function consentGuidance(
+  decision: string,
+  what: string,
+): { hint: string; nextStep: string } {
+  if (decision === "no-ui") {
+    return {
+      hint: `Nobody was asked: no Human Assist window is connected, so there was no one to approve capturing ${what}.`,
+      nextStep: "Open the Human Assist app, then call this tool again.",
+    };
+  }
+  if (decision === "timeout") {
+    return {
+      hint: `An Allow prompt for ${what} is sitting on the human's screen and went unanswered.`,
+      nextStep:
+        "Ask the human to click Allow in the Human Assist window, then call this tool again — do not retry blindly.",
+    };
+  }
+  return {
+    hint: `The human declined to allow capturing ${what}.`,
+    nextStep: "Do not retry this target; ask the human what they would rather capture.",
+  };
+}
+
 function captureUrlFor(file: string): string {
   const base = require("node:path").basename(file);
   return `http://127.0.0.1:${mcpHttpPort}/captures/${encodeURIComponent(base)}`;

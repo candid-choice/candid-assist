@@ -237,3 +237,89 @@ describe("CaptureSurface result", () => {
     expect(screen.getByText(/CAP_004/)).toBeTruthy();
   });
 });
+
+describe("CaptureSurface source list freshness", () => {
+  it("re-lists sources on demand, because macOS offers no event when a window appears", () => {
+    const send = vi.spyOn(wsService, "send").mockImplementation(() => {});
+    render(
+      <CaptureSurface
+        config={config({ sources: SOURCES, selectedSourceId: SOURCES[0].id })}
+        onDone={noop}
+        onCancel={noop}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /re-list|refresh/i }));
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: "capture:refresh" }));
+  });
+
+  it("re-lists when the window regains focus, so windows opened off-screen show up", () => {
+    const send = vi.spyOn(wsService, "send").mockImplementation(() => {});
+    render(
+      <CaptureSurface
+        config={config({ sources: SOURCES, selectedSourceId: SOURCES[0].id })}
+        onDone={noop}
+        onCancel={noop}
+      />,
+    );
+    send.mockClear();
+    fireEvent(window, new Event("focus"));
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: "capture:refresh" }));
+  });
+
+  it("says how many sources there are and names the macOS limitation", () => {
+    render(
+      <CaptureSurface
+        config={config({ sources: SOURCES, selectedSourceId: SOURCES[0].id })}
+        onDone={noop}
+        onCancel={noop}
+      />,
+    );
+    expect(screen.getByText(/3 sources/)).toBeTruthy();
+    expect(screen.getByText(/current\s+Space/)).toBeTruthy();
+  });
+
+  it("stamps when the list was last refreshed, so staleness is visible", () => {
+    render(
+      <CaptureSurface
+        config={config({
+          sources: SOURCES,
+          selectedSourceId: SOURCES[0].id,
+          sourcesAt: "2026-11-10T05:06:07.000Z",
+        })}
+        onDone={noop}
+        onCancel={noop}
+      />,
+    );
+    // Local time, not the ISO blob — the question is "how stale", not "what epoch".
+    expect(screen.getByText(/re-listed \d{1,2}:\d{2}/)).toBeTruthy();
+  });
+
+  it("says nothing about a refresh time it does not have", () => {
+    render(
+      <CaptureSurface
+        config={config({ sources: SOURCES, selectedSourceId: SOURCES[0].id })}
+        onDone={noop}
+        onCancel={noop}
+      />,
+    );
+    expect(screen.queryByText(/re-listed/)).toBeNull();
+  });
+
+  it("shows the permission/Space explanation when the list came back empty", () => {
+    render(
+      <CaptureSurface
+        config={config({
+          sources: [],
+          note: "No capturable sources. Either macOS Screen Recording permission for Electron is off (System Settings → Privacy & Security → Screen Recording) or every window is minimised / on another Space. Then hit ↻.",
+        })}
+        onDone={noop}
+        onCancel={noop}
+      />,
+    );
+    // The note shows both in the meta line and in the empty state, so ask for
+    // "at least one" rather than getByText (which throws on the duplicate).
+    expect(screen.getAllByText(/Screen Recording permission/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/another Space/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/0 sources/)).toBeTruthy();
+  });
+});

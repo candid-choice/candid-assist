@@ -12,7 +12,7 @@
 
 .ha-capture-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
@@ -209,4 +209,36 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Re-list: the window list is a snapshot and macOS offers no event when a
+   window appears, so refreshing has to be a thing the human can see. */
+.ha-capture-refresh {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: #b9b9c8;
+  cursor: pointer;
+  background: #1d1d27;
+  border: 1px solid #2c2c3a;
+  border-radius: 6px;
+}
+
+.ha-capture-refresh:hover:not(:disabled) {
+  color: #fff;
+  background: #262632;
+}
+
+.ha-capture-refresh:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.ha-capture-count {
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: #6d6d7d;
 }
