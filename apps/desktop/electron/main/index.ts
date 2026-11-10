@@ -47,6 +47,7 @@ import fs from "node:fs";
 
 import { startMcpServer } from "../../src/mcp-server";
 import { startMcpWebSocketServer, stopMcpWebSocketServer } from "../../src/mcp-websocket";
+import { registerCaptureBridge } from "./capture-bridge";
 
 // MCP/WS ports — overridable so the Electrobun desktop can coexist
 // during migration. The WS port is forwarded to the renderer via
@@ -74,18 +75,52 @@ const isDev = !app.isPackaged;
 
 // One instance per userData profile — two instances share the same
 // IndexedDB/LevelDB directory and the second one gets LOCK errors.
-if (!app.requestSingleInstanceLock()) {
-  console.error(
-    "[main] Another Human Assist Electron instance is already running — exiting. " +
-      "(If you started `pnpm dev:electron` elsewhere, close that window first.)",
-  );
-  app.quit();
-} else {
-  app.on("second-instance", () => {
-    win?.show();
-    win?.focus();
-  });
+//
+// A `dev` instance that loses the race does NOT give up immediately: during a
+// stack bounce the previous window may still be releasing the lock, or the
+// dev-stack watchdog may be killing a stray hand-launched copy. A supervised
+// component that exits here stays missing for the rest of the session (and
+// exiting with 0 made the stack believe it finished cleanly, so nothing
+// restarted it), so we wait for the lock to free up before declaring defeat.
+const LOCK_WAIT_MS = 25_000;
+let ownsSingleInstance = app.requestSingleInstanceLock();
+let lockWait: Promise<boolean> = Promise.resolve(ownsSingleInstance);
+
+if (!ownsSingleInstance) {
+  if (isDev) {
+    console.warn(
+      "[main] another Human Assist instance holds the single-instance lock — " +
+        "waiting up to " +
+        LOCK_WAIT_MS / 1000 +
+        's for it to release — a stray "pnpm dev:electron"? Close that window first.',
+    );
+    lockWait = new Promise<boolean>((resolve) => {
+      const deadline = Date.now() + LOCK_WAIT_MS;
+      const timer = setInterval(() => {
+        if (app.requestSingleInstanceLock()) {
+          clearInterval(timer);
+          ownsSingleInstance = true;
+          console.log("[main] single-instance lock acquired after waiting");
+          resolve(true);
+        } else if (Date.now() > deadline) {
+          clearInterval(timer);
+          resolve(false);
+        }
+      }, 500);
+    });
+  } else {
+    console.error(
+      "[main] Another Human Assist Electron instance is already running — exiting. " +
+        "(If you started `pnpm dev:electron` elsewhere, close that window first.)",
+    );
+    app.exit(0);
+  }
 }
+
+app.on("second-instance", () => {
+  win?.show();
+  win?.focus();
+});
 
 // ── Window ─────────────────────────────────────────────────────────────
 
@@ -587,7 +622,18 @@ async function clearSiteData(opts: {
   return { status: "cleared", host: host ?? "(all)", cleared };
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (!(await lockWait)) {
+    // Non-zero on purpose: the dev-stack watchdog must see a FAILED component
+    // (and retry / halt on budget) rather than a clean exit it will never
+    // revisit.
+    console.error(
+      "[main] another instance kept the single-instance lock — this copy is not starting. " +
+        "If you launched the app by hand, close it and restart the stack.",
+    );
+    app.exit(1);
+    return;
+  }
   applyBrowsingUserAgent();
   createWindow();
   // Lock MCP to the persisted auth state BEFORE any agent can connect.
@@ -597,6 +643,12 @@ app.whenReady().then(() => {
   startMcpServer(MCP_PORT, WS_PORT);
   // WebSocket MCP for pi (@0xkobold/pi-mcp) — loopback only.
   startMcpWebSocketServer();
+
+  // Screenshots / screen recordings go through Electron (desktopCapturer for
+  // sources, webContents.capturePage for panes, MediaRecorder in a hidden
+  // recorder window) — no CLI shelling out, and files stay on disk instead of
+  // arriving in tool results as base64.
+  registerCaptureBridge();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

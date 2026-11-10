@@ -15,6 +15,7 @@ import {
   listGuestSurfaceIds,
   unregisterGuest,
   type GuestHandle,
+  wcIdForSurface,
 } from "./guest-registry";
 import { checkForUpdates, onUpdaterState } from "./updater";
 import {
@@ -27,7 +28,17 @@ import {
   type ManagedProcess,
 } from "./process-registry";
 import { v4 as uuidv4 } from "uuid";
-import { planGoal } from "./task-service";
+import { planGoal, describeImage } from "./task-service";
+import {
+  CAPTURES_DIR,
+  captureAvailable,
+  captureStill,
+  listRecordings,
+  listSources,
+  startRecording,
+  stopRecording,
+  type Rect,
+} from "./capture";
 import {
   BLOCKER_FACTS_JS,
   captchaLike,
@@ -666,25 +677,181 @@ function handleInputRespond(msg: Record<string, unknown>): void {
   console.log(`[input] answered ${id}: ${String(answer).slice(0, 80)}`);
 }
 
-function handleOpenScreenCapture(args: unknown): Record<string, unknown> {
-  const obj = args as Record<string, unknown>;
-  const mode = obj["mode"] as string | undefined;
-  if (!["region", "window", "fullscreen"].includes(mode ?? "")) {
-    throw new Error("MCP_001: Invalid screen capture mode");
+/** Modes we accept. The old three are kept (the desktop toolbar uses them);
+ *  the rest are what the capture tools mean by "a still" / "a clip". */
+const SCREEN_MODES = [
+  "region",
+  "window",
+  "fullscreen",
+  "screen",
+  "display",
+  "screenshot",
+  "video",
+  "recording",
+];
+
+function handleOpenScreenCapture(args: unknown, ctx?: McpAgentCtx): Record<string, unknown> {
+  const obj = (args ?? {}) as Record<string, unknown>;
+  const mode = typeof obj["mode"] === "string" ? obj["mode"] : "fullscreen";
+  if (!SCREEN_MODES.includes(mode)) {
+    throw new Error(`MCP_001: Invalid screen capture mode "${mode}"`);
   }
   if (openSurfaces.size >= MAX_SURFACES) {
     throw new Error("MCP_002: Maximum surfaces reached");
   }
   const id = generateSurfaceId();
+  const recording = mode === "video" || mode === "recording";
+  const payload: Record<string, unknown> = {
+    // The panel is one component in two moods; `requestedMode` keeps what the
+    // caller asked for for readSurface.
+    mode: recording ? "video" : "screenshot",
+    requestedMode: mode,
+    prompt: typeof obj["prompt"] === "string" ? obj["prompt"] : undefined,
+    sources: [],
+    capturedAt: new Date().toISOString(),
+  };
   openSurfaces.set(id, {
     surfaceId: id,
     type: "screen",
-    payload: { mode },
+    payload,
     createdAt: Date.now(),
     lastActive: Date.now(),
     status: "open",
   });
-  return { surfaceId: id, status: "started" };
+  notifySurfacePush({ surfaceId: id, type: "screen", payload, status: "open" });
+  // desktopCapturer can take a beat (and needs the screen-recording grant), so
+  // the picker fills itself in rather than delaying the panel.
+  void fillCaptureSources(id);
+  return {
+    surfaceId: id,
+    status: "ready",
+    hint: "The human picks the source (a display, one window, or a browser pane) in the panel and clicks Screenshot / Record; readSurface({surfaceId}) or the capture tools return the file instead of base64.",
+  };
+}
+
+/** Fill the picker with capturable sources (displays + individual windows,
+ *  with Electron's own thumbnails — the human chooses visually or an agent
+ *  cannot tell "Screen 1" from "Window: Screen 1"). */
+async function fillCaptureSources(surfaceId: string): Promise<void> {
+  const rec = openSurfaces.get(surfaceId);
+  if (!rec || rec.type !== "screen") return;
+  try {
+    const list = await listSources({ types: ["screen", "window"], thumbnails: true });
+    const cur = openSurfaces.get(surfaceId);
+    if (!cur) return;
+    // Browser panes are first-class targets: webContents.capturePage is sharper
+    // than cropping the display they sit on, and "the page you are looking at"
+    // is usually what a human means.
+    const panes = [...openSurfaces.values()]
+      .filter((sv) => sv.type === "browser" && sv.status === "open")
+      .map((sv) => ({
+        id: `pane:${sv.surfaceId}`,
+        name: String(sv.payload?.title ?? sv.payload?.url ?? sv.surfaceId),
+        kind: "pane" as const,
+      }));
+    const sources = [
+      ...list.map((sc) => ({
+        id: sc.id,
+        name: sc.name,
+        kind: sc.kind,
+        thumbnail: sc.thumbnail,
+        width: sc.width,
+        height: sc.height,
+      })),
+      ...panes,
+    ];
+    cur.payload = {
+      ...cur.payload,
+      sources,
+      sourcesAt: new Date().toISOString(),
+      selectedSourceId: cur.payload?.selectedSourceId ?? sources[0]?.id,
+      note: sources.length
+        ? undefined
+        : "No capturable sources. Either macOS Screen Recording permission for Electron is off (System Settings → Privacy & Security → Screen Recording) or every window is minimised / on another Space. Then hit ↻.",
+    };
+    notifySurfacePush({
+      surfaceId,
+      type: "screen",
+      payload: cur.payload,
+      status: "updated",
+    });
+  } catch (e) {
+    const cur = openSurfaces.get(surfaceId);
+    if (!cur) return;
+    cur.payload = { ...cur.payload, note: `Capture unavailable: ${String(e)}` };
+    notifySurfacePush({ surfaceId, type: "screen", payload: cur.payload, status: "updated" });
+  }
+}
+
+/** The panel's buttons: capture:request from the renderer. Human-initiated, so
+ *  no consent gate — and files go to disk + the /captures route, never back
+ *  through the chat as base64. */
+async function handleCaptureRequest(msg: Record<string, unknown>): Promise<void> {
+  const id = typeof msg["surfaceId"] === "string" ? msg["surfaceId"] : undefined;
+  if (!id) return;
+  const rec = openSurfaces.get(id);
+  if (!rec || rec.type !== "screen") return;
+  const action = typeof msg["action"] === "string" ? msg["action"] : "still";
+  const pane = typeof msg["paneSurfaceId"] === "string" ? msg["paneSurfaceId"] : undefined;
+  const rawSource = typeof msg["sourceId"] === "string" ? msg["sourceId"] : undefined;
+  const sourceId = rawSource && !rawSource.startsWith("pane:") ? rawSource : undefined;
+  const wcId = pane ? wcIdForSurface(pane) : undefined;
+  const patch = (extra: Record<string, unknown>) => {
+    const cur = openSurfaces.get(id);
+    if (!cur) return;
+    cur.payload = { ...cur.payload, ...extra };
+    cur.lastActive = Date.now();
+    notifySurfacePush({
+      surfaceId: id,
+      type: "screen",
+      payload: cur.payload,
+      status: "updated",
+    });
+  };
+  if (action !== "stop" && wcId === undefined && !sourceId) {
+    patch({ note: "Pick a source first (a display, a window, or a browser pane)." });
+    return;
+  }
+  const target = wcId !== undefined ? { webContentsId: wcId } : { sourceId };
+  try {
+    if (action === "still") {
+      const res = await captureStill({ ...target, format: "png" });
+      patch({
+        mode: "screenshot",
+        file: res.file,
+        url: captureUrlFor(res.file),
+        bytes: res.bytes,
+        width: res.width,
+        height: res.height,
+        note: res.status === "unchanged" ? "Same as the previous shot of this source." : undefined,
+        capturedAt: new Date().toISOString(),
+      });
+    } else if (action === "start") {
+      const h = await startRecording({ ...target });
+      patch({
+        mode: "video",
+        recordingId: h.recordingId,
+        url: undefined,
+        note: `Recording ${h.maxSeconds}s of ${h.fps}fps — click Stop when done.`,
+      });
+    } else if (action === "stop") {
+      const r = await stopRecording(
+        typeof rec.payload?.recordingId === "string" ? rec.payload.recordingId : undefined,
+      );
+      patch({
+        mode: "video",
+        recordingId: undefined,
+        file: r.file,
+        url: captureUrlFor(r.file),
+        bytes: r.bytes,
+        seconds: r.seconds,
+        fps: r.fps,
+        note: r.error ?? undefined,
+      });
+    }
+  } catch (e) {
+    patch({ note: `Capture failed: ${String(e)}`, recordingId: undefined });
+  }
 }
 
 function handleOpenCodeDiff(args: unknown): Record<string, unknown> {
@@ -930,6 +1097,123 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object",
       properties: { surfaceId: { type: "string" } },
+    },
+  },
+  {
+    name: "listCaptureSources",
+    description:
+      "List what can be captured through Electron: every display (kind=screen, use one for 'full screen') and every individual window (kind=window), each with the sourceId to pass to captureScreenshot/screenRecording. Pass thumbnails:true ONLY when a human needs to pick from the UI — thumbnails are data URLs and would bloat the result. Browser panes opened by Human Assist don't need a sourceId: capture by surfaceId (webContents.capturePage is sharper than cropping the display).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        types: {
+          type: "array",
+          items: { type: "string", enum: ["screen", "window"] },
+          description: "Defaults to both",
+        },
+        thumbnails: {
+          type: "boolean",
+          description: "Include preview data URLs for the picker UI (default false)",
+        },
+      },
+    },
+  },
+  {
+    name: "captureScreenshot",
+    description:
+      "Take a screenshot through Electron — the pixels land on disk (~/Downloads/human-assist-captures) and the result carries {file, agentFile, url, bytes, width, height}, NOT base64. Targets: surfaceId (a Human Assist pane; sharpest, uses webContents.capturePage), sourceId (from listCaptureSources: one display or one specific window), or target:'display'|'window' (with windowTitle) which resolves a desktopCapturer source for you. Capturing another app's window or the whole screen goes through the consent gate once per project. Re-shooting an unchanged target returns {status:'unchanged', sameAs} instead of paying again; pass force:true to override. Use sendTo:'canvas' to open the shot in the markup canvas for the human, inline:true only when YOU need to see the pixels (it costs tokens).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        surfaceId: { type: "string", description: "Capture a Human Assist browser pane" },
+        sourceId: {
+          type: "string",
+          description: "desktopCapturer source id (a display or a single window)",
+        },
+        target: {
+          type: "string",
+          enum: ["pane", "display", "window", "screen", "fullscreen"],
+          description: "When no surfaceId/sourceId is given",
+        },
+        windowTitle: { type: "string", description: "Match a window by title (target:'window')" },
+        display: { type: "number", description: "Display index for target:'display'" },
+        clip: {
+          type: "object",
+          description: "Region in source pixels",
+          properties: {
+            x: { type: "number" },
+            y: { type: "number" },
+            w: { type: "number" },
+            h: { type: "number" },
+          },
+        },
+        format: { type: "string", enum: ["png", "jpeg"], description: "Default png" },
+        quality: { type: "number", description: "JPEG quality 0..1 (default .92)" },
+        maxEdge: {
+          type: "number",
+          description: "Downscale the stored original to this longest edge",
+        },
+        agentMaxEdge: {
+          type: "number",
+          description: "Longest edge of the JPEG copy made for vision (default 1560)",
+        },
+        out: { type: "string", description: "File name (kept inside the captures folder)" },
+        force: { type: "boolean", description: "Skip the unchanged check" },
+        inline: { type: "boolean", description: "Also return a data URL (costly)" },
+        sendTo: {
+          type: "string",
+          enum: ["canvas", "none"],
+          description: "'canvas' opens the shot in the markup canvas for the human",
+        },
+      },
+    },
+  },
+  {
+    name: "screenRecording",
+    description:
+      "Record video through Electron (MediaRecorder/webm, in-app — no CLI, no native encoder). action:'start' needs a target like captureScreenshot (surfaceId | sourceId | target:'display'|'window' with windowTitle) and returns {recordingId, file, url, maxSeconds}; action:'stop' writes the webm and returns {file, bytes, seconds}; action:'list' shows what is running. fps defaults to 15 and bitrate to 1200 kbps (tune down for long clips), maxSeconds is capped at 300 and also enforced from the main process so a stalled recorder can never run away. Recording the screen or another window passes the consent gate; recording a Human Assist pane does not.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["start", "stop", "list"] },
+        recordingId: { type: "string", description: "For action:'stop' (default: the newest)" },
+        surfaceId: { type: "string" },
+        sourceId: { type: "string" },
+        target: { type: "string", enum: ["pane", "display", "window", "screen", "fullscreen"] },
+        windowTitle: { type: "string" },
+        clip: {
+          type: "object",
+          properties: {
+            x: { type: "number" },
+            y: { type: "number" },
+            w: { type: "number" },
+            h: { type: "number" },
+          },
+        },
+        fps: { type: "number", description: "1-60, default 15" },
+        bitrateKbps: { type: "number", description: "150-8000, default 1200" },
+        maxSeconds: { type: "number", description: "1-300, default 30" },
+        out: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "analyzeCapture",
+    description:
+      "Ask the app's internal model what is in a capture — 'take a screenshot then do something with it' without the bytes ever entering your chat. Pass path (a file from the captures folder) or a target (same options as captureScreenshot, which takes a fresh shot and analyses the downscaled agent copy). Reads use the agent copy by default, which is what vision models want; returns {answer, model, analyzed}.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "Capture file name or path inside the captures folder",
+        },
+        question: { type: "string", description: "What to look for" },
+        surfaceId: { type: "string" },
+        sourceId: { type: "string" },
+        target: { type: "string", enum: ["pane", "display", "window", "screen", "fullscreen"] },
+        windowTitle: { type: "string" },
+      },
     },
   },
   {
@@ -1303,6 +1587,10 @@ const TOOL_HANDLERS: Record<
   browserClick: handleBrowserClick,
   browserType: handleBrowserType,
   browserScreenshot: handleBrowserScreenshot,
+  listCaptureSources: handleListCaptureSources,
+  captureScreenshot: handleCaptureScreenshot,
+  screenRecording: handleScreenRecording,
+  analyzeCapture: handleAnalyzeCapture,
   browserExecuteActions: handleBrowserExecuteActions,
   delegateTask: handleDelegateTask,
   browserHandoff: handleBrowserHandoff,
@@ -1648,6 +1936,50 @@ function createMcpServer(port: number): { server: ReturnType<typeof createServer
       return;
     }
 
+    // Serve captured screenshots/recording stills to the renderer (and to a
+    // browser you point at the port). The UI shows `http://127.0.0.1:<port>/
+    // captures/<name>` instead of a base64 blob, so a 4 MB PNG never has to
+    // cross a tool result just to be looked at. Path-confined to the captures
+    // folder by construction (basename + extension allowlist).
+    if (req.url?.startsWith("/captures/") && req.method === "GET") {
+      const name = decodeURIComponent(req.url.slice("/captures/".length)).split("?")[0];
+      // Reject a name that hides a directory (even encoded) rather than
+      // silently serving a different file than the caller asked for.
+      if (name.includes("/") || name.includes("\\")) {
+        res.writeHead(400).end("bad capture name");
+        return;
+      }
+      const base = require("node:path").basename(name);
+      const ext = require("node:path").extname(base).toLowerCase();
+      const types: Record<string, string> = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".webm": "video/webm",
+      };
+      const type = types[ext];
+      if (!type || !/^[\w.\-]+$/.test(base)) {
+        res.writeHead(400).end("bad capture name");
+        return;
+      }
+      const file = require("node:path").join(CAPTURES_DIR, base);
+      try {
+        const buf = require("node:fs").readFileSync(file);
+        res.writeHead(200, {
+          "content-type": type,
+          "content-length": buf.length,
+          // Loopback-only, but the app's port is reachable from any local tab:
+          // don't let captures (which can be someone's screen) sit in a cache.
+          "cache-control": "no-store",
+        });
+        res.end(buf);
+      } catch {
+        res.writeHead(404).end("no such capture");
+      }
+      return;
+    }
+
     if (req.url === "/mcp" && req.method === "POST") {
       let body = "";
       req.on("data", (chunk: Buffer) => {
@@ -1769,6 +2101,35 @@ function startWebSocketServer(port: number): WebSocketServer {
         }
         if (msg && msg.type === "canvas:respond") {
           handleCanvasRespond(msg as Record<string, unknown>);
+        }
+        if (msg && msg.type === "capture:select" && typeof msg.surfaceId === "string") {
+          const rec = openSurfaces.get(msg.surfaceId);
+          if (rec && rec.type === "screen") {
+            const sel = (msg as Record<string, unknown>)["sourceId"];
+            rec.payload = {
+              ...rec.payload,
+              selectedSourceId: typeof sel === "string" ? sel : undefined,
+            };
+            notifySurfacePush({
+              surfaceId: msg.surfaceId,
+              type: "screen",
+              payload: rec.payload,
+              status: "updated",
+            });
+          }
+        }
+        if (msg && msg.type === "capture:refresh" && typeof msg.surfaceId === "string") {
+          // Window lists go stale the moment the human opens something, and
+          // macOS gives no event when that happens — so the panel asks.
+          void fillCaptureSources(msg.surfaceId).catch((err: unknown) => {
+            console.error("[capture] re-list failed:", String(err));
+          });
+          return;
+        }
+        if (msg && msg.type === "capture:request") {
+          void handleCaptureRequest(msg as Record<string, unknown>).catch((err: unknown) => {
+            console.error("[capture] request failed:", String(err));
+          });
         }
         // Human-initiated surface creation (tab-bar “+” picker).
         if (msg && msg.type === "surface:create") {
@@ -3438,6 +3799,258 @@ async function handleBrowserType(args: unknown): Promise<Record<string, unknown>
   return { status: "typed", surfaceId: id, selector };
 }
 
+// ── Capture: screenshots + recordings, entirely through Electron ────────
+
+/** Resolve a capture target into what the bridge needs. Panes go by
+ *  webContentsId (capturePage is sharper than cropping the display); screens
+ *  and individual windows go by desktopCapturer source id. */
+async function resolveCaptureTarget(o: Record<string, unknown>): Promise<{
+  webContentsId?: number;
+  sourceId?: string;
+  kindLabel: string;
+}> {
+  const surfaceId = typeof o["surfaceId"] === "string" ? o["surfaceId"] : undefined;
+  if (surfaceId) {
+    const id = wcIdForSurface(surfaceId);
+    if (id === undefined) throw new Error("CAP_011: surface has no attached pane to capture");
+    return { webContentsId: id, kindLabel: `pane ${surfaceId}` };
+  }
+  const sourceId = typeof o["sourceId"] === "string" ? o["sourceId"] : undefined;
+  if (sourceId) return { sourceId, kindLabel: `source ${sourceId}` };
+  const target = typeof o["target"] === "string" ? o["target"] : "display";
+  if (target === "display" || target === "screen" || target === "fullscreen") {
+    const screens = await listSources({ types: ["screen"], thumbnails: false });
+    const wanted = typeof o["display"] === "number" ? String(o["display"]) : undefined;
+    const pick = (wanted ? screens.find((sc) => sc.displayId === wanted) : undefined) ?? screens[0];
+    if (!pick) throw new Error("CAP_012: no display available to capture");
+    return { sourceId: pick.id, kindLabel: `display ${pick.displayId ?? pick.name}` };
+  }
+  if (target === "window") {
+    const wins = await listSources({ types: ["window"], thumbnails: false });
+    const title = typeof o["windowTitle"] === "string" ? o["windowTitle"] : undefined;
+    const pick = title ? wins.find((w) => w.name.includes(title)) : undefined;
+    if (!pick) {
+      throw new Error(
+        title
+          ? `CAP_013: no window matching "${title}"`
+          : "CAP_014: windowTarget needs windowTitle — call listCaptureSources first",
+      );
+    }
+    return { sourceId: pick.id, kindLabel: `window ${pick.name}` };
+  }
+  throw new Error('CAP_015: target must be "pane"|"display"|"window" (or pass surfaceId/sourceId)');
+}
+
+function readClip(o: Record<string, unknown>): Rect | undefined {
+  const c = o["clip"];
+  if (!c || typeof c !== "object") return undefined;
+  const r = c as Record<string, unknown>;
+  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : NaN);
+  const x = n(r["x"]);
+  const y = n(r["y"]);
+  const w = n(r["w"] ?? r["width"]);
+  const h = n(r["h"] ?? r["height"]);
+  if (![x, y, w, h].every(Number.isFinite)) throw new Error("CAP_016: clip needs numeric x,y,w,h");
+  if (w < 1 || h < 1) throw new Error("CAP_017: clip w/h must be >= 1");
+  return { x, y, w, h };
+}
+
+async function handleListCaptureSources(args: unknown): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const wantThumbs = o["thumbnails"] === true;
+  const typesRaw = Array.isArray(o["types"]) ? (o["types"] as unknown[]).map(String) : undefined;
+  const types = (typesRaw?.length ? typesRaw : ["screen", "window"]).filter((t) =>
+    ["screen", "window"].includes(t),
+  ) as ("screen" | "window")[];
+  const sources = await listSources({ types, thumbnails: wantThumbs });
+  return {
+    status: captureAvailable() ? "ok" : "unavailable",
+    count: sources.length,
+    // Thumbnails only on explicit request: a dozen JPEGs in a tool result
+    // would be exactly the inefficiency we are trying to remove.
+    sources: sources.map((sc) => ({
+      id: sc.id,
+      name: sc.name,
+      kind: sc.kind,
+      displayId: sc.displayId ?? null,
+      width: sc.width ?? null,
+      height: sc.height ?? null,
+      ...(wantThumbs ? { thumbnail: sc.thumbnail } : {}),
+    })),
+    hint: 'Pick an id, then captureScreenshot({sourceId}) or screenRecording({action:"start", sourceId}). Browser panes can be captured by surfaceId instead (sharper).',
+  };
+}
+
+async function handleCaptureScreenshot(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
+  if (!captureAvailable()) {
+    throw new Error("CAP_001: capture is only available inside the desktop app (Electron)");
+  }
+  const o = (args ?? {}) as Record<string, unknown>;
+  const target = await resolveCaptureTarget(o);
+  // Grabbing someone's screen or another app's window is a privacy boundary:
+  // ask once per project (panes are the agent's own page, so they are free).
+  if (target.webContentsId === undefined) {
+    const perm = await permissionBroker.ensure(
+      `screen://capture-${target.kindLabel.split(" ")[0]}`,
+      "captureScreenshot",
+      {
+        agentClient: ctx?.agentClient,
+        agentSessionId: ctx?.agentSessionId,
+        agentProject: ctx?.agentProject,
+      },
+    );
+    if (!perm.allowed) {
+      const g = consentGuidance(perm.decision, target.kindLabel);
+      return {
+        status: "denied",
+        reason: perm.decision,
+        target: target.kindLabel,
+        ...g,
+      };
+    }
+  }
+  const res = await captureStill({
+    ...(target.webContentsId !== undefined ? { webContentsId: target.webContentsId } : {}),
+    ...(target.sourceId ? { sourceId: target.sourceId } : {}),
+    ...(readClip(o) ? { clip: readClip(o) } : {}),
+    format: o["format"] === "jpeg" || o["format"] === "jpg" ? "jpeg" : "png",
+    ...(typeof o["quality"] === "number" ? { quality: o["quality"] } : {}),
+    ...(typeof o["maxEdge"] === "number" ? { maxEdge: o["maxEdge"] } : {}),
+    ...(typeof o["agentMaxEdge"] === "number" ? { agentMaxEdge: o["agentMaxEdge"] } : {}),
+    ...(typeof o["out"] === "string" ? { out: o["out"] } : {}),
+    force: o["force"] === true,
+  });
+  if (res.status === "unchanged") {
+    return {
+      status: "unchanged",
+      sameAs: res.sameAs,
+      url: captureUrlFor(res.file),
+      note: "Identical to the previous capture of this target (within 2 min). Pass force:true to re-shoot.",
+    };
+  }
+  const base = {
+    status: "captured",
+    target: target.kindLabel,
+    file: res.file,
+    agentFile: res.agentFile,
+    url: captureUrlFor(res.file),
+    bytes: res.bytes,
+    width: res.width,
+    height: res.height,
+    ms: res.ms,
+    // Pixels stay on disk: read them with analyzeCapture or show `url`.
+    note: "Files on disk — pass inline:true for a data URL, or analyzeCapture({path}) to have the app model look at it.",
+  };
+  if (o["inline"] === true) {
+    const buf = require("node:fs").readFileSync(res.file) as Buffer;
+    const ext = require("node:path").extname(res.file).toLowerCase();
+    const mime = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+    return { ...base, dataUrl: `data:${mime};base64,${buf.toString("base64")}` };
+  }
+  if (o["sendTo"] === "canvas") {
+    const opened = await handleOpenCanvasSurface({
+      prompt: typeof o["prompt"] === "string" ? o["prompt"] : "Review / mark up this capture",
+      imageSrc: captureUrlFor(res.agentFile !== res.file ? res.agentFile : res.file),
+    });
+    return { ...base, markupSurfaceId: (opened as Record<string, unknown>).surfaceId ?? null };
+  }
+  return base;
+}
+
+async function handleScreenRecording(
+  args: unknown,
+  ctx?: McpAgentCtx,
+): Promise<Record<string, unknown>> {
+  if (!captureAvailable()) {
+    throw new Error("CAP_001: recording is only available inside the desktop app (Electron)");
+  }
+  const o = (args ?? {}) as Record<string, unknown>;
+  const action = typeof o["action"] === "string" ? o["action"] : "start";
+  if (action === "list") {
+    return { status: "ok", recordings: listRecordings() };
+  }
+  if (action === "stop") {
+    const res = await stopRecording(
+      typeof o["recordingId"] === "string" ? o["recordingId"] : undefined,
+    );
+    return {
+      ...res,
+      url: res.file ? captureUrlFor(res.file) : null,
+      note: res.file
+        ? "webm written to disk (the human can play it in the app's capture panel)"
+        : (res.error ?? "nothing written"),
+    };
+  }
+  const target = await resolveCaptureTarget(o);
+  if (target.webContentsId === undefined) {
+    const perm = await permissionBroker.ensure(
+      `screen://record-${target.kindLabel.split(" ")[0]}`,
+      "screenRecording",
+      {
+        agentClient: ctx?.agentClient,
+        agentSessionId: ctx?.agentSessionId,
+        agentProject: ctx?.agentProject,
+      },
+    );
+    if (!perm.allowed) {
+      const g = consentGuidance(perm.decision, target.kindLabel);
+      return {
+        status: "denied",
+        reason: perm.decision,
+        target: target.kindLabel,
+        ...g,
+      };
+    }
+  }
+  const handle = await startRecording({
+    ...(target.webContentsId !== undefined ? { webContentsId: target.webContentsId } : {}),
+    ...(target.sourceId ? { sourceId: target.sourceId } : {}),
+    ...(readClip(o) ? { clip: readClip(o) } : {}),
+    ...(typeof o["fps"] === "number" ? { fps: o["fps"] } : {}),
+    ...(typeof o["bitrateKbps"] === "number" ? { bitrateKbps: o["bitrateKbps"] } : {}),
+    ...(typeof o["maxSeconds"] === "number" ? { maxSeconds: o["maxSeconds"] } : {}),
+    ...(typeof o["out"] === "string" ? { out: o["out"] } : {}),
+  });
+  return {
+    status: "recording",
+    ...handle,
+    url: captureUrlFor(handle.file),
+    hint: `Stop with screenRecording({action:"stop", recordingId:"${handle.recordingId}"}) — it also stops automatically at maxSeconds.`,
+  };
+}
+
+async function handleAnalyzeCapture(args: unknown): Promise<Record<string, unknown>> {
+  const o = (args ?? {}) as Record<string, unknown>;
+  const question =
+    typeof o["question"] === "string" ? o["question"] : "Describe what is on screen.";
+  let file = typeof o["path"] === "string" ? o["path"] : undefined;
+  if (!file) {
+    // No path: take a fresh shot (agent copy) and analyze that.
+    const shot = await handleCaptureScreenshot({ ...o, inline: false, sendTo: "none" }, undefined);
+    if (shot.status === "unchanged") file = String(shot.sameAs ?? shot.file);
+    else if (shot.status === "captured") file = String(shot.agentFile ?? shot.file);
+    else return shot; // denied / unavailable — pass the reason through
+  }
+  // Confine reads to the captures folder: this tool must not become an
+  // arbitrary file reader with a vision model attached.
+  const base = require("node:path").basename(file);
+  const full = require("node:path").join(CAPTURES_DIR, base);
+  if (!require("node:fs").existsSync(full)) {
+    throw new Error(`CAP_018: no capture named "${base}" in ${CAPTURES_DIR}`);
+  }
+  const ext = require("node:path").extname(full).toLowerCase();
+  const mime = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+  const buf = require("node:fs").readFileSync(full) as Buffer;
+  const { answer, model } = await describeImage(
+    `data:${mime};base64,${buf.toString("base64")}`,
+    question,
+  );
+  return { status: "ok", analyzed: full, bytes: buf.length, model, answer };
+}
+
 async function handleBrowserScreenshot(args: unknown): Promise<Record<string, unknown>> {
   const o = (args ?? {}) as Record<string, unknown>;
   const { id, handle } = resolveGuestEntry(
@@ -3551,7 +4164,45 @@ export function getServerState(): {
 
 // ── Start ─────────────────────────────────────────────────────────────────
 
+let mcpHttpPort = 3615;
+
+/** Public URL for a file in the captures folder (what the UI and the
+ *  markup canvas use — pixels over HTTP, never through a tool result). */
+/** A consent prompt nobody saw is not the same failure as a human saying no.
+ *  Both used to come back as a bare `{ status: "denied" }`, so the agent
+ *  retried a prompt that was waiting on someone's screen, or pushed on a
+ *  target the human had actually refused. Name the failure and the one action
+ *  that unblocks it. Exported so the wording is pinned by tests. */
+export function consentGuidance(
+  decision: string,
+  what: string,
+): { hint: string; nextStep: string } {
+  if (decision === "no-ui") {
+    return {
+      hint: `Nobody was asked: no Human Assist window is connected, so there was no one to approve capturing ${what}.`,
+      nextStep: "Open the Human Assist app, then call this tool again.",
+    };
+  }
+  if (decision === "timeout") {
+    return {
+      hint: `An Allow prompt for ${what} is sitting on the human's screen and went unanswered.`,
+      nextStep:
+        "Ask the human to click Allow in the Human Assist window, then call this tool again — do not retry blindly.",
+    };
+  }
+  return {
+    hint: `The human declined to allow capturing ${what}.`,
+    nextStep: "Do not retry this target; ask the human what they would rather capture.",
+  };
+}
+
+function captureUrlFor(file: string): string {
+  const base = require("node:path").basename(file);
+  return `http://127.0.0.1:${mcpHttpPort}/captures/${encodeURIComponent(base)}`;
+}
+
 export function startMcpServer(initialPort: number = 3615, wsPort: number = 3614): void {
+  mcpHttpPort = initialPort;
   const portRange = Array.from({ length: 10 }, (_, i) => initialPort + i);
 
   for (const port of portRange) {

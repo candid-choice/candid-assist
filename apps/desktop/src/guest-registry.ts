@@ -21,6 +21,13 @@ export type GuestResolver = (surfaceId: string, webContentsId: number) => GuestH
 /** surfaceId -> webContentsId (reported by the renderer). */
 const surfaceToWcId = new Map<string, number>();
 
+/** The webContentsId a browser pane registered (capture tools target panes
+ *  by id, which is sharper than cropping the display it happens to sit on). */
+export function wcIdForSurface(surfaceId: string): number | undefined {
+  const id = surfaceToWcId.get(surfaceId);
+  return typeof id === "number" && id > 0 ? id : undefined;
+}
+
 let resolver: GuestResolver = () => undefined;
 
 export function setGuestResolver(fn: GuestResolver): void {

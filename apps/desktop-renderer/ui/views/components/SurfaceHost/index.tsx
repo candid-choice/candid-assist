@@ -23,7 +23,7 @@ import { ThreeSurface } from "../surfaces/ThreeSurface";
 import { ProcessSurface } from "../surfaces/ProcessSurface";
 import { CanvasSurface } from "../surfaces/CanvasSurface";
 import { InputSurface } from "../surfaces/InputSurface";
-import { ScreenSurface } from "../surfaces/ScreenSurface";
+import { CaptureSurface } from "../surfaces/CaptureSurface";
 import { CodeDiffSurface } from "../surfaces/CodeDiffSurface";
 import { TerminalSurface } from "../surfaces/TerminalSurface";
 
@@ -156,9 +156,9 @@ export function SurfaceHost({ config, isViewActive }: SurfaceHostProps) {
         );
       case "screen":
         return (
-          <ScreenSurface
+          <CaptureSurface
             config={config as SurfaceConfig<ScreenPayload>}
-            onDone={() => {}}
+            onDone={handleDone}
             onCancel={handleCancel}
           />
         );
