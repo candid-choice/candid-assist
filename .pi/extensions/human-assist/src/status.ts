@@ -26,24 +26,6 @@ export interface StackActions {
   getOutputSnapshot?: () => StackOutputSnapshot | null;
 }
 
-export function getStackStatus(): StackStatus {
-  const g = globalThis as Record<string, unknown>;
-  return (g.__haStackStatus as StackStatus) || { alive: false, env: "prod", changedAt: 0 };
-}
-
-export function onStackStatus(cb: (s: StackStatus) => void): () => void {
-  const g = globalThis as Record<string, unknown>;
-  if (!g.__haStackStatusListeners) g.__haStackStatusListeners = new Set<(s: StackStatus) => void>();
-  const set = g.__haStackStatusListeners as Set<(s: StackStatus) => void>;
-  set.add(cb);
-  return () => set.delete(cb);
-}
-
-/** pi-dev-stack's supervised-output accessor, when the keeper is present. */
-export function getStackActions(): StackActions | undefined {
-  return (globalThis as Record<string, unknown>).__haStackActions as StackActions | undefined;
-}
-
 // ── readiness EDGES (__haStackEvents) ───────────────────────────────
 
 export type StackEvent = "ready" | "launching" | "down";

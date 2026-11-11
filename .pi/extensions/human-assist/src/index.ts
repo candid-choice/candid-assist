@@ -35,14 +35,10 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getConfig, loadConfig } from "./config.js";
 import { HumanAssistConn, type Timer } from "./conn.js";
-import {
-  installHumanAssistFooter,
-  isStackFooterSegmentRegistered,
-  registerStackFooterSegment,
-  type FooterHost,
-} from "./footer.js";
+import { StandaloneFooter, FooterSegmentClient, type FooterHost } from "./footer.js";
 import { getHarnessId, resolveProject, resetProject, setHarnessId } from "./identity.js";
-import { getStackEvents, getStackStatus, stackEventsApi, type StackEventsApi } from "./status.js";
+import { getStackEvents, stackEventsApi, type StackEventsApi } from "./status.js";
+import { StackStatusClient } from "./host/stack.status.client.js";
 import { createToolRegistry } from "./tools.js";
 import { clearJournal, journalCount, renderJournal } from "./journal.js";
 import { closeSharedViewer, isSharedViewerOpen, openSharedViewer } from "./viewer.js";
@@ -80,7 +76,7 @@ export default function humanAssist(pi: ExtensionAPI) {
   const readyWaiters = new Set<(up: boolean) => void>();
 
   function stackIsUp(): boolean {
-    return getStackStatus().alive || stackApi?.status().alive === true;
+    return StackStatusClient.get().alive || stackApi?.status().alive === true;
   }
 
   function wakeReady(up: boolean): void {
@@ -99,7 +95,7 @@ export default function humanAssist(pi: ExtensionAPI) {
             "info",
           );
         }
-        registerStackFooterSegment(conn, () => openJournal());
+        footerClient.register(conn, () => openJournal());
       }
     } catch {
       /* transient — the recovery tick or a refresh retries */
@@ -182,7 +178,7 @@ export default function humanAssist(pi: ExtensionAPI) {
     lastCtx?.ui?.notify?.(
       `Human Assist ${conn.status} @ ${process.env.HARNESS_MCP_WS_URL || cfg.wsUrl || url} — session ${hid ? hid.slice(0, 8) + "…" : "?"}, ` +
         `project ${resolveProject() ?? "(none)"}, ${registered.size} tools, ${cfg.maxRetries ?? 5} retries, ` +
-        `footer via ${isStackFooterSegmentRegistered(conn) ? "pi-dev-stack row" : "own footer"}`,
+        `footer via ${footerClient.isRegistered(conn) ? "pi-dev-stack row" : "own footer"}`,
       level,
     );
   }
@@ -255,17 +251,20 @@ export default function humanAssist(pi: ExtensionAPI) {
    *  session_start runs before the keeper's (alphabetical load order), so
    *  retry briefly until it publishes globalThis.__piDevStackFooter. */
   function registerFooterSegment(ctx: unknown): void {
-    if (registerStackFooterSegment(conn, () => openJournal())) return;
+    if (footerClient.register(conn, () => openJournal())) return;
     let tries = 0;
     const step = () => {
       footerRetry = null;
-      if (registerStackFooterSegment(conn, () => openJournal()) || tries++ >= 15) return;
+      if (footerClient.register(conn, () => openJournal()) || tries++ >= 15) return;
       footerRetry = setTimeout(step, 200) as ReturnType<typeof setTimeout> & { unref?: () => void };
       footerRetry.unref?.();
     };
     footerRetry = setTimeout(step, 200) as ReturnType<typeof setTimeout> & { unref?: () => void };
     footerRetry.unref?.();
   }
+
+  /** One footer client per process: the row carries a single HA segment. */
+  const footerClient = FooterSegmentClient.instance();
 
   async function bootstrap(ctx: {
     ui?: { notify?: (m: string, k?: "info" | "error" | "warning") => void };
@@ -380,7 +379,7 @@ export default function humanAssist(pi: ExtensionAPI) {
         /* keeper not present — our own footer covers us */
       }
       try {
-        installHumanAssistFooter(ctx as unknown as FooterHost, conn);
+        StandaloneFooter.install(ctx as unknown as FooterHost, conn);
       } catch {
         /* older pi without setFooter — status still available via /human-assist */
       }
@@ -408,7 +407,7 @@ export default function humanAssist(pi: ExtensionAPI) {
     else if (!started && stackIsUp()) void resyncTools();
     // Re-attach our segment if the keeper reloaded (it clears the registry
     // on session_shutdown, so a stale registration would silently vanish).
-    if (getConfig().footer !== false) registerStackFooterSegment(conn, () => openJournal());
+    if (getConfig().footer !== false) footerClient.register(conn, () => openJournal());
   }, 10 * 60_000) as Timer;
   poll.unref?.();
 
@@ -469,9 +468,9 @@ export default function humanAssist(pi: ExtensionAPI) {
           if (sub === "reconnect") conn.closeForReconnect();
           const n = await syncTools();
           started = n > 0;
-          registerStackFooterSegment(conn, () => openJournal()); // re-attach after a keeper /reload
+          footerClient.register(conn, () => openJournal()); // re-attach after a keeper /reload
           ctx.ui?.notify?.(
-            `Human Assist: ${conn.status}, ${n} server tools, ${registered.size} registered, footer via ${isStackFooterSegmentRegistered(conn) ? "pi-dev-stack row" : "own footer"}`,
+            `Human Assist: ${conn.status}, ${n} server tools, ${registered.size} registered, footer via ${footerClient.isRegistered(conn) ? "pi-dev-stack row" : "own footer"}`,
             "info",
           );
         } catch (e) {
