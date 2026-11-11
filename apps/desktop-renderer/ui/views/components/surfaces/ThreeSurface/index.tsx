@@ -126,9 +126,13 @@ export function ThreeSurface({ config }: ThreeSurfaceProps) {
           raf = requestAnimationFrame(loop);
         };
         loop();
-        setFallback(null);
+        if (!cancelled) setFallback(null);
       } catch (e) {
-        // jsdom / no WebGL / import failure — honest fallback, no crash.
+        // jsdom / no WebGL / import failure — honest fallback, no crash. The
+        // `cancelled` guard matters: without it this setState lands after
+        // unmount (i.e. after jsdom teardown at the end of a test file) and
+        // surfaces as an unhandled rejection that can mask real failures.
+        if (cancelled) return;
         setFallback(
           `3D preview unavailable here (${(e as Error).message.slice(0, 80)}). ` +
             `${spec!.primitives.length} primitive(s) in scene.`,

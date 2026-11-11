@@ -134,11 +134,10 @@ describe("MCP tools/call router", () => {
       method: "POST",
       body: JSON.stringify({ jsonrpc: "2.0", method: "tools/list", id: 1 }),
     }).then((r) => r.json());
-    expect(res.result.tools).toHaveLength(36); // +listCaptureSources, captureScreenshot, screenRecording, analyzeCapture
+    expect(res.result.tools).toHaveLength(35); // +listCaptureSources, captureScreenshot, screenRecording, analyzeCapture
     expect(res.result.tools.map((t: { name: string }) => t.name)).toContain("readSurface");
     const names = res.result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain("openBrowserSurface");
-    expect(names).toContain("openInputSurface");
     expect(names).toContain("showMessage");
     for (const t of res.result.tools) {
       expect(t.inputSchema?.type).toBe("object");
@@ -159,22 +158,6 @@ describe("MCP tools/call router", () => {
   });
 });
 
-describe("MCP input surface tool", () => {
-  it("opens an input surface with question + kind", async () => {
-    const res = await call({
-      name: "openInputSurface",
-      arguments: { question: "Pick a color", kind: "choices", options: ["red", "blue"] },
-    });
-    expect(res.error).toBeUndefined();
-    expect(res.result.status).toBe("opened");
-  });
-
-  it("rejects a missing question with MCP_003", async () => {
-    const res = await call({ name: "openInputSurface", arguments: {} });
-    expect(res.error?.message).toContain("MCP_003");
-  });
-});
-
 describe("WebSocket surface:push broadcast", () => {
   it("broadcasts the stored surface type for browser surfaces", async () => {
     const event = await receiveWsEvent(WS_PORT, () =>
@@ -186,16 +169,16 @@ describe("WebSocket surface:push broadcast", () => {
     expect(event.data.surfaceId).toMatch(/^surf_/);
   });
 
-  it('broadcasts type "input" with payload passthrough for input surfaces', async () => {
+  it('broadcasts type "canvas" with payload passthrough', async () => {
     const event = await receiveWsEvent(WS_PORT, () =>
       call({
-        name: "openInputSurface",
-        arguments: { question: "Approve deploy?", kind: "confirm" },
+        name: "openCanvasSurface",
+        arguments: { prompt: "review this diagram" },
       }),
     );
     expect(event.event).toBe("surface:push");
-    expect(event.data.type).toBe("input");
-    expect(event.data.payload).toMatchObject({ question: "Approve deploy?", kind: "confirm" });
+    expect(event.data.type).toBe("canvas");
+    expect(event.data.payload).toMatchObject({ prompt: "review this diagram" });
   });
 });
 

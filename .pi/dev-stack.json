@@ -2,16 +2,26 @@
   "project": "candid-assist",
   "repo": "/Users/szhao/candid-choice/candid-assist",
   "command": "pnpm run dev",
-  "_ports_comment": "ALL of these must answer for the stack to count as up. 43179 is the desktop app's MCP WebSocket (ws://127.0.0.1:43179/mcp) that the human-assist pi extension dials — keeping it here means a green footer genuinely implies the socket HA needs is listening.",
-  "ports": [3600, 3601, 3602, 3604, 3613, 3614, 3615, 3616, 43179],
-  "taskName": "candid-assist dev",
+  "ports": [
+    3600,
+    3601,
+    3602,
+    3604,
+    3613,
+    3614,
+    3615,
+    3616,
+    43179
+  ],
   "openUrls": [
     "http://localhost:3600/",
     "http://localhost:3607/",
     "http://localhost:3616/?viewPortal=1&wsPort=3614&mcpPort=3615&ha_dev_email=dev@candidchoice.ai&ha_dev_password=Dev!2345"
   ],
   "healthUrl": "http://127.0.0.1:3615/status",
-  "healthContains": ["\"ok\":true"],
+  "healthContains": [
+    "\"ok\":true"
+  ],
   "slack": {
     "botToken": "env:SLACK_BOT_TOKEN",
     "appToken": "env:SLACK_APP_TOKEN",

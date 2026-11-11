@@ -73,6 +73,24 @@ src/
   status.ts     globalThis contract reader (no import from pi-dev-stack)
 ```
 
+## Surfaces
+
+Browser · canvas (sketch / markup) · 3d · screen capture · code diff ·
+terminal · processes.
+
+**There is no question-answering surface.** An earlier `open_input_surface`
+(+ an `InputSurface` panel + an `input:respond` round-trip) let an agent block
+on a multiple-choice answer. It is gone: asking a question is precisely what the
+chat is for, the harness already delivers it, and the duplicate channel cost a
+surface type, a renderer component, a WS message, and a whole class of "the
+panel never rendered, so the call timed out" failures. When the answer is a
+human decision, ask in the reply.
+
+Blocking on a human survives where the answer is genuinely not words:
+`open_canvas_surface({ waitForMarkup: true })` waits for the person to annotate
+and press Send (`canvas:respond`), and browser automation pauses on a handoff
+until they click Done.
+
 ## Contract with pi-dev-stack
 
 No imports cross the package boundary — either extension installs alone. State

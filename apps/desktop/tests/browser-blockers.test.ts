@@ -122,7 +122,7 @@ describe("classifyBlockers", () => {
     });
     const ac = b.find((x) => x.kind === "accountChooser");
     expect(ac?.severity).toBe("soft");
-    expect(ac?.suggest).toBe("input");
+    expect(ac?.suggest).toBe("ask");
     // Soft blockers must never trip an automation stop.
     expect(hardBlockers(b).map((x) => x.kind)).not.toContain("accountChooser");
   });
@@ -135,7 +135,7 @@ describe("classifyBlockers", () => {
       visibleTexts: ["accept all", "only necessary"],
     });
     expect(consent[0].kind).toBe("consent");
-    expect(consent[0].suggest).toBe("input");
+    expect(consent[0].suggest).toBe("ask");
     expect(hardBlockers(consent)).toEqual([]);
 
     const pay = classifyBlockers({

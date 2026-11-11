@@ -1,7 +1,7 @@
 /** Human → agent round-trips over the surface WebSocket.
 
 Both of these exist so a human decision reaches the agent that asked for it:
-  - input surface: {type:"input:respond"} → openInputSurface(waitForAnswer)
+  - canvas markup: {type:"canvas:respond"} → openCanvasSurface(waitForMarkup)
   - canvas surface: {type:"canvas:respond"} → openCanvasSurface(waitForMarkup)
 A fake renderer on the surface WS plays the human.
 */
@@ -77,8 +77,6 @@ function openFakeRenderer(): {
           },
         });
       }),
-    respond: (surfaceId, answer) =>
-      ws.send(JSON.stringify({ type: "input:respond", surfaceId, answer })),
     sendMarkup: (surfaceId, markup, note) =>
       ws.send(JSON.stringify({ type: "canvas:respond", surfaceId, markup, note })),
     close: () => ws.close(),
@@ -107,62 +105,6 @@ beforeAll(async () => {
     }
     await new Promise((r) => setTimeout(r, 25));
   }
-});
-
-describe("input surface: the human's answer reaches the agent", () => {
-  it("opens immediately (push precedes the wait) so the human can answer", async () => {
-    const renderer = await openRenderer();
-
-    const pending = call("openInputSurface", {
-      question: "Which account should I sign in as?",
-      kind: "choices",
-      options: ["personal", "work"],
-      waitForAnswer: true,
-      timeoutMs: 6000,
-    });
-
-    // The push must arrive BEFORE the answer, otherwise the panel is invisible
-    // and the waiting call can only ever time out.
-    const push = await renderer.waitForPush((d) => d?.type === "input");
-    expect(push.payload.question).toBe("Which account should I sign in as?");
-    expect(push.payload.answered).toBe(false);
-
-    renderer.respond(push.surfaceId, "work");
-    const out = await pending;
-    expect(out.answered).toBe(true);
-    expect(out.answer).toBe("work");
-    expect(out.status).toBe("answered");
-    expect(out.question).toBe("Which account should I sign in as?");
-
-    // And it stays readable afterwards (session handover / re-read).
-    const read = await call("readSurface", { surfaceId: push.surfaceId });
-    expect(read.type).toBe("input");
-    expect(read.summary.answered).toBe(true);
-    expect(read.summary.answer).toBe("work");
-    renderer.close();
-  });
-
-  it("times out instead of hanging when nobody answers", async () => {
-    const renderer = await openRenderer();
-    const out = await call("openInputSurface", {
-      question: "Spend $49 to unlock this dataset?",
-      kind: "confirm",
-      waitForAnswer: true,
-      timeoutMs: 1000,
-    });
-    expect(out.answered).toBe(false);
-    expect(out.status).toBe("timeout");
-    renderer.close();
-  });
-
-  it("ignores an answer for an unknown surface instead of crashing", async () => {
-    const renderer = await openRenderer();
-    renderer.respond("surface_does_not_exist", "whatever");
-    await new Promise((r) => setTimeout(r, 60));
-    const out = await call("readSurface");
-    expect(Array.isArray(out.surfaces)).toBe(true);
-    renderer.close();
-  });
 });
 
 describe("canvas surface: the human's markup reaches the agent", () => {

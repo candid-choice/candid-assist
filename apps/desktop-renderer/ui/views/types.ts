@@ -9,7 +9,6 @@ export type SurfaceType =
   | "3d"
   | "canvas"
   | "screen"
-  | "input"
   | "file"
   | "voice"
   | "prompt"
@@ -127,26 +126,6 @@ export interface ScreenPayload {
   note?: string;
 }
 
-export interface InputPayload {
-  /** Input format */
-  kind: "choices" | "text" | "confirm" | "file" | "voice" | "prompt";
-  /** Display text for the input */
-  question?: string;
-  /** Multiple choice options */
-  options?: string[];
-  /** Whether multiple selections are allowed */
-  multiSelect?: boolean;
-  /** Placeholder text for text inputs */
-  placeholder?: string;
-  /** Pre-filled value */
-  value?: string;
-  /** Answer the human already gave (mirrored from the desktop main process so
-   *  every view — including the read-only portal — shows the collected answer) */
-  answered?: boolean;
-  answer?: string | string[];
-  answeredAt?: number;
-  answeredBy?: "human" | "agent";
-}
 
 export interface CodeDiffPayload {
   /** Unified diff text */
@@ -174,7 +153,7 @@ export interface TerminalPayload {
 }
 
 export type SurfacePayload =
-  BrowserPayload | CanvasPayload | ScreenPayload | InputPayload | CodeDiffPayload | TerminalPayload;
+  BrowserPayload | CanvasPayload | ScreenPayload | CodeDiffPayload | TerminalPayload;
 
 // ── Result Shapes ─────────────────────────────────────────────────────────
 

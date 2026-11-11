@@ -23,8 +23,6 @@ export function surfaceIcon(type: string): string {
       return "🌐";
     case "3d":
       return "🧊";
-    case "input":
-      return "❓";
     case "code-diff":
       return "🔀";
     case "canvas":
@@ -112,7 +110,7 @@ export function pickVisibleSurface<T extends { id: string }>(
   return sessionOpenViews[sessionOpenViews.length - 1] ?? null;
 }
 
-/** Human tab label: 'Browser · react.dev', 'Input · Ship it?', … */
+/** Human tab label: 'Browser · react.dev', 'Canvas · review this', … */
 export function surfaceLabel(type: string, payload: unknown): string {
   const base = type
     .split("-")

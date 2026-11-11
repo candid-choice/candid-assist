@@ -27,7 +27,6 @@ export { UserStatus } from "./shared/UserStatus";
 export { BrowserSurface } from "./surfaces/BrowserSurface";
 export { CanvasSurface } from "./surfaces/CanvasSurface";
 export { ScreenSurface } from "./surfaces/ScreenSurface";
-export { InputSurface } from "./surfaces/InputSurface";
 
 // ── Hooks ────────────────────────────────────────────────────────
 export {

@@ -151,7 +151,7 @@ class WsService {
 
   /** Send a JSON message to the desktop MCP server (renderer → main),
    *  e.g. { type: 'handoff:complete', surfaceId } to release browser
-   *  automation lock, { type: 'input:respond', surfaceId, answer } to answer a
+   *  automation lock,
    *  question, { type: 'canvas:respond', surfaceId, markup, note } to return a
    *  marked-up image. All are agent-visible: main stores them and readSurface
    *  digests them, so the human's response reaches the agent that asked. */
@@ -167,7 +167,6 @@ class WsService {
         "permission:respond",
         "process:control",
         "handoff:complete",
-        "input:respond",
         "canvas:respond",
       ].includes(type)
     ) {

@@ -90,7 +90,7 @@ describe("WebSocket MCP (pi transport)", () => {
     const c = openClient();
     await c.waitForOpen();
     const res = await c.request("tools/list");
-    expect(res.result.tools).toHaveLength(36); // +listCaptureSources, captureScreenshot, screenRecording, analyzeCapture
+    expect(res.result.tools).toHaveLength(35); // +listCaptureSources, captureScreenshot, screenRecording, analyzeCapture
     c.ws.close();
   });
 
@@ -99,8 +99,8 @@ describe("WebSocket MCP (pi transport)", () => {
     await c.waitForOpen();
     await c.request("initialize", { clientInfo: { name: "pi-test" } });
     const res = await c.request("tools/call", {
-      name: "openInputSurface",
-      arguments: { question: "ws ok?", kind: "confirm" },
+      name: "openCanvasSurface",
+      arguments: { prompt: "ws ok?" },
     });
     expect(res.result.status).toBe("opened");
     c.ws.close();
@@ -205,8 +205,8 @@ describe("bindAgentSession — coding-session recording", () => {
     expect(bind.result.agentSessionId).toBe("pi-session-abc123");
 
     await c.request("tools/call", {
-      name: "openInputSurface",
-      arguments: { question: "recorded action", kind: "confirm" },
+      name: "openCanvasSurface",
+      arguments: { prompt: "recorded action" },
     });
     const ev = await got;
     expect(ev.data.agent).toBeDefined();

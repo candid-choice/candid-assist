@@ -32,7 +32,7 @@ export interface Blocker {
   confidence: number;
   evidence: string[];
   /** What the agent should do next. */
-  suggest: "handoff" | "input" | "continue";
+  suggest: "handoff" | "ask" | "continue";
   /** Ready-to-show instruction for the human ("Your turn" pane). */
   prompt: string;
 }
@@ -73,7 +73,7 @@ interface Rule {
   /** regex over the whole text; each match scores */
   re?: RegExp;
   min: number;
-  suggest: "handoff" | "input" | "continue";
+  suggest: "handoff" | "ask" | "continue";
   prompt: string;
 }
 
@@ -207,7 +207,7 @@ const RULES: Rule[] = [
     severity: "soft",
     phrases: ["choose an account", "pick an account", "select account", "use another account"],
     min: 1,
-    suggest: "input",
+    suggest: "ask",
     prompt: "Which account should I use?",
   },
   {
@@ -224,7 +224,7 @@ const RULES: Rule[] = [
     ],
     selectorKeys: ["consentBanner"],
     min: 1,
-    suggest: "input",
+    suggest: "ask",
     prompt: "Cookie/consent wall — accept all, only necessary, or skip this site?",
   },
   {
@@ -241,7 +241,7 @@ const RULES: Rule[] = [
       "premium content",
     ],
     min: 1,
-    suggest: "input",
+    suggest: "ask",
     prompt: "Paywall — pay/subscribe, sign up, or skip this source?",
   },
 ];

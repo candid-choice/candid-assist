@@ -482,7 +482,8 @@ async function handleOpenCanvasSurface(
     lastActive: Date.now(),
     status: "open",
   });
-  // Push now (same reason as openInputSurface): with waitForMarkup the router
+  // Push now (the router's own broadcast comes later than we need): with
+  // waitForMarkup the tool's
   // would only broadcast after the human finishes, so they'd never see it.
   notifySurfacePush({
     surfaceId: id,
@@ -493,16 +494,16 @@ async function handleOpenCanvasSurface(
   });
   if (obj["waitForMarkup"] !== true) return { surfaceId: id, status: "opened" };
   const timeoutMs = Math.min(
-    INPUT_WAIT_MAX_MS,
+    HUMAN_WAIT_MAX_MS,
     Math.max(1_000, typeof obj["timeoutMs"] === "number" ? obj["timeoutMs"] : 300_000),
   );
   const waited = await new Promise<Record<string, unknown>>((resolve) => {
     const timer = setTimeout(() => {
-      inputWaiters.delete(id);
+      humanWaiters.delete(id);
       resolve({ status: "timeout", markedUp: false });
     }, timeoutMs) as ReturnType<typeof setTimeout>;
     timer.unref?.();
-    inputWaiters.set(id, { resolve, timer });
+    humanWaiters.set(id, { resolve, timer });
   });
   const rec = openSurfaces.get(id);
   return {
@@ -513,82 +514,22 @@ async function handleOpenCanvasSurface(
   };
 }
 
-async function handleOpenInputSurface(
-  args: unknown,
-  ctx?: McpAgentCtx,
-): Promise<Record<string, unknown>> {
-  const obj = args as Record<string, unknown>;
-  const question = obj["question"] as string | undefined;
-  if (!question || typeof question !== "string" || question.trim().length === 0) {
-    throw new Error("MCP_003: Missing question");
-  }
-  if (openSurfaces.size >= MAX_SURFACES) {
-    throw new Error("MCP_002: Maximum surfaces reached");
-  }
-  const id = generateSurfaceId();
-  openSurfaces.set(id, {
-    surfaceId: id,
-    type: "input",
-    payload: {
-      kind: (obj["kind"] as string) ?? "text",
-      question,
-      options: obj["options"] as string[] | undefined,
-      answered: false,
-    },
-    createdAt: Date.now(),
-    lastActive: Date.now(),
-    status: "open",
-  });
-  // Push NOW, before any wait: with waitForAnswer the router's post-handler
-  // broadcast would only fire after the human replies — and the human can't
-  // reply to a panel they never saw. Tagged like the router's push, because
-  // this is the push that reaches the renderer first.
-  notifySurfacePush({
-    surfaceId: id,
-    type: "input",
-    payload: openSurfaces.get(id)!.payload,
-    status: "pushed",
-    ...agentTagFor(ctx),
-  });
-  if (obj["waitForAnswer"] !== true) return { surfaceId: id, status: "opened" };
-  // Block this call until the human answers (or the surface closes / times out)
-  // so a decision the model must NOT guess actually comes from the person.
-  const timeoutMs = Math.min(
-    INPUT_WAIT_MAX_MS,
-    Math.max(1_000, typeof obj["timeoutMs"] === "number" ? obj["timeoutMs"] : 300_000),
-  );
-  const waited = await new Promise<Record<string, unknown>>((resolve) => {
-    const timer = setTimeout(() => {
-      inputWaiters.delete(id);
-      resolve({ status: "timeout", answered: false });
-    }, timeoutMs) as ReturnType<typeof setTimeout>;
-    timer.unref?.();
-    inputWaiters.set(id, { resolve, timer });
-  });
-  const rec = openSurfaces.get(id);
-  return {
-    surfaceId: id,
-    ...waited,
-    answer: waited.answer ?? rec?.payload?.["answer"] ?? null,
-    question,
-    kind: rec?.payload?.["kind"] ?? "text",
-  };
-}
-
-/** Agents that need the answer BEFORE continuing (a decision the model must
- *  not guess: which account, which auth strategy, pay-or-skip) ask for
- *  waitForAnswer and the tool blocks until the human answers, the surface
- *  closes, or timeoutMs expires. */
-const INPUT_WAIT_MAX_MS = 10 * 60_000;
-const inputWaiters = new Map<
+/** One waiting room for "the agent blocked until a human did something": the
+ *  canvas markup Send lands here, and any future human-gated tool that wants
+ *  to block on a reply. (Asking a *question* is not one of them — that happens
+ *  in the chat, where the harness already puts it.) The timer is unref'd so a
+ *  stalled wait can never hold the process open, and the cap keeps a forgotten
+ *  wait from living for hours. */
+const HUMAN_WAIT_MAX_MS = 10 * 60_000;
+const humanWaiters = new Map<
   string,
   { resolve: (v: Record<string, unknown>) => void; timer: ReturnType<typeof setTimeout> }
 >();
 
-function settleInputWait(id: string, value: Record<string, unknown>): void {
-  const w = inputWaiters.get(id);
+function settleHumanWait(id: string, value: Record<string, unknown>): void {
+  const w = humanWaiters.get(id);
   if (!w) return;
-  inputWaiters.delete(id);
+  humanWaiters.delete(id);
   clearTimeout(w.timer);
   w.resolve(value);
 }
@@ -633,49 +574,10 @@ function handleCanvasRespond(msg: Record<string, unknown>): void {
       ? `Annotated canvas — “${note.slice(0, 80)}”`
       : "Annotated canvas sent to the agent.",
   });
-  settleInputWait(id, { status: "marked-up", markedUp: true, note: note || null });
+  settleHumanWait(id, { status: "marked-up", markedUp: true, note: note || null });
   console.log(`[canvas] markup stored on ${id} (${markup.length} bytes of data URL)`);
 }
 
-/** Renderer → main: the human answered an input surface. */
-function handleInputRespond(msg: Record<string, unknown>): void {
-  const id = typeof msg["surfaceId"] === "string" ? msg["surfaceId"] : "";
-  const rec = id ? openSurfaces.get(id) : undefined;
-  if (!rec || rec.type !== "input") {
-    console.warn("[input] respond for unknown/closed surface", id || "(missing)");
-    return;
-  }
-  const answer =
-    typeof msg["answer"] === "string"
-      ? msg["answer"]
-      : Array.isArray(msg["answer"])
-        ? (msg["answer"] as unknown[]).map(String)
-        : msg["answer"] === undefined
-          ? ""
-          : String(msg["answer"]);
-  rec.payload = {
-    ...rec.payload,
-    answered: true,
-    answer,
-    answeredAt: Date.now(),
-    answeredBy: msg["answeredBy"] === "agent" ? "agent" : "human",
-  };
-  rec.lastActive = Date.now();
-  // Push so every view (incl. the read-only portal) shows the answer.
-  notifySurfacePush({
-    surfaceId: id,
-    type: "input",
-    payload: rec.payload,
-    status: "answered",
-  });
-  notifyUiMessage({
-    level: "success",
-    title: "Answer received",
-    message: `“${String(rec.payload["question"] ?? "").slice(0, 60)}” → ${String(answer).slice(0, 120)}`,
-  });
-  settleInputWait(id, { status: "answered", answered: true, answer });
-  console.log(`[input] answered ${id}: ${String(answer).slice(0, 80)}`);
-}
 
 /** Modes we accept. The old three are kept (the desktop toolbar uses them);
  *  the rest are what the capture tools mean by "a still" / "a clip". */
@@ -966,38 +868,6 @@ const TOOL_DEFINITIONS = [
           description: "Update an existing canvas in place instead of opening a new one",
         },
       },
-    },
-  },
-  {
-    name: "openInputSurface",
-    description:
-      "Ask the human for input: free text, a choice among options, or a confirm. Use this (not a guess) whenever the answer is a human decision — which account/tenant, auth strategy, accept-cookies vs skip, pay-vs-skip a paywall, approve an irreversible action. Pass waitForAnswer:true to BLOCK this call until the human answers, and read the answer straight from the result; otherwise poll readSurface(surfaceId) which digests {answered, answer, answeredAt}.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        question: { type: "string", description: "The question to show" },
-        kind: {
-          type: "string",
-          enum: ["text", "choices", "confirm"],
-          description: "Input mode (default text)",
-        },
-        options: {
-          type: "array",
-          items: { type: "string" },
-          description: "Choices when kind=choices",
-        },
-        waitForAnswer: {
-          type: "boolean",
-          description:
-            "Block until the human answers (or the surface closes / timeoutMs expires), then return {answered, answer}.",
-        },
-        timeoutMs: {
-          type: "number",
-          description:
-            "How long to wait for the answer when waitForAnswer:true (default 300000, max 600000)",
-        },
-      },
-      required: ["question"],
     },
   },
   {
@@ -1572,7 +1442,6 @@ const TOOL_HANDLERS: Record<
   openScreenCapture: handleOpenScreenCapture,
   openCodeDiff: handleOpenCodeDiff,
   openTerminalOutput: handleOpenTerminalOutput,
-  openInputSurface: handleOpenInputSurface,
   showMessage: handleShowMessage,
   browserNavigate: handleBrowserNavigate,
   open3dSurface: handleOpen3dSurface,
@@ -2095,9 +1964,6 @@ function startWebSocketServer(port: number): WebSocketServer {
             notifyHandoff(msg.surfaceId, false, "human-completed");
             console.log("[browser] handoff CLOSE on " + msg.surfaceId + " (human done)");
           }
-        }
-        if (msg && msg.type === "input:respond") {
-          handleInputRespond(msg as Record<string, unknown>);
         }
         if (msg && msg.type === "canvas:respond") {
           handleCanvasRespond(msg as Record<string, unknown>);
@@ -2639,8 +2505,6 @@ function summarizePayload(s: SurfaceState): Record<string, unknown> {
         prompt: shrink(p.prompt),
       };
     }
-    case "input":
-      return pick(["question", "kind", "options", "answer", "answered", "responded", "prompt"]);
     case "codeDiff":
       return {
         files: p.files,
@@ -4141,7 +4005,7 @@ export function closeSurface(surfaceId: string): void {
     });
     openSurfaces.delete(surfaceId);
     // An agent blocked on waitForAnswer must not hang until the timeout.
-    settleInputWait(surfaceId, { status: "closed", answered: false });
+    settleHumanWait(surfaceId, { status: "closed", answered: false });
     unregisterGuest(surfaceId);
   }
 }
@@ -4235,7 +4099,7 @@ export function startMcpServer(initialPort: number = 3615, wsPort: number = 3614
                   status: "timeout",
                 });
                 openSurfaces.delete(id);
-                settleInputWait(id, { status: "timeout", answered: false });
+                settleHumanWait(id, { status: "timeout", answered: false });
               }
             }
           },
